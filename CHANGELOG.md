@@ -18,6 +18,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- GitHub Pages deploy workflow on push to `main`, gated on CI, and Vite `base` `/sorta-fast/` so assets resolve on the project-pages URL (#4).
 - TraceEvent SoA schema, centralized op-cost table, and TraceWriter chunked slabs so algorithms can emit traces without per-event object allocation (#3).
 - Design doc (`docs/design.md`), agent contract (`AGENTS.md`), Cursor rules, and README stub.
 - Vite + TypeScript strict + Vitest + ESLint/Prettier scaffold and CI on PRs and `main` (#1).
