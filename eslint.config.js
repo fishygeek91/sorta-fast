@@ -24,4 +24,28 @@ export default tseslint.config(
       "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
+  {
+    files: ["src/render/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "**/core/dijkstra.ts",
+                "**/core/bellmanFord.ts",
+                "**/core/trace.ts",
+                "../core/dijkstra.ts",
+                "../core/bellmanFord.ts",
+                "../core/trace.ts",
+              ],
+              message:
+                "Renderer consumes LaneState + Graph only — never algorithm modules or the trace schema (issues #6/#7).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
