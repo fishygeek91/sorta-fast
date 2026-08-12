@@ -1,0 +1,45 @@
+:root {
+  color: #1a1a1a;
+  background: #f6f4ef;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.hello {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 20% 20%, #ffe8c8 0%, transparent 45%),
+    radial-gradient(circle at 80% 70%, #d9ebe3 0%, transparent 40%),
+    linear-gradient(160deg, #f6f4ef 0%, #ebe6dc 100%);
+}
+
+.hello h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  letter-spacing: -0.02em;
+}
+
+.hello p {
+  margin: 0;
+  font-size: 1.125rem;
+  opacity: 0.8;
+}
