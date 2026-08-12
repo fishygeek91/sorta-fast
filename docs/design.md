@@ -138,7 +138,7 @@ sorta-fast/
 ```
 
 ### 4.2 The one design decision everything hangs on: **algorithms are trace emitters**
-Each algorithm is a pure function `run(graph, source): TraceEvent[]` (implemented as a generator, drained in a worker). Events are written into **typed-array ring buffers** (SoA: event kind, vertex, edge, cost, aux), not JS object arrays — 100k-node races produce millions of events and GC pauses would murder the animation.
+Each algorithm is a pure function `run(graph, source): TraceEvent[]` (implemented as a generator, drained in a worker). Events are written into **typed-array SoA slabs** (kind, vertex, edge, cost, aux), not JS object arrays — 100k-node races produce millions of events and GC pauses would murder the animation. `TraceWriter` **rotates** fixed-capacity slabs rather than wrapping a true ring, so a filled slab can be handed off as transferables without the writer retaining the buffer (issue #3).
 
 ```ts
 type TraceEvent =
