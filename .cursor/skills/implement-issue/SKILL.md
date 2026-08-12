@@ -2,9 +2,9 @@
 name: implement-issue
 description: >-
   Implement an approved sorta-fast issue plan (or the named issue) with Maestro
-  orchestration, the full correctness battery, verification through PR, and no
-  self-merge. Use when the user attaches this skill and says to implement,
-  execute the plan, or ship the issue.
+  orchestration, the full correctness battery, verification through PR, and merge
+  only when the human explicitly asks. Use when the user attaches this skill and
+  says to implement, execute the plan, or ship the issue.
 disable-model-invocation: true
 ---
 
@@ -47,7 +47,7 @@ This skill **does not run** without Maestro. An `/implement-issue` turn that wri
 3. **Correctness battery** — write/extend everything the issue's Testing requirements name: differential fuzzing (with weight ties), debug invariants, golden traces, trace audits. For perf ACs, measure and report actual numbers in the PR. Test files are `generalPurpose` work unless a retry already failed.
 4. **Verify**: typecheck + `vitest run` + lint green locally before opening the PR (`shell` subagent is fine; you still confirm the output).
 5. **Close out**: PR title `[M#] #<issue>: <title>`; body `Closes #N`, how each AC checkbox is met, deviations, test/perf evidence. Tick the corresponding box in Roadmap #29 via the PR description note (reviewer confirms on merge).
-6. **Stop**. Comment ready-for-review. **Claude reviews every PR before merge — never merge, never approve your own PR.** Discovered work → new issue, never scope creep.
+6. **Stop**. Comment ready-for-review. Do not merge unless the human later explicitly asks. Claude reviews as the human on another platform. Discovered work → new issue, never scope creep.
 
 ## Anti-patterns
 
@@ -58,4 +58,4 @@ This skill **does not run** without Maestro. An `/implement-issue` turn that wri
 - Scope creep / redesign of `docs/design.md` decisions
 - PR with red local checks, or perf ACs asserted without measurement
 - Hardcoding op costs at emission sites instead of the cost table
-- Self-merge or posting your own APPROVE as substitute review
+- Merging without an explicit human ask in this conversation

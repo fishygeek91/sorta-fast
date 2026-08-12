@@ -14,7 +14,7 @@
 2. Respect `> Blocked by #N` in the issue body — do not start an issue whose blockers aren't merged.
 3. Every AC checkbox in the issue must be genuinely satisfied and covered by a test where testable. Do not silently reduce scope; if an AC is impossible, say so in the PR description.
 4. PR title: `[M#] #<issue>: <title>`. PR body: link the issue (`Closes #N`), list how each AC is met, note any deviations.
-5. CI (typecheck + tests + lint) must be green. **Claude reviews every PR before merge — do not self-merge.**
+5. CI (typecheck + tests + lint) must be green. **Do not merge a PR unless the human explicitly asked.** Claude reviews as the human on another platform.
 6. M6 only: issue #22 (paper deep-read → `docs/paper-notes.md`) must be merged before any other M6 issue is started.
 
 ## Architecture invariants (do not violate)
