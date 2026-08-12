@@ -3,7 +3,9 @@
  *
  * `drainRun` collects every yielded {@link TraceEvent} and the generator's
  * final {@link DijkstraResult}. `auditDistancesFromTrace` replays improving
- * relax events alone to re-derive distances for trace-audit checks.
+ * relax events alone to re-derive distances for trace-audit checks. That
+ * replay assumes the emitter relaxes only from settled/final vertices
+ * (Dijkstra-specific) — BMSSP/DMSY must not import this helper.
  */
 
 import { run, type DijkstraResult } from "../src/core/dijkstra.ts";
@@ -42,6 +44,10 @@ export function drainRun(
  *
  * Ignores heap and settle events. For each relax with `improved === true`,
  * sets `dist[to] = dist[from] + weight` using CSR edge tails.
+ *
+ * Assumes the emitter relaxes only from settled/final vertices — Dijkstra-specific.
+ * BMSSP/DMSY can improve a vertex after some of its out-edges were already
+ * relaxed; a naive reuse of this audit would produce wrong distances.
  *
  * @throws If `source` is out of range or CSR slots are missing.
  */
