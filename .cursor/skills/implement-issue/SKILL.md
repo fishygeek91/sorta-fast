@@ -2,9 +2,9 @@
 name: implement-issue
 description: >-
   Implement an approved sorta-fast issue plan (or the named issue) with Maestro
-  orchestration, the full correctness battery, verification through PR, and no
-  self-merge. Use when the user attaches this skill and says to implement,
-  execute the plan, or ship the issue.
+  orchestration, the full correctness battery, verification through PR, and merge
+  only when the human explicitly asks. Use when the user attaches this skill and
+  says to implement, execute the plan, or ship the issue.
 disable-model-invocation: true
 ---
 
@@ -16,13 +16,20 @@ Implement the work. Prefer an already-approved plan in this conversation; otherw
 
 Issue number (if no in-thread plan) and/or explicit "implement / execute / go ahead" for the current plan.
 
-## Required: Maestro
+## Maestro is mandatory (not optional)
 
-Read and follow `~/.cursor/skills/maestro/SKILL.md` (or attached `/maestro`):
+This skill **does not run** without Maestro. An `/implement-issue` turn that writes the implementation without `Task` subagents is a skill violation — stop and delegate.
 
-- Track the finely split plan todos (create them if missing)
-- Delegate mechanical edits/docs to subagents; keep science code (`src/core/`) and the cost table under direct review
-- Review every subagent diff; retry once, then take over
+1. **First tool calls this turn** (after this file): `Read` `~/.cursor/skills/maestro/SKILL.md`, then immediately launch `Task` subagents. Creating the git branch may happen in that same batch. Do **not** start writing `src/` or `test/` yourself before a `Task` is in flight.
+2. **Every `Task` call must set** `model: "composer-2.5"`. Do not omit `model` (inherit is not Maestro — the UI will not show Composer 2.5). Do not pick another slug unless the user named one from the allowed Task list; if they name an invalid slug, report it and fall back to `composer-2.5`.
+3. **One `Task` per subtask**, self-contained prompt (subagents have no chat history). Independent work goes in **one parent message with multiple `Task` calls**.
+4. **Types:** `explore` for read-only research; `shell` for git / `gh` / test / lint commands; `generalPurpose` for file edits. Never one giant "implement the whole issue" subagent.
+5. **Review** every subagent diff before accepting. Retry once with sharper instructions; after ~2 failures, take over that subtask yourself.
+6. **What to delegate vs keep:**
+   - **Always delegate:** test files, docs, lint/format fixes, harness/render/ui/workers, `explore` of existing APIs, `shell` for `tsc` / vitest / eslint.
+   - **May delegate a draft, then you read every line:** `src/core/` algorithm/graph modules.
+   - **Parent-authored only:** `src/core/trace.ts` op-cost table; final science accept/reject; PR open + ready-for-review comment.
+7. "I'll just write it myself, it's small / it's science / review is faster" is the failure mode. Draft via `Task`, then review.
 
 ## Quality bar
 
@@ -36,16 +43,19 @@ Read and follow `~/.cursor/skills/maestro/SKILL.md` (or attached `/maestro`):
 ## Workflow
 
 1. **Bootstrap**: branch from fresh `main`: `issue-<n>-<slug>`. Never commit to `main` directly.
-2. **Implement by phase** per the plan. Parallelize independent work via Maestro.
-3. **Correctness battery** — write/extend everything the issue's Testing requirements name: differential fuzzing (with weight ties), debug invariants, golden traces, trace audits. For perf ACs, measure and report actual numbers in the PR.
-4. **Verify**: typecheck + `vitest run` + lint green locally before opening the PR.
+2. **Implement by phase** per the plan. Each phase launches `Task` (`composer-2.5`) for its independent pieces; you integrate and review.
+3. **Correctness battery** — write/extend everything the issue's Testing requirements name: differential fuzzing (with weight ties), debug invariants, golden traces, trace audits. For perf ACs, measure and report actual numbers in the PR. Test files are `generalPurpose` work unless a retry already failed.
+4. **Verify**: typecheck + `vitest run` + lint green locally before opening the PR (`shell` subagent is fine; you still confirm the output).
 5. **Close out**: PR title `[M#] #<issue>: <title>`; body `Closes #N`, how each AC checkbox is met, deviations, test/perf evidence. Tick the corresponding box in Roadmap #29 via the PR description note (reviewer confirms on merge).
-6. **Stop**. Comment ready-for-review. **Claude reviews every PR before merge — never merge, never approve your own PR.** Discovered work → new issue, never scope creep.
+6. **Stop**. Comment ready-for-review. Do not merge unless the human later explicitly asks. Claude reviews as the human on another platform. Discovered work → new issue, never scope creep.
 
 ## Anti-patterns
 
-- Skipping Maestro review of subagent output
+- Zero `Task` calls, or `Task` without `model: "composer-2.5"`
+- Parent writing all of `src/` and `test/` because the work is "science" or "small"
+- Skipping review of subagent output
+- Delegating the whole issue as one giant subtask
 - Scope creep / redesign of `docs/design.md` decisions
 - PR with red local checks, or perf ACs asserted without measurement
 - Hardcoding op costs at emission sites instead of the cost table
-- Self-merge or posting your own APPROVE as substitute review
+- Merging without an explicit human ask in this conversation

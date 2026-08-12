@@ -15,13 +15,18 @@ Pull the given GitHub issue and plan the work. Do not implement.
 
 Issue number required. Examples: `/plan-issue #5`, `/plan-issue 5`. If missing, ask and stop.
 
-## Required: Maestro
+## Maestro is mandatory (not optional)
 
-Read and follow `~/.cursor/skills/maestro/SKILL.md` (or the attached `/maestro` skill):
+This skill **does not run** without Maestro. A `/plan-issue` turn with zero `Task` tool calls is a skill violation — stop, launch subagents, then continue.
 
-- Decompose into small, independently verifiable subtasks
-- Delegate research to `explore` / `shell` subagents; review every output; retry once, then take over
-- Never delegate the whole request as one giant subtask
+1. **First tool calls this turn** (after this file): `Read` `~/.cursor/skills/maestro/SKILL.md`, then immediately launch `Task` subagents. `gh issue view` / git may run in that same batch. Do **not** grep the repo or draft the plan yourself before a `Task` is in flight.
+2. **Every `Task` call must set** `model: "composer-2.5"`. Do not omit `model` (inherit is not Maestro — the UI will not show Composer 2.5). Do not pick another slug unless the user named one from the allowed Task list; if they name an invalid slug, report it and fall back to `composer-2.5`.
+3. **One `Task` per subtask**, self-contained prompt (subagents have no chat history). Independent research goes in **one parent message with multiple `Task` calls**.
+4. **Types:** `explore` for codebase/design reads; `shell` for `gh` / git / file-tree commands. Never one giant "plan the whole issue" subagent.
+5. **Review** every subagent output; open cited files yourself before trusting them. Retry once, then take over that subtask.
+6. **Parent-only work:** lock design decisions, write the plan, CreatePlan. Everything else is delegated first.
+
+Doing the research yourself because it "seems faster" is the failure mode this skill exists to prevent.
 
 ## Repo gates (non-negotiable)
 
@@ -34,8 +39,12 @@ Read in order before planning: `AGENTS.md` → `docs/design.md` (the sections th
 
 ## Workflow
 
-1. **Fetch** with `gh issue view <N> --json number,title,body,labels,state,comments,url`.
-2. **Explore in parallel** via Maestro: existing modules the issue touches, test patterns, trace-schema/cost-table contracts, adjacent issues that constrain scope.
+1. **Fetch** with `gh issue view <N> --json number,title,body,labels,state,comments,url` (may be a `shell` subagent, in parallel with explores).
+2. **Explore in parallel via `Task` (`composer-2.5`)** — at minimum all of:
+   - existing modules the issue touches
+   - test patterns / vitest layout
+   - trace-schema / cost-table contracts if relevant
+   - adjacent issues that constrain scope
 3. **Double-check** critical files yourself before trusting subagents.
 4. **Lock decisions** — pick one concrete approach from evidence; no A/B left open in the plan.
 5. **Create the plan** (CreatePlan / plan mode): problem + context with file paths, chosen design, phased sequence, explicit non-goals.
@@ -49,6 +58,9 @@ Read in order before planning: `AGENTS.md` → `docs/design.md` (the sections th
 ## Anti-patterns
 
 - Implementing during planning
+- Zero `Task` calls, or `Task` without `model: "composer-2.5"`
+- Parent grepping/reading the whole tree instead of `explore` / `shell` subagents
 - Fat todos ("build the renderer") — split per layer / per overlay / per test
 - Accepting explore claims without opening cited files
 - Expanding past the issue's acceptance criteria
+- Delegating the whole request as one giant subtask
