@@ -105,6 +105,9 @@ function assertEncodeIndex(chunk: TraceChunk, index: number): void {
 }
 
 function assertDecodeIndex(chunk: TraceChunk, index: number): void {
+  if (chunk.kind.length < chunk.count) {
+    throw new Error("chunk buffers detached");
+  }
   if (!Number.isInteger(index) || index < 0 || index >= chunk.count) {
     throw new Error(`decodeAt index ${index} out of range (count ${chunk.count})`);
   }
@@ -128,13 +131,59 @@ function assertBoolean(name: string, value: boolean): void {
   }
 }
 
-function writeUnusedColumns(chunk: TraceChunk, index: number): void {
-  chunk.vertex[index] = SENTINEL;
-  chunk.edge[index] = SENTINEL;
-  chunk.aux0[index] = SENTINEL;
-  chunk.aux1[index] = SENTINEL;
-  chunk.aux2[index] = SENTINEL;
-  chunk.auxF[index] = 0;
+/** Write every SoA column exactly once. */
+function writeRow(
+  chunk: TraceChunk,
+  index: number,
+  kind: number,
+  vertex: number,
+  edge: number,
+  aux0: number,
+  aux1: number,
+  aux2: number,
+  auxF: number,
+  cost: number,
+): void {
+  chunk.kind[index] = kind;
+  chunk.vertex[index] = vertex;
+  chunk.edge[index] = edge;
+  chunk.aux0[index] = aux0;
+  chunk.aux1[index] = aux1;
+  chunk.aux2[index] = aux2;
+  chunk.auxF[index] = auxF;
+  chunk.cost[index] = cost;
+}
+
+function validateEvent(event: TraceEvent): void {
+  switch (event.k) {
+    case "relax":
+      assertBoolean("improved", event.improved);
+      return;
+    case "settle":
+      assertNonNegativeInteger("order", event.order);
+      return;
+    case "heap":
+      assertNonNegativeInteger("cmps", event.cmps);
+      return;
+    case "pivot":
+      assertNonNegativeInteger("level", event.level);
+      return;
+    case "batch":
+      assertNonNegativeInteger("level", event.level);
+      assertNonNegativeInteger("size", event.size);
+      return;
+    case "recurse":
+      assertNonNegativeInteger("level", event.level);
+      assertBound("bound", event.bound);
+      return;
+    case "forest":
+      assertNonNegativeInteger("tree", event.tree);
+      return;
+    case "dstruct":
+      assertNonNegativeInteger("n", event.n);
+      assertNonNegativeInteger("cmps", event.cmps);
+      return;
+  }
 }
 
 function heapOpFromCode(code: number): "push" | "popmin" | "sift" {
@@ -222,102 +271,142 @@ export function costOf(event: TraceEvent): number {
 
 /**
  * Pack one {@link TraceEvent} into row `index` of a {@link TraceChunk}.
- * Unused int columns are set to {@link SENTINEL}; unused `auxF` is 0.
+ * Hot path: no payload validation; each column is written once.
+ * Unused int columns are {@link SENTINEL}; unused `auxF` is 0.
+ * Use {@link encodeChecked} from tests.
  */
 export function encode(chunk: TraceChunk, index: number, event: TraceEvent): void {
-  assertEncodeIndex(chunk, index);
-
   switch (event.k) {
     case "relax":
-      assertBoolean("improved", event.improved);
-      chunk.kind[index] = TRACE_KIND.relax;
-      chunk.vertex[index] = SENTINEL;
-      chunk.edge[index] = event.e;
-      chunk.aux0[index] = event.improved ? 1 : 0;
-      chunk.aux1[index] = SENTINEL;
-      chunk.aux2[index] = SENTINEL;
-      chunk.auxF[index] = 0;
-      chunk.cost[index] = OP_COST.relax;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.relax,
+        SENTINEL,
+        event.e,
+        event.improved ? 1 : 0,
+        SENTINEL,
+        SENTINEL,
+        0,
+        OP_COST.relax,
+      );
       return;
 
     case "settle":
-      assertNonNegativeInteger("order", event.order);
-      chunk.kind[index] = TRACE_KIND.settle;
-      chunk.vertex[index] = event.v;
-      chunk.edge[index] = SENTINEL;
-      chunk.aux0[index] = event.order;
-      chunk.aux1[index] = SENTINEL;
-      chunk.aux2[index] = SENTINEL;
-      chunk.auxF[index] = 0;
-      chunk.cost[index] = OP_COST.settle;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.settle,
+        event.v,
+        SENTINEL,
+        event.order,
+        SENTINEL,
+        SENTINEL,
+        0,
+        OP_COST.settle,
+      );
       return;
 
     case "heap":
-      assertNonNegativeInteger("cmps", event.cmps);
-      chunk.kind[index] = TRACE_KIND.heap;
-      writeUnusedColumns(chunk, index);
-      chunk.aux0[index] = HEAP_OP[event.op];
-      chunk.aux1[index] = event.cmps;
-      chunk.cost[index] = event.cmps * OP_COST.comparison;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.heap,
+        SENTINEL,
+        SENTINEL,
+        HEAP_OP[event.op],
+        event.cmps,
+        SENTINEL,
+        0,
+        event.cmps * OP_COST.comparison,
+      );
       return;
 
     case "pivot":
-      assertNonNegativeInteger("level", event.level);
-      chunk.kind[index] = TRACE_KIND.pivot;
-      chunk.vertex[index] = event.v;
-      chunk.edge[index] = SENTINEL;
-      chunk.aux0[index] = event.level;
-      chunk.aux1[index] = SENTINEL;
-      chunk.aux2[index] = SENTINEL;
-      chunk.auxF[index] = 0;
-      chunk.cost[index] = OP_COST.pivot;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.pivot,
+        event.v,
+        SENTINEL,
+        event.level,
+        SENTINEL,
+        SENTINEL,
+        0,
+        OP_COST.pivot,
+      );
       return;
 
     case "batch":
-      assertNonNegativeInteger("level", event.level);
-      assertNonNegativeInteger("size", event.size);
-      chunk.kind[index] = TRACE_KIND.batch;
-      writeUnusedColumns(chunk, index);
-      chunk.aux0[index] = BATCH_PHASE[event.phase];
-      chunk.aux1[index] = event.level;
-      chunk.aux2[index] = event.size;
-      chunk.cost[index] = OP_COST.batch;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.batch,
+        SENTINEL,
+        SENTINEL,
+        BATCH_PHASE[event.phase],
+        event.level,
+        event.size,
+        0,
+        OP_COST.batch,
+      );
       return;
 
     case "recurse":
-      assertNonNegativeInteger("level", event.level);
-      assertBound("bound", event.bound);
-      chunk.kind[index] = TRACE_KIND.recurse;
-      writeUnusedColumns(chunk, index);
-      chunk.aux0[index] = RECURSE_DIR[event.dir];
-      chunk.aux1[index] = event.level;
-      chunk.auxF[index] = event.bound;
-      chunk.cost[index] = OP_COST.recurse;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.recurse,
+        SENTINEL,
+        SENTINEL,
+        RECURSE_DIR[event.dir],
+        event.level,
+        SENTINEL,
+        event.bound,
+        OP_COST.recurse,
+      );
       return;
 
     case "forest":
-      assertNonNegativeInteger("tree", event.tree);
-      chunk.kind[index] = TRACE_KIND.forest;
-      chunk.vertex[index] = SENTINEL;
-      chunk.edge[index] = event.e;
-      chunk.aux0[index] = FOREST_OP[event.op];
-      chunk.aux1[index] = event.tree;
-      chunk.aux2[index] = SENTINEL;
-      chunk.auxF[index] = 0;
-      chunk.cost[index] = OP_COST.forest;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.forest,
+        SENTINEL,
+        event.e,
+        FOREST_OP[event.op],
+        event.tree,
+        SENTINEL,
+        0,
+        OP_COST.forest,
+      );
       return;
 
     case "dstruct":
-      assertNonNegativeInteger("n", event.n);
-      assertNonNegativeInteger("cmps", event.cmps);
-      chunk.kind[index] = TRACE_KIND.dstruct;
-      writeUnusedColumns(chunk, index);
-      chunk.aux0[index] = DSTRUCT_OP[event.op];
-      chunk.aux1[index] = event.n;
-      chunk.aux2[index] = event.cmps;
-      chunk.cost[index] = event.cmps * OP_COST.comparison;
+      writeRow(
+        chunk,
+        index,
+        TRACE_KIND.dstruct,
+        SENTINEL,
+        SENTINEL,
+        DSTRUCT_OP[event.op],
+        event.n,
+        event.cmps,
+        0,
+        event.cmps * OP_COST.comparison,
+      );
       return;
   }
+}
+
+/**
+ * {@link encode} plus payload and index checks. Used by unit tests; the
+ * writer hot path calls {@link encode} directly.
+ */
+export function encodeChecked(chunk: TraceChunk, index: number, event: TraceEvent): void {
+  assertEncodeIndex(chunk, index);
+  validateEvent(event);
+  encode(chunk, index, event);
 }
 
 /**
@@ -567,11 +656,15 @@ export function transferables(chunk: TraceChunk): ArrayBuffer[] {
 }
 
 /**
- * Append-only trace encoder with fixed-size slabs.
+ * Append-only trace encoder with fixed-size SoA slabs (not a true ring:
+ * a filled slab is rotated out so its buffers can be transferred).
  *
  * Each slab owns arrays of length `capacity`; {@link TraceChunk.count} tracks
- * filled rows. Full slabs are rotated onto a completed list; transferables
- * may include unused tail capacity in the backing buffers.
+ * filled rows. Full slabs are rotated onto a completed list.
+ *
+ * TODO(#13): `flush()` of a partial slab still transfers the full-capacity
+ * backing buffers (~2.3 MB at the default 65536 rows). Right-size the final
+ * flush (copy into exact-length arrays) or accept the overhead in the worker.
  */
 export class TraceWriter {
   private readonly capacity: number;

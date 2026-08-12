@@ -16,42 +16,53 @@ const RECURSE_DIRS = ["in", "out"] as const;
 const FOREST_OPS = ["grow", "cut"] as const;
 const DSTRUCT_OPS = ["insert", "batchPrepend", "pull"] as const;
 
-/** Deterministic mixed event from index — no Math.random / Date.now. */
-function mixedEvent(i: number): TraceEvent {
+function pickOp<T>(ops: readonly T[], index: number): T {
+  const op = ops[index];
+  if (op === undefined) {
+    throw new Error(`op table index ${index} out of range`);
+  }
+  return op;
+}
+
+/**
+ * Deterministic mixed event from index — no Math.random / Date.now.
+ * Shared by `npm run bench:trace` and `test/trace-perf.test.ts`.
+ */
+export function mixedTraceEvent(i: number): TraceEvent {
   switch (i % 8) {
     case 0:
       return { k: "relax", e: i % 4096, improved: i % 2 === 0, cost: 1 };
     case 1:
       return { k: "settle", v: i % 1024, order: i % 512, cost: 1 };
     case 2:
-      return { k: "heap", op: HEAP_OPS[i % 3], cmps: i % 16 };
+      return { k: "heap", op: pickOp(HEAP_OPS, i % 3), cmps: i % 16 };
     case 3:
       return { k: "pivot", v: i % 1024, level: i % 32 };
     case 4:
       return {
         k: "batch",
-        phase: BATCH_PHASES[i % 2],
+        phase: pickOp(BATCH_PHASES, i % 2),
         level: i % 32,
         size: (i % 256) + 1,
       };
     case 5:
       return {
         k: "recurse",
-        dir: RECURSE_DIRS[i % 2],
+        dir: pickOp(RECURSE_DIRS, i % 2),
         level: i % 32,
         bound: i % 100 === 0 ? Infinity : i % 1000,
       };
     case 6:
       return {
         k: "forest",
-        op: FOREST_OPS[i % 2],
+        op: pickOp(FOREST_OPS, i % 2),
         e: i % 4096,
         tree: i % 64,
       };
     default:
       return {
         k: "dstruct",
-        op: DSTRUCT_OPS[i % 3],
+        op: pickOp(DSTRUCT_OPS, i % 3),
         n: (i % 128) + 1,
         cmps: i % 12,
       };
@@ -70,7 +81,7 @@ export function runTraceWriteBench(): {
   const t0 = performance.now();
 
   for (let i = 0; i < EVENT_COUNT; i += 1) {
-    writer.append(mixedEvent(i));
+    writer.append(mixedTraceEvent(i));
   }
 
   const chunks = writer.takeChunks();

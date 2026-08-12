@@ -7,6 +7,15 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ## [Unreleased]
 
+### Fixed
+
+- 1M-event trace write/replay is measured best-of-3 after warmup, and `encode` writes each SoA column once without per-event asserts, so the #3 budget holds on CI runners.
+
+### Changed
+
+- `decodeAt` rejects detached chunk buffers instead of reporting an unknown kind (#3).
+- Design doc §4.2 notes TraceWriter rotates SoA slabs rather than wrapping a true ring (#3).
+
 ### Added
 
 - TraceEvent SoA schema, centralized op-cost table, and TraceWriter chunked slabs so algorithms can emit traces without per-event object allocation (#3).

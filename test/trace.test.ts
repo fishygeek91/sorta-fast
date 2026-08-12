@@ -6,6 +6,7 @@ import {
   decodeAt,
   DEFAULT_CHUNK_CAPACITY,
   encode,
+  encodeChecked,
   OP_COST,
   scanCosts,
   SENTINEL,
@@ -192,48 +193,48 @@ describe("costOf and tally", () => {
 describe("encode validation", () => {
   it("rejects negative heap cmps", () => {
     const chunk = allocateChunk(1);
-    expect(() => encode(chunk, 0, { k: "heap", op: "push", cmps: -1 })).toThrow(
+    expect(() => encodeChecked(chunk, 0, { k: "heap", op: "push", cmps: -1 })).toThrow(
       /cmps must be a non-negative integer/,
     );
   });
 
   it("rejects negative settle order", () => {
     const chunk = allocateChunk(1);
-    expect(() => encode(chunk, 0, { k: "settle", v: 0, order: -1, cost: 1 })).toThrow(
+    expect(() => encodeChecked(chunk, 0, { k: "settle", v: 0, order: -1, cost: 1 })).toThrow(
       /order must be a non-negative integer/,
     );
   });
 
   it("rejects negative pivot level", () => {
     const chunk = allocateChunk(1);
-    expect(() => encode(chunk, 0, { k: "pivot", v: 0, level: -2 })).toThrow(
+    expect(() => encodeChecked(chunk, 0, { k: "pivot", v: 0, level: -2 })).toThrow(
       /level must be a non-negative integer/,
     );
   });
 
   it("rejects negative batch level and size", () => {
     const chunk = allocateChunk(2);
-    expect(() => encode(chunk, 0, { k: "batch", phase: "start", level: -1, size: 0 })).toThrow(
-      /level must be a non-negative integer/,
-    );
-    expect(() => encode(chunk, 1, { k: "batch", phase: "end", level: 0, size: -3 })).toThrow(
+    expect(() =>
+      encodeChecked(chunk, 0, { k: "batch", phase: "start", level: -1, size: 0 }),
+    ).toThrow(/level must be a non-negative integer/);
+    expect(() => encodeChecked(chunk, 1, { k: "batch", phase: "end", level: 0, size: -3 })).toThrow(
       /size must be a non-negative integer/,
     );
   });
 
   it("rejects negative dstruct n and cmps", () => {
     const chunk = allocateChunk(2);
-    expect(() => encode(chunk, 0, { k: "dstruct", op: "insert", n: -1, cmps: 0 })).toThrow(
+    expect(() => encodeChecked(chunk, 0, { k: "dstruct", op: "insert", n: -1, cmps: 0 })).toThrow(
       /n must be a non-negative integer/,
     );
-    expect(() => encode(chunk, 1, { k: "dstruct", op: "pull", n: 1, cmps: -2 })).toThrow(
+    expect(() => encodeChecked(chunk, 1, { k: "dstruct", op: "pull", n: 1, cmps: -2 })).toThrow(
       /cmps must be a non-negative integer/,
     );
   });
 
   it("rejects negative forest tree", () => {
     const chunk = allocateChunk(1);
-    expect(() => encode(chunk, 0, { k: "forest", op: "cut", e: 0, tree: -1 })).toThrow(
+    expect(() => encodeChecked(chunk, 0, { k: "forest", op: "cut", e: 0, tree: -1 })).toThrow(
       /tree must be a non-negative integer/,
     );
   });
@@ -241,14 +242,14 @@ describe("encode validation", () => {
   it("rejects recurse bound NaN", () => {
     const chunk = allocateChunk(1);
     expect(() =>
-      encode(chunk, 0, { k: "recurse", dir: "in", level: 0, bound: Number.NaN }),
+      encodeChecked(chunk, 0, { k: "recurse", dir: "in", level: 0, bound: Number.NaN }),
     ).toThrow(/bound must be finite or Infinity/);
   });
 
   it("rejects recurse bound -Infinity", () => {
     const chunk = allocateChunk(1);
     expect(() =>
-      encode(chunk, 0, { k: "recurse", dir: "out", level: 0, bound: -Infinity }),
+      encodeChecked(chunk, 0, { k: "recurse", dir: "out", level: 0, bound: -Infinity }),
     ).toThrow(/bound must be finite or Infinity/);
   });
 });
@@ -264,6 +265,17 @@ describe("decodeAt validation", () => {
     const chunk = encodeOne({ k: "relax", e: 0, improved: true, cost: 1 });
     chunk.kind[0] = 99;
     expect(() => decodeAt(chunk, 0)).toThrow(/unknown trace kind 99/);
+  });
+
+  it("rejects detached chunk buffers", () => {
+    const writer = new TraceWriter(2);
+    writer.append({ k: "pivot", v: 0, level: 0 });
+    const chunk = writer.takeChunks()[0];
+    if (chunk === undefined) {
+      throw new Error("missing chunk");
+    }
+    structuredClone(chunk, { transfer: transferables(chunk) });
+    expect(() => decodeAt(chunk, 0)).toThrow(/chunk buffers detached/);
   });
 });
 
