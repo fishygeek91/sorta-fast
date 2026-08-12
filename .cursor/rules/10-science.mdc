@@ -1,0 +1,18 @@
+---
+description: Correctness rules for algorithm code (the science)
+globs:
+  - "src/core/**"
+  - "test/**"
+---
+
+# Science code — correctness bar
+
+We publicly claim the first implementation of the Feb 2026 algorithm. The test suite is the evidence. Non-negotiable for any algorithm PR:
+
+1. **Differential fuzzing**: run the algorithm + reference Bellman-Ford (and previously merged lanes) on thousands of seeded random graphs — vary n, m, weight distributions, and ALWAYS include weight ties. Assert identical distance arrays. Must run in CI.
+2. **Invariant checks** (debug builds): Dijkstra settles in nondecreasing distance order; BMSSP/DMSY never settle a vertex with dist ≥ B inside a bounded call; DMSY tie-breaking is exactly lexicographic (path length, edge count, vertex ID, predecessor) per the paper.
+3. **Golden traces**: small hand-verified graphs frozen as fixtures — catches trace-instrumentation regressions, not just distance bugs.
+4. **Trace audit**: replay the trace and re-derive distances from events alone; must equal the algorithm's own output.
+5. Cite paper sections/lemmas in comments next to the code that implements them (e.g. `// arXiv 2504.17033 Lemma 3.3`).
+6. Parameters: BMSSP k = ⌊log^{1/3} n⌋, t = ⌊log^{2/3} n⌋. Guard degenerate small-n cases explicitly and test them.
+7. M6/DMSY: `docs/paper-notes.md` (issue #22) is the implementation spec. If you hit an ambiguity not covered there, add it to the ambiguity log with a section cite in the same PR — do not decide silently.

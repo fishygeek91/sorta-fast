@@ -1,0 +1,16 @@
+---
+description: Sorta Fast project context — always loaded
+alwaysApply: true
+---
+
+# Sorta Fast — core context
+
+In-browser race of shortest-path algorithms: Dijkstra (1959), BMSSP (STOC 2025, arXiv 2504.17033), DMSY (Feb 2026, arXiv 2602.07868 — first public implementation). TS + Vite + Canvas2D, zero backend, GitHub Pages.
+
+- **Source of truth:** `docs/design.md`. Build plan: GitHub issues #1–#28 (build order = issue number), roadmap #29. Agent contract: `AGENTS.md`.
+- Directory contract: `src/core/` pure zero-DOM science · `src/harness/` work clock, trace buffers, race scheduler · `src/render/` Canvas2D layers · `src/ui/` · `src/workers/` · `test/` · `bench/`.
+- **Algorithms are trace emitters**: pure generators `run(graph, source)` yielding TraceEvents (schema in `src/core/trace.ts`) into typed-array ring buffers. Renderer consumes events only and never imports algorithm code.
+- **Single op-cost table** in `src/core/trace.ts` — never hardcode op costs elsewhere. Headline race metric = total comparisons on a shared work clock.
+- **Determinism**: seeded mulberry32 only; no Math.random()/Date.now() in core/harness; same seed → byte-identical trace. Full state must round-trip through the URL.
+- Typed arrays (SoA) in hot paths; avoid per-event object allocation.
+- TypeScript strict; no `any` without a commented reason.

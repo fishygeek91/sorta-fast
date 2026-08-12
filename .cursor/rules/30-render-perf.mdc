@@ -1,0 +1,17 @@
+---
+description: Rendering & performance rules
+globs:
+  - "src/render/**"
+  - "src/harness/**"
+  - "src/workers/**"
+  - "src/ui/**"
+---
+
+# Rendering & performance
+
+- Canvas2D, layered: static edge layer (once per graph) / dynamic settle-fill (dirty-rect batched) / overlay layer (frontier, pivots, forest) / FX layer (blooms, photo-finish).
+- Perf budget: 60fps on 5k nodes; ≥30fps on 100k. No main-thread stalls > 50ms during a 3-lane 25k race. ≥25k nodes: aggregated path — 2px ImageData nodes, offscreen prerendered edge bitmap.
+- Trace generation always in workers, streamed in chunks (transferables); playback must be able to start before generation finishes.
+- Everything must be scrub-safe both directions: state at clock T must be identical whether reached by playing forward or scrubbing back (keyframe snapshots ~every 250k ops).
+- Renderer reads decoded TraceEvents only — never import from src/core algorithm modules.
+- Visual language (design.md §3.6): one perceptually-uniform colorblind-safe settle gradient shared by lanes; lane accents marble/ember/moss; dark default + light; tabular numerals for counters; no chartjunk.
