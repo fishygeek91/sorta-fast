@@ -103,7 +103,10 @@ export class Renderer {
   private readonly fillLayer: CanvasSurface;
   private readonly overlayLayer: CanvasSurface;
   private lastSettle: Int32Array;
+  private lastFrontier: Uint8Array;
   private readonly dirty: DirtyRect;
+  /** True until the first composite or after {@link setGraph}; forces a full three-layer blit. */
+  private needsFullComposite: boolean;
 
   /**
    * @param opts.target - On-screen canvas surface.
@@ -116,6 +119,8 @@ export class Renderer {
     this.dirty = createDirtyRect();
     this.lastSettle = new Int32Array(opts.graph.n);
     this.lastSettle.fill(UNSETTLED);
+    this.lastFrontier = new Uint8Array(opts.graph.n);
+    this.needsFullComposite = true;
 
     const width = opts.target.width;
     const height = opts.target.height;
@@ -137,6 +142,8 @@ export class Renderer {
     this.camera = fitCamera(graph, this.target.width, this.target.height);
     this.lastSettle = new Int32Array(graph.n);
     this.lastSettle.fill(UNSETTLED);
+    this.lastFrontier = new Uint8Array(graph.n);
+    this.needsFullComposite = true;
     resetDirty(this.dirty);
     markFull(this.dirty, this.target.width, this.target.height);
     this.drawEdgeLayer();
@@ -148,9 +155,10 @@ export class Renderer {
    * - new settles: fill circles with {@link cssColorForSettleOrder}, `includeNode` dirty
    * - any unsettle: clear fill layer, redraw ALL settled nodes, `markFull`
    *
-   * Frontier overlay: clear overlay, draw rings for `frontier[v] === 1`, always composite overlay.
-   * Composite onto target: edges, then fill (dirty source rect), then overlay.
-   * First draw or after {@link setGraph}: full composite.
+   * Frontier overlay: clear overlay, draw rings for `frontier[v] === 1`.
+   * Dirty frontier changes (vs {@link lastFrontier}) expand the dirty rect before overlay paint.
+   * Composite onto target: full blit on first frame, {@link setGraph}, unsettle, or hit cap;
+   * otherwise blit only the dirty rect (edges + fill + overlay).
    */
   draw(state: LaneState): void {
     if (state.n !== this.graph.n) {
@@ -203,6 +211,17 @@ export class Renderer {
       }
     }
 
+    for (let v = 0; v < n; v += 1) {
+      const prevFrontier = this.lastFrontier[v];
+      const curFrontier = state.frontier[v];
+      if (prevFrontier === undefined || curFrontier === undefined) {
+        throw new Error(`frontier[${String(v)}] is missing`);
+      }
+      if (prevFrontier !== curFrontier) {
+        this.includeVertexDirty(v);
+      }
+    }
+
     this.drawFrontierOverlay(state);
 
     this.compositeToTarget();
@@ -213,6 +232,11 @@ export class Renderer {
         throw new Error(`settleOrder[${String(v)}] is missing`);
       }
       this.lastSettle[v] = order;
+      const curFrontier = state.frontier[v];
+      if (curFrontier === undefined) {
+        throw new Error(`frontier[${String(v)}] is missing`);
+      }
+      this.lastFrontier[v] = curFrontier;
     }
 
     resetDirty(this.dirty);
@@ -284,6 +308,15 @@ export class Renderer {
   }
 
   /**
+   * Expand the dirty rect by vertex `v`'s projected circle AABB.
+   */
+  private includeVertexDirty(v: number): void {
+    const cx = projectX(this.camera, vertexX(this.graph, v));
+    const cy = projectY(this.camera, vertexY(this.graph, v));
+    includeNode(this.dirty, cx, cy, this.camera.radius, this.target.width, this.target.height);
+  }
+
+  /**
    * Redraw the frontier ring overlay for the current lane state.
    */
   private drawFrontierOverlay(state: LaneState): void {
@@ -320,19 +353,37 @@ export class Renderer {
   /**
    * Blit edge, fill, and overlay layers onto the target canvas.
    *
-   * Always a full three-layer composite so frontier rings do not accumulate
-   * (transparent overlay pixels would not erase stale rings under alpha blit).
-   * Dirty-rect batching still applies to fill-layer painting, not the blit.
+   * Dirty rect limits the compositing blit; a full pass runs on the first frame,
+   * after {@link setGraph}, on unsettle ({@link markFull}), or when the hit cap is exceeded.
    */
   private compositeToTarget(): void {
     const targetCtx = requireContext(this.target, "target");
     const width = this.target.width;
     const height = this.target.height;
+    const dirty = this.dirty;
 
-    targetCtx.fillStyle = PAPER_BG;
-    targetCtx.fillRect(0, 0, width, height);
-    targetCtx.drawImage(this.edgeLayer, 0, 0, width, height, 0, 0, width, height);
-    targetCtx.drawImage(this.fillLayer, 0, 0, width, height, 0, 0, width, height);
-    targetCtx.drawImage(this.overlayLayer, 0, 0, width, height, 0, 0, width, height);
+    if (this.needsFullComposite || dirty.full) {
+      targetCtx.fillStyle = PAPER_BG;
+      targetCtx.fillRect(0, 0, width, height);
+      targetCtx.drawImage(this.edgeLayer, 0, 0, width, height, 0, 0, width, height);
+      targetCtx.drawImage(this.fillLayer, 0, 0, width, height, 0, 0, width, height);
+      targetCtx.drawImage(this.overlayLayer, 0, 0, width, height, 0, 0, width, height);
+      this.needsFullComposite = false;
+      return;
+    }
+
+    if (dirty.w > 0 && dirty.h > 0) {
+      const sx = dirty.x;
+      const sy = dirty.y;
+      const sw = dirty.w;
+      const sh = dirty.h;
+      const dx = dirty.x;
+      const dy = dirty.y;
+      const dw = dirty.w;
+      const dh = dirty.h;
+      targetCtx.drawImage(this.edgeLayer, sx, sy, sw, sh, dx, dy, dw, dh);
+      targetCtx.drawImage(this.fillLayer, sx, sy, sw, sh, dx, dy, dw, dh);
+      targetCtx.drawImage(this.overlayLayer, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
   }
 }

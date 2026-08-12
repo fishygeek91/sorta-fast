@@ -140,16 +140,29 @@ function mountDemo(): void {
   scrubber.max = String(totalWork);
   workLabel.textContent = formatWorkLabel(playback.state.work, totalWork);
 
+  /** True while the user is dragging the scrubber thumb. */
+  let scrubberPointerDown = false;
+
+  scrubber.addEventListener("pointerdown", () => {
+    scrubberPointerDown = true;
+  });
+
+  const onScrubberPointerRelease = (): void => {
+    scrubberPointerDown = false;
+  };
+
+  window.addEventListener("pointerup", onScrubberPointerRelease);
+  window.addEventListener("pointercancel", onScrubberPointerRelease);
+
   /**
    * Sync the scrubber and label to the current playback cursor.
    */
   function syncScrubberUi(): void {
-    if (document.activeElement === scrubber) {
-      return;
-    }
-    const work = playback.state.work;
-    scrubber.value = String(Math.floor(work));
+    const work = playback.clock.cursor;
     workLabel.textContent = formatWorkLabel(work, totalWork);
+    if (!scrubberPointerDown) {
+      scrubber.value = String(Math.floor(work));
+    }
   }
 
   /**

@@ -114,14 +114,16 @@ export class Playback {
   }
 
   /**
-   * Advance billed work by one op (or to {@link totalWork} if already there).
+   * Advance the work-clock cursor by one billed op, then sync the buffer.
    *
-   * Zero-cost events at the new T are included via {@link TraceBuffer.seekWork}.
+   * {@link TraceBuffer.seekWork} applies every event whose cumulative work is
+   * ≤ the cursor; a cost-k event is fully crossed only after k successive
+   * stepOp calls (e.g. a heap push with `cmps: 3` needs three clicks).
    *
    * @returns Live lane state after the step.
    */
   stepOp(): LaneState {
-    const nextWork = Math.min(this.buffer.state.work + 1, this.totalWork);
+    const nextWork = Math.min(this.clock.cursor + 1, this.totalWork);
     return this.seek(nextWork);
   }
 
