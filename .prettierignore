@@ -1,0 +1,13 @@
+dist
+node_modules
+coverage
+package-lock.json
+*.tsbuildinfo
+.git
+.cursor
+_to_delete
+
+# Pre-existing prose (owned by design/README issues; avoid drive-by reformat)
+AGENTS.md
+README.md
+docs/
