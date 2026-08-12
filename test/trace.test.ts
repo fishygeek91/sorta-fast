@@ -285,6 +285,22 @@ describe("allocateChunk", () => {
   });
 });
 
+/** Decode every event stored in one or more chunks (order preserved). */
+function decodeAll(chunks: TraceChunk[]): TraceEvent[] {
+  const events: TraceEvent[] = [];
+  for (const chunk of chunks) {
+    for (let i = 0; i < chunk.count; i += 1) {
+      events.push(decodeAt(chunk, i));
+    }
+  }
+  return events;
+}
+
+/** Sum row counts across chunks. */
+function totalCount(chunks: TraceChunk[]): number {
+  return chunks.reduce((sum, chunk) => sum + chunk.count, 0);
+}
+
 describe("TraceWriter", () => {
   it("defaults chunk capacity to DEFAULT_CHUNK_CAPACITY", () => {
     const writer = new TraceWriter();
@@ -379,6 +395,83 @@ describe("TraceWriter", () => {
       throw new Error("missing chunk after transfer");
     }
     expect(decodeAt(next, 0)).toEqual({ k: "forest", op: "grow", e: 5, tree: 0 });
+  });
+
+  describe("drainCompleted", () => {
+    it("returns [] for a partial slab and leaves takeChunks to flush it", () => {
+      const capacity = 2;
+      const writer = new TraceWriter(capacity);
+      writer.append({ k: "heap", op: "push", cmps: 0 });
+
+      expect(writer.drainCompleted()).toEqual([]);
+
+      const remainder = writer.takeChunks();
+      expect(remainder).toHaveLength(1);
+      const chunk = remainder[0];
+      if (chunk === undefined) {
+        throw new Error("missing partial chunk");
+      }
+      expect(chunk.count).toBe(1);
+      expect(decodeAt(chunk, 0)).toEqual({ k: "heap", op: "push", cmps: 0 });
+    });
+
+    it("returns only full slabs; takeChunks later yields the partial remainder", () => {
+      const capacity = 2;
+      const events: TraceEvent[] = [
+        { k: "heap", op: "push", cmps: 0 },
+        { k: "heap", op: "sift", cmps: 1 },
+        { k: "heap", op: "popmin", cmps: 2 },
+        { k: "heap", op: "push", cmps: 3 },
+        { k: "heap", op: "sift", cmps: 4 },
+      ];
+
+      const writer = new TraceWriter(capacity);
+      for (const event of events) {
+        writer.append(event);
+      }
+
+      const drained = writer.drainCompleted();
+      expect(drained).toHaveLength(2);
+      for (const chunk of drained) {
+        expect(chunk.count).toBe(capacity);
+      }
+
+      const remainder = writer.takeChunks();
+      expect(remainder).toHaveLength(1);
+      const partial = remainder[0];
+      if (partial === undefined) {
+        throw new Error("missing partial chunk");
+      }
+      expect(partial.count).toBe(1);
+
+      const baseline = new TraceWriter(capacity);
+      for (const event of events) {
+        baseline.append(event);
+      }
+      const baselineChunks = baseline.takeChunks();
+
+      expect(decodeAll([...drained, ...remainder])).toEqual(decodeAll(baselineChunks));
+      expect(totalCount(drained) + totalCount(remainder)).toBe(totalCount(baselineChunks));
+    });
+
+    it("returns [] on a second drain when no new full slabs rotated", () => {
+      const capacity = 2;
+      const writer = new TraceWriter(capacity);
+      writer.append({ k: "pivot", v: 0, level: 0 });
+      writer.append({ k: "pivot", v: 1, level: 1 });
+
+      const first = writer.drainCompleted();
+      expect(first).toHaveLength(1);
+      expect(first[0]?.count).toBe(capacity);
+
+      expect(writer.drainCompleted()).toEqual([]);
+
+      writer.append({ k: "pivot", v: 2, level: 2 });
+      expect(writer.drainCompleted()).toEqual([]);
+
+      const tail = writer.takeChunks();
+      expect(totalCount(tail)).toBe(1);
+    });
   });
 });
 

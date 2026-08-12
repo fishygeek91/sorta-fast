@@ -711,6 +711,20 @@ export class TraceWriter {
   }
 
   /**
+   * Return rotated full slabs without flushing the current partial slab.
+   * A subsequent takeChunks() still flushes the remainder.
+   * Does not detach buffers.
+   */
+  drainCompleted(): TraceChunk[] {
+    if (this.completed.length === 0) {
+      return [];
+    }
+    const result = this.completed;
+    this.completed = [];
+    return result;
+  }
+
+  /**
    * Flush, return all completed chunks, and clear the completed list.
    * Does not detach buffers. A second call returns only chunks from new appends.
    */

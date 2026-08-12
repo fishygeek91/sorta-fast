@@ -2,7 +2,35 @@ import { describe, expect, it } from "vitest";
 
 import { packCsr } from "../src/core/graph.ts";
 import { type TraceEvent, TraceWriter } from "../src/core/trace.ts";
+import { type LaneState, UNSETTLED } from "../src/harness/laneState.ts";
 import { KEYFRAME_OPS, TraceBuffer } from "../src/harness/traceBuffer.ts";
+
+/** Assert two lane snapshots are identical (scrub-safe fields + live counters). */
+function compareLane(a: LaneState, b: LaneState): void {
+  expect(a.n).toBe(b.n);
+  expect(a.m).toBe(b.m);
+  expect(a.settledCount).toBe(b.settledCount);
+  expect(a.eventIndex).toBe(b.eventIndex);
+  expect(a.work).toBe(b.work);
+  expect(a.relaxations).toBe(b.relaxations);
+  expect(a.heapOps).toBe(b.heapOps);
+
+  for (let v = 0; v < a.n; v += 1) {
+    const aOrder = a.settleOrder[v];
+    const bOrder = b.settleOrder[v];
+    expect(aOrder).toBe(bOrder);
+
+    const aFrontier = a.frontier[v];
+    const bFrontier = b.frontier[v];
+    expect(aFrontier).toBe(bFrontier);
+  }
+
+  for (let e = 0; e < a.m; e += 1) {
+    const aRelaxWork = a.lastRelaxWork[e];
+    const bRelaxWork = b.lastRelaxWork[e];
+    expect(aRelaxWork).toBe(bRelaxWork);
+  }
+}
 
 /** Encode events into trace chunks via TraceWriter. */
 function chunksFromEvents(events: readonly TraceEvent[]): ReturnType<TraceWriter["takeChunks"]> {
@@ -128,5 +156,109 @@ describe("TraceBuffer double settle", () => {
     ]);
 
     expect(() => new TraceBuffer(graph, chunks)).toThrow(/double settle/);
+  });
+});
+
+describe("TraceBuffer appendChunk streaming", () => {
+  it("empty buffer grows totals on append; live cursor stays at T=0", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const buf = new TraceBuffer(graph, []);
+
+    expect(buf.totalEvents).toBe(0);
+    expect(buf.totalWork).toBe(0);
+
+    const chunks = chunksFromEvents([{ k: "settle", v: 1, order: 0, cost: 1 }]);
+    const slab = chunks[0];
+    if (slab === undefined) {
+      throw new Error("expected at least one chunk from settle event");
+    }
+
+    buf.appendChunk(slab);
+
+    expect(buf.totalEvents).toBe(1);
+    expect(buf.totalWork).toBe(1);
+    expect(buf.state.eventIndex).toBe(0);
+    expect(buf.state.work).toBe(0);
+    expect(buf.state.settledCount).toBe(0);
+  });
+
+  it("incremental append matches one-shot buffer at end seek", () => {
+    const graph = packCsr(3, [{ from: 0, to: 1, weight: 1 }], [0, 1, 2], [0, 0, 0]);
+    const events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "pivot", v: 2, level: 0 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+    const allChunks = chunksFromEvents(events);
+
+    const incremental = new TraceBuffer(graph, []);
+    for (const chunk of allChunks) {
+      incremental.appendChunk(chunk);
+    }
+
+    const oneShot = new TraceBuffer(graph, allChunks);
+
+    incremental.seekWork(incremental.totalWork);
+    oneShot.seekWork(oneShot.totalWork);
+
+    compareLane(incremental.state, oneShot.state);
+  });
+
+  it("seek to 0 then end restores relaxations and heapOps", () => {
+    const graph = packCsr(3, [{ from: 0, to: 1, weight: 1 }], [0, 1, 2], [0, 0, 0]);
+    const events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+    const chunks = chunksFromEvents(events);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    const endRelaxations = buf.state.relaxations;
+    const endHeapOps = buf.state.heapOps;
+
+    buf.seekWork(0);
+    expect(buf.state.relaxations).toBe(0);
+    expect(buf.state.heapOps).toBe(0);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.relaxations).toBe(endRelaxations);
+    expect(buf.state.heapOps).toBe(endHeapOps);
+  });
+});
+
+describe("TraceBuffer live counters", () => {
+  it("tracks relaxations, heapOps, and lastRelaxWork through seek to end", () => {
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: 1 },
+        { from: 1, to: 2, weight: 1 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "relax", e: 1, improved: false, cost: 1 },
+    ];
+    const chunks = chunksFromEvents(events);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(4);
+    const workAfterImprovingRelax = buf.state.work;
+
+    buf.seekWork(buf.totalWork);
+
+    expect(buf.state.heapOps).toBe(1);
+    expect(buf.state.relaxations).toBe(2);
+    expect(buf.state.lastRelaxWork[0]).toBe(workAfterImprovingRelax);
+    expect(buf.state.lastRelaxWork[1]).toBe(UNSETTLED);
   });
 });
