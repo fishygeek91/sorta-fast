@@ -17,8 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "isolatedModules": true,
-    "resolveJsonModule": true,
-    "types": ["vitest/globals"]
+    "resolveJsonModule": true
   },
   "include": ["src", "test", "vite.config.ts"]
 }
