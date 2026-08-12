@@ -12,7 +12,8 @@
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "bench:trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/trace-write.ts"
+    "bench:trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/trace-write.ts",
+    "bench:replay": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/replay-5k.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
