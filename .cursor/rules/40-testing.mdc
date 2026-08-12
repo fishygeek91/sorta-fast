@@ -1,0 +1,16 @@
+---
+description: Testing rules
+globs: ["**/*.test.ts", "test/**", "**/vitest.config.*"]
+alwaysApply: false
+---
+
+# Testing rules
+
+Framework: Vitest. Full policy: `docs/design.md` §5 and `.cursor/rules/10-science.mdc`.
+
+- **Never** weaken, skip (`.skip`, `.todo` on existing tests), or delete a test to make a change pass. A failing differential or golden test means your change is wrong.
+- No time/randomness flakiness: inject seeds; use mulberry32; never `Math.random()`/`Date.now()` in anything under test from `src/core/` or `src/harness/`.
+- Differential fuzz suites are the project's evidence for the "first implementation" claim — they run in CI on every PR and always include weight-tie cases.
+- Golden trace fixtures change only with explicit justification in the PR description — the trace is a spec property, not an implementation detail.
+- No network in tests. Renderer-free: everything in `src/core/`/`src/harness/` must test headless in Node.
+- Perf ACs (fps, stall budgets, bench timings) are verified with a measured number reported in the PR, not asserted by eye.

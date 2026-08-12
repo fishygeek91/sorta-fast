@@ -1,0 +1,18 @@
+---
+description: Restrict implementation on this project to Cursor models (Composer 2.5 and Grok 4.5)
+alwaysApply: true
+---
+
+# Allowed models for implementation
+
+Implementation work in Cursor uses only:
+
+- **Composer 2.5**
+- **Grok 4.5** (Cursor Grok 4.5)
+
+Review is separate: Claude (via the Claude app) reviews PRs — Cursor agents never perform or simulate that review.
+
+## Agent behavior
+
+- If the current session is not one of the allowed models, stop and tell the user to switch before continuing development work.
+- When spawning subagents, only select Composer 2.5 or Grok 4.5.
