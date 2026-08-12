@@ -10,5 +10,7 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     environment: "node",
+    // Shared GHA CPUs miss the 1M-event budget when files run in parallel (#35).
+    fileParallelism: false,
   },
 });
