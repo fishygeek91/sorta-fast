@@ -85,6 +85,10 @@ describe("generateGraph validation", () => {
   it("rejects non-positive n", () => {
     expect(() => generateGraph("sparse", 0, 1)).toThrow(/n must be an integer >= 1/);
   });
+
+  it("rejects sparse graphs too small to place m = 2n arcs", () => {
+    expect(() => generateGraph("sparse", 2, 1)).toThrow(/n >= 3/);
+  });
 });
 
 function expectSameGraph(a: Graph, b: Graph): void {
@@ -110,31 +114,57 @@ function assertValidCsr(graph: Graph): void {
   expect(graph.y.length).toBe(graph.n);
   expect(graph.offsets[graph.n]).toBe(graph.m);
 
+  const violations: string[] = [];
+
   for (let v = 0; v < graph.n; v += 1) {
     const start = graph.offsets[v];
     const end = graph.offsets[v + 1];
     if (start === undefined || end === undefined) {
-      throw new Error(`missing offsets at vertex ${v}`);
+      violations.push(`vertex ${v}: missing offsets`);
+      continue;
     }
-    expect(start).toBeLessThanOrEqual(end);
+    if (start > end) {
+      violations.push(`vertex ${v}: offsets not nondecreasing (${start} > ${end})`);
+    }
     let prevTarget = -1;
     for (let e = start; e < end; e += 1) {
       const to = graph.targets[e];
       const weight = graph.weights[e];
       if (to === undefined || weight === undefined) {
-        throw new Error(`missing edge fields at ${e}`);
+        violations.push(`edge ${e}: missing fields`);
+        continue;
       }
-      expect(to).toBeGreaterThanOrEqual(0);
-      expect(to).toBeLessThan(graph.n);
-      expect(to).not.toBe(v);
-      expect(to).toBeGreaterThanOrEqual(prevTarget);
-      expect(weight).toBeGreaterThanOrEqual(0);
-      expect(Number.isFinite(weight)).toBe(true);
+      if (to < 0) {
+        violations.push(`edge ${e}: target ${to} out of range (< 0)`);
+      } else if (to >= graph.n) {
+        violations.push(`edge ${e}: target ${to} out of range (>= n=${graph.n})`);
+      }
+      if (to === v) {
+        violations.push(`edge ${e}: self-loop at vertex ${v}`);
+      }
+      if (to < prevTarget) {
+        violations.push(`vertex ${v} edge ${e}: targets not sorted (${to} < ${prevTarget})`);
+      }
+      if (to === prevTarget) {
+        violations.push(`vertex ${v} edge ${e}: duplicate arc ${v} -> ${to}`);
+      }
+      if (weight < 0) {
+        violations.push(`edge ${e}: weight ${weight} < 0`);
+      }
+      if (!Number.isFinite(weight)) {
+        violations.push(`edge ${e}: weight ${weight} not finite`);
+      }
       prevTarget = to;
     }
-    expect(Number.isFinite(graph.x[v])).toBe(true);
-    expect(Number.isFinite(graph.y[v])).toBe(true);
+    if (!Number.isFinite(graph.x[v])) {
+      violations.push(`vertex ${v}: x not finite`);
+    }
+    if (!Number.isFinite(graph.y[v])) {
+      violations.push(`vertex ${v}: y not finite`);
+    }
   }
+
+  expect(violations).toEqual([]);
 }
 
 function assertEdgeRegime(kind: GraphKind, graph: Graph): void {

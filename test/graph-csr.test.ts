@@ -60,6 +60,20 @@ describe("packCsr", () => {
     expect(() => packCsr(1, [{ from: 0, to: 0, weight: 1 }], [0], [0])).toThrow(/self-loop/);
   });
 
+  it("rejects duplicate parallel arcs", () => {
+    expect(() =>
+      packCsr(
+        2,
+        [
+          { from: 0, to: 1, weight: 1 },
+          { from: 0, to: 1, weight: 2 },
+        ],
+        [0, 1],
+        [0, 1],
+      ),
+    ).toThrow(/duplicate arc/);
+  });
+
   it("rejects negative weights", () => {
     expect(() => packCsr(2, [{ from: 0, to: 1, weight: -0.1 }], [0, 1], [0, 1])).toThrow(
       /weight must be finite/,

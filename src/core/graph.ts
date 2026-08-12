@@ -61,8 +61,9 @@ const CLUSTER_JITTER = 0.12;
 /**
  * Pack a directed edge list into CSR typed arrays.
  *
- * Rejects self-loops, negative / non-finite weights, and out-of-range endpoints.
- * Edges are sorted by `(from, to)` so neighbor iteration is stable across runs.
+ * Rejects self-loops, duplicate `(from, to)` arcs, negative / non-finite weights,
+ * and out-of-range endpoints. Simple digraph only — later SSSP lanes assume no
+ * parallel edges. Edges are sorted by `(from, to)` so neighbor iteration is stable.
  *
  * @param n - Vertex count; must be an integer >= 0.
  * @param edges - Directed arcs.
@@ -114,6 +115,17 @@ export function packCsr(
     }
   }
 
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const edge = sorted[i];
+    if (prev === undefined || edge === undefined) {
+      throw new Error("packCsr: sorted edge list was sparse");
+    }
+    if (prev.from === edge.from && prev.to === edge.to) {
+      throw new Error(`duplicate arc ${edge.from} -> ${edge.to}`);
+    }
+  }
+
   const m = sorted.length;
   const offsets = new Uint32Array(n + 1);
   const targets = new Uint32Array(m);
@@ -146,7 +158,10 @@ export function packCsr(
  * Generate a seeded graph of the requested kind.
  *
  * @param kind - One of {@link GRAPH_KINDS}.
- * @param n - Vertex count; integer >= 1.
+ * @param n - Vertex count; integer >= 1. `sparse` requires n >= 3 (cannot place
+ *   m = 2n distinct arcs otherwise). `city` with n = 1 or 2 is edgeless — the
+ *   Delaunay super-triangle is stripped and nothing remains. URL/UI layers
+ *   should clamp rather than pass those sizes through.
  * @param seed - PRNG seed; coerced to Uint32.
  */
 export function generateGraph(kind: GraphKind, n: number, seed: number): Graph {
@@ -367,6 +382,7 @@ function generateClusters(n: number, seed: number): Graph {
  *
  * Insertion order is vertex id (the seeded point stream). No extra jitter
  * beyond that stream — degeneracies are broken by insertion order + CSR sort.
+ * n = 1 and n = 2 produce an edgeless graph (no remaining triangles).
  */
 function generateCity(n: number, seed: number): Graph {
   const rng = mulberry32(seed);
