@@ -42,6 +42,17 @@ export interface Graph {
   readonly y: Float64Array;
 }
 
+/**
+ * Vertex index in `0 .. n-1`.
+ */
+export type VertexId = number;
+
+/**
+ * Directed-arc index into CSR `targets` / `weights` (`0 .. m-1`).
+ * Edge `i` leaves vertex `u` when `offsets[u] <= i < offsets[u+1]`.
+ */
+export type EdgeId = number;
+
 /** One directed arc, used only while packing (not the runtime representation). */
 export type CsrEdge = {
   readonly from: number;
