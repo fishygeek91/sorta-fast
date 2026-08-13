@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { bellmanFord } from "../src/core/bellmanFord.ts";
+import { bmsspParams } from "../src/core/bmssp/params.ts";
 import { generateGraph, GRAPH_KINDS } from "../src/core/graph.ts";
 import {
   auditBmsspDistancesFromTrace,
   assertBoundedSettleInvariant,
   drainBmsspRun,
+  heapEventsOutsideLevelZero,
+  pullSizeViolations,
 } from "./bmssp-helpers.ts";
 import { drainRun } from "./dijkstra-helpers.ts";
 
@@ -55,6 +58,15 @@ describe("bmssp differential fuzz", () => {
 
       const settleViolations = assertBoundedSettleInvariant(events, result.distances);
       for (const msg of settleViolations) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      for (const msg of heapEventsOutsideLevelZero(events)) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      const { t } = bmsspParams(n);
+      for (const msg of pullSizeViolations(events, t)) {
         violations.push(`${ctx}: ${msg}`);
       }
     }

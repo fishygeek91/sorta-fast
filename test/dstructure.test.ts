@@ -146,6 +146,31 @@ describe("BlockListD M=1 adversarial", () => {
     expect(third.keys).toEqual([2]);
     expect(third.bound).toBe(B);
   });
+
+  it("pulls tied values in key order when M=1 so a later insert cannot hide a smaller key", () => {
+    const d = new BlockListD(1, Number.POSITIVE_INFINITY);
+    d.insert(40, 7);
+    d.insert(15, 8);
+    d.insert(17, 8);
+
+    const first = d.pull();
+    expect(first.keys).toEqual([40]);
+    expect(first.bound).toBe(8);
+
+    d.insert(41, 8);
+
+    const second = d.pull();
+    expect(second.keys).toEqual([15]);
+    expect(second.bound).toBe(8);
+
+    const third = d.pull();
+    expect(third.keys).toEqual([17]);
+    expect(third.bound).toBe(8);
+
+    const fourth = d.pull();
+    expect(fourth.keys).toEqual([41]);
+    expect(fourth.bound).toBe(Number.POSITIVE_INFINITY);
+  });
 });
 
 describe("BlockListD all-equal values", () => {
@@ -156,11 +181,7 @@ describe("BlockListD all-equal values", () => {
     }
     const result = d.pull();
     expect(result.n).toBe(2);
-    expect(result.keys).toHaveLength(2);
-    for (const key of result.keys) {
-      expect(key).toBeGreaterThanOrEqual(0);
-      expect(key).toBeLessThanOrEqual(3);
-    }
+    expect(result.keys).toEqual([0, 1]);
     expect(result.bound).toBe(5);
     expect(d.size).toBe(2);
   });

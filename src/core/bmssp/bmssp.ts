@@ -39,6 +39,7 @@ type SettleState = {
 /** Result of an internal {@link bmssp} call (arXiv 2504.17033 Algorithm 3). */
 type BmsspCallResult = {
   Bprime: number;
+  BprimeKey: number;
   U: VertexId[];
 };
 
@@ -52,7 +53,7 @@ type PopMinResult = {
  * Binary min-heap on distance keys (structure-of-arrays).
  *
  * Lazy deletion: each `push` appends a snapshot; no in-place decrease-key.
- * Private copy of the Dijkstra lane heap (not exported from `dijkstra.ts`).
+ * Private copy of the Dijkstra lane heap — extracting a shared module is a later task.
  */
 class MinHeap {
   private vertices: Int32Array;
@@ -214,22 +215,139 @@ function dedupeSources(S: readonly VertexId[], n: number): VertexId[] {
   return sources;
 }
 
-/**
- * Block capacity M = 2^t for data structure D (Lemma 3.3).
- */
-function blockCapacity(t: number): number {
-  if (t < 31) {
-    return 1 << t;
+/** 2^exp with overflow guard. exp must be an integer >= 0. */
+function pow2(exp: number): number {
+  if (!Number.isInteger(exp) || exp < 0) {
+    throw new Error(`pow2 exp must be an integer >= 0, got ${String(exp)}`);
   }
-  return Math.pow(2, t);
+  if (exp === 0) {
+    return 1;
+  }
+  if (exp < 31) {
+    return 1 << exp;
+  }
+  if (exp < 53) {
+    return 2 ** exp;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/** Algorithm 3: M = 2^{(l-1)·t} for D at level l >= 1. */
+function blockCapacity(level: number, t: number): number {
+  return pow2((level - 1) * t);
+}
+
+/** Algorithm 3 workload cap: k · 2^{l·t} */
+function workloadCap(k: number, level: number, t: number): number {
+  const p = pow2(level * t);
+  if (!Number.isFinite(p)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return k * p;
 }
 
 /**
- * Settle vertex `v` once globally; throws if `dist[v] >= B` (debug invariant).
+ * Sentinel bound-key for a scalar-strict `value < bound` test (Assumption 2.1
+ * unique lengths). Finite bound-keys encode D's (value, key) total order so
+ * tied distances still satisfy Lemma 3.3 `max(S') < x ≤ min(D)` as pairs.
+ */
+const BOUND_KEY_STRICT = Number.NEGATIVE_INFINITY;
+
+/**
+ * Whether `(value, key)` is strictly below the pair bound `(bound, boundKey)`.
+ *
+ * D already orders pairs by value then key. Pull's scalar `bound` can equal a
+ * pulled distance when several vertices share that distance; the pair test
+ * keeps those pulled sources inside the child call.
+ */
+function lessPair(value: number, key: number, bound: number, boundKey: number): boolean {
+  if (value < bound) {
+    return true;
+  }
+  if (value > bound) {
+    return false;
+  }
+  return key < boundKey;
+}
+
+/**
+ * Lemma 3.3 separator key after Pull: if any pulled source sits at `Bi`, the
+ * next vertex id after the max such key is the pair-order cut. Otherwise the
+ * scalar bound is already strict (`max(S') < Bi`).
+ */
+function pullSeparatorKey(Si: readonly VertexId[], Bi: number, dist: Float64Array): number {
+  let maxKeyAtBi = Number.NEGATIVE_INFINITY;
+  let anyAtBi = false;
+  for (const s of Si) {
+    const ds = dist[s];
+    if (ds === Bi) {
+      anyAtBi = true;
+      if (s > maxKeyAtBi) {
+        maxKeyAtBi = s;
+      }
+    }
+  }
+  if (anyAtBi) {
+    return maxKeyAtBi + 1;
+  }
+  return BOUND_KEY_STRICT;
+}
+
+/**
+ * Lemma 3.3 BatchPrepend requires every value to be strictly smaller than
+ * every value still in D. Remaining keys after Pull have pair-order ≥ (Bi, BiKey),
+ * so scalar ties at Bi must go through Insert instead of BatchPrepend.
+ */
+function* ingestFrontBand(
+  D: BlockListD,
+  pairs: readonly DPair[],
+  Bi: number,
+  dstructB: number,
+): Generator<TraceEvent, void, undefined> {
+  if (pairs.length === 0) {
+    return;
+  }
+
+  let allStrictlyBelowBi = true;
+  for (const pair of pairs) {
+    if (!(pair.value < Bi)) {
+      allStrictlyBelowBi = false;
+      break;
+    }
+  }
+
+  if (allStrictlyBelowBi) {
+    const prependResult = D.batchPrepend(pairs);
+    yield {
+      k: "dstruct",
+      op: "batchPrepend",
+      n: prependResult.n,
+      cmps: prependResult.cmps,
+    };
+    return;
+  }
+
+  for (const pair of pairs) {
+    if (!(Number.isFinite(pair.value) && pair.value < dstructB)) {
+      continue;
+    }
+    const insertResult = D.insert(pair.key, pair.value);
+    yield {
+      k: "dstruct",
+      op: "insert",
+      n: insertResult.n,
+      cmps: insertResult.cmps,
+    };
+  }
+}
+
+/**
+ * Settle vertex `v` once globally; throws if `(dist[v], v)` is not below `(B, Bkey)`.
  */
 function* emitSettle(
   v: VertexId,
   B: number,
+  Bkey: number,
   dist: Float64Array,
   settleState: SettleState,
 ): Generator<TraceEvent, void, undefined> {
@@ -241,7 +359,7 @@ function* emitSettle(
   if (distV === undefined) {
     throw new Error(`dist[${v}] missing`);
   }
-  if (distV >= B) {
+  if (!lessPair(distV, v, B, Bkey)) {
     throw new Error(
       `BMSSP invariant: cannot settle vertex ${v} with dist ${String(distV)} >= bound ${String(B)}`,
     );
@@ -253,44 +371,45 @@ function* emitSettle(
 }
 
 /**
- * arXiv 2504.17033 Algorithm 3 base case (`l = 0`): mini-Dijkstra from S,
- * settling at most k+1 vertices with edge relaxations only when `nd < B`.
+ * arXiv 2504.17033 Algorithm 2 base case: mini-Dijkstra from singleton S,
+ * settling at most k+1 vertices (Remark 3.4 relaxation rule).
  */
 function* baseMiniDijkstra(
   graph: Graph,
   B: number,
+  Bkey: number,
   S: readonly VertexId[],
   k: number,
   dist: Float64Array,
   pred: Int32Array,
   settleState: SettleState,
 ): Generator<TraceEvent, BmsspCallResult, undefined> {
+  const sources = dedupeSources(S, graph.n);
+  if (sources.length !== 1) {
+    throw new Error(`BaseCase requires singleton S, got ${String(sources.length)}`);
+  }
+
+  const x = sources[0];
+  if (x === undefined) {
+    throw new Error("BaseCase requires singleton S, got 0");
+  }
+
+  const startDist = dist[x];
+  if (startDist === undefined) {
+    throw new Error(`dist[${x}] missing`);
+  }
+  if (!Number.isFinite(startDist) || !lessPair(startDist, x, B, Bkey)) {
+    return { Bprime: B, BprimeKey: Bkey, U: [] };
+  }
+
   const heap = new MinHeap();
   const { offsets, targets, weights } = graph;
 
-  // arXiv 2504.17033 Algorithm 3 base case: start from a single x ∈ S
-  // (choose the minimum current distance when |S| > 1).
-  let start: VertexId | undefined;
-  let startDist = Number.POSITIVE_INFINITY;
-  for (const x of S) {
-    const dx = dist[x];
-    if (dx === undefined) {
-      throw new Error(`dist[${x}] missing`);
-    }
-    if (Number.isFinite(dx) && dx < B && dx < startDist) {
-      start = x;
-      startDist = dx;
-    }
-  }
-
-  if (start === undefined) {
-    return { Bprime: B, U: [] };
-  }
-
-  const initialPushCmps = heap.push(start, startDist);
+  const initialPushCmps = heap.push(x, startDist);
   yield { k: "heap", op: "push", cmps: initialPushCmps };
 
   const popped: VertexId[] = [];
+  const inPopped = new Uint8Array(graph.n);
 
   while (heap.size > 0 && popped.length < k + 1) {
     const { v, key, cmps: popCmps } = heap.popmin();
@@ -301,14 +420,20 @@ function* baseMiniDijkstra(
       throw new Error(`dist[${v}] missing`);
     }
 
+    // Stale-key skip only (arXiv 2504.17033 Algorithm 2); do not skip settled vertices —
+    // a partial child may BatchPrepend a complete vertex back into D to be pulled again.
     if (key !== distV) {
       continue;
     }
-    if (settleState.settled[v] === 1) {
+    if (inPopped[v] === 1) {
+      continue;
+    }
+    if (!lessPair(distV, v, B, Bkey)) {
       continue;
     }
 
-    yield* emitSettle(v, B, dist, settleState);
+    yield* emitSettle(v, B, Bkey, dist, settleState);
+    inPopped[v] = 1;
     popped.push(v);
 
     const arcStart = offsets[v];
@@ -325,7 +450,7 @@ function* baseMiniDijkstra(
       }
 
       const cand = distV + w;
-      if (!(cand < B)) {
+      if (!lessPair(cand, to, B, Bkey)) {
         continue;
       }
 
@@ -334,12 +459,17 @@ function* baseMiniDijkstra(
         throw new Error(`dist[${to}] missing`);
       }
 
+      // arXiv 2504.17033 Remark 3.4 / Algorithm 2: on cand <= dist, update and
+      // ensure `to` is in the heap even when FindPivots already wrote the same
+      // label — otherwise U0 never grows past the source and B' stays B.
       const improved = cand < distTo;
       yield { k: "relax", e, improved, cost: RELAX_EVENT_COST };
 
-      if (improved) {
-        dist[to] = cand;
-        pred[to] = v;
+      if (cand <= distTo) {
+        if (improved) {
+          dist[to] = cand;
+          pred[to] = v;
+        }
         const pushCmps = heap.push(to, cand);
         yield { k: "heap", op: "push", cmps: pushCmps };
       }
@@ -347,7 +477,7 @@ function* baseMiniDijkstra(
   }
 
   if (popped.length <= k) {
-    return { Bprime: B, U: popped };
+    return { Bprime: B, BprimeKey: Bkey, U: popped };
   }
 
   let Bprime = Number.NEGATIVE_INFINITY;
@@ -372,100 +502,22 @@ function* baseMiniDijkstra(
     }
   }
 
-  return { Bprime, U };
-}
-
-/**
- * Bounded multi-source Dijkstra from `sources` with relaxations only when `nd < B`.
- * Settles vertices not already marked in `settleState`.
- */
-function* boundedMultiSourceDijkstra(
-  graph: Graph,
-  B: number,
-  sources: readonly VertexId[],
-  dist: Float64Array,
-  pred: Int32Array,
-  settleState: SettleState,
-): Generator<TraceEvent, void, undefined> {
-  const heap = new MinHeap();
-  const { offsets, targets, weights } = graph;
-
-  for (const x of sources) {
-    const dx = dist[x];
-    if (dx === undefined) {
-      throw new Error(`dist[${x}] missing`);
-    }
-    if (Number.isFinite(dx) && dx < B) {
-      const pushCmps = heap.push(x, dx);
-      yield { k: "heap", op: "push", cmps: pushCmps };
-    }
-  }
-
-  while (heap.size > 0) {
-    const { v, key, cmps: popCmps } = heap.popmin();
-    yield { k: "heap", op: "popmin", cmps: popCmps };
-
-    const distV = dist[v];
-    if (distV === undefined) {
-      throw new Error(`dist[${v}] missing`);
-    }
-
-    if (key !== distV) {
-      continue;
-    }
-    if (settleState.settled[v] === 1) {
-      continue;
-    }
-
-    yield* emitSettle(v, B, dist, settleState);
-
-    const arcStart = offsets[v];
-    const arcEnd = offsets[v + 1];
-    if (arcStart === undefined || arcEnd === undefined) {
-      throw new Error(`offsets for vertex ${v} missing`);
-    }
-
-    for (let e = arcStart; e < arcEnd; e += 1) {
-      const to = targets[e];
-      const w = weights[e];
-      if (to === undefined || w === undefined) {
-        throw new Error(`CSR arc ${e} missing`);
-      }
-
-      const cand = distV + w;
-      if (!(cand < B)) {
-        continue;
-      }
-
-      const distTo = dist[to];
-      if (distTo === undefined) {
-        throw new Error(`dist[${to}] missing`);
-      }
-
-      const improved = cand < distTo;
-      yield { k: "relax", e, improved, cost: RELAX_EVENT_COST };
-
-      if (improved) {
-        dist[to] = cand;
-        pred[to] = v;
-        const pushCmps = heap.push(to, cand);
-        yield { k: "heap", op: "push", cmps: pushCmps };
-      }
-    }
-  }
+  return { Bprime, BprimeKey: BOUND_KEY_STRICT, U };
 }
 
 /**
  * Internal BMSSP recursion (arXiv 2504.17033 Algorithm 3).
  *
  * @param l - Recursion level (0 = base mini-Dijkstra).
- * @param B - Distance upper bound for this call.
+ * @param B - Distance upper bound for this call (pair-ordered with `Bkey`).
+ * @param Bkey - Vertex-id cut at `B`; {@link BOUND_KEY_STRICT} means scalar `value < B`.
  * @param S - Multi-source frontier.
  */
 function* bmssp(
   graph: Graph,
   l: number,
   B: number,
+  Bkey: number,
   S: readonly VertexId[],
   k: number,
   t: number,
@@ -478,7 +530,7 @@ function* bmssp(
   let result: BmsspCallResult;
 
   if (l === 0) {
-    result = yield* baseMiniDijkstra(graph, B, S, k, dist, pred, settleState);
+    result = yield* baseMiniDijkstra(graph, B, Bkey, S, k, dist, pred, settleState);
   } else {
     // arXiv 2504.17033 Algorithm 3 (recursive case)
     const pivotGen = findPivots(graph, B, S, k, dist, l);
@@ -488,20 +540,20 @@ function* bmssp(
       pivotStep = pivotGen.next();
     }
     const pivotResult = pivotStep.value;
-    let P = pivotResult.P;
+    const P = pivotResult.P;
     const W = pivotResult.W;
 
-    if (P.length === 0) {
-      P = dedupeSources(S, graph.n);
-    }
-
-    const M = blockCapacity(t);
-    const D = new BlockListD(M, B);
+    // Algorithm 3: M = 2^{(l-1)·t}. When the call bound is a pair cut at B,
+    // D's scalar cap is +∞ so sources with dist === B can be inserted; inserts
+    // are still gated by lessPair(..., B, Bkey). Empty P leaves D empty.
+    const M = blockCapacity(l, t);
+    const dstructB = Bkey === BOUND_KEY_STRICT ? B : Number.POSITIVE_INFINITY;
+    const D = new BlockListD(M, dstructB);
     const { offsets, targets, weights } = graph;
 
     for (const x of P) {
       const dx = dist[x];
-      if (dx !== undefined && Number.isFinite(dx) && dx < B) {
+      if (dx !== undefined && Number.isFinite(dx) && lessPair(dx, x, B, Bkey)) {
         const insertResult = D.insert(x, dx);
         yield {
           k: "dstruct",
@@ -513,8 +565,13 @@ function* bmssp(
     }
 
     const Uall: VertexId[] = [];
+    const inUall = new Uint8Array(graph.n);
+    let uCount = 0;
+    const cap = workloadCap(k, l, t);
+    let Bprime = B;
+    let BprimeKey = Bkey;
 
-    while (D.size > 0) {
+    while (uCount < cap && D.size > 0) {
       const pullResult = D.pull();
       yield {
         k: "dstruct",
@@ -528,12 +585,27 @@ function* bmssp(
       }
 
       const Si = pullResult.keys;
-      const Bi = pullResult.bound;
+      let Bi = pullResult.bound;
+      let BiKey = pullSeparatorKey(Si, Bi, dist);
+      // Draining D returns the structure cap; keep this call's pair bound so a
+      // pair-cut level does not recurse with +∞.
+      if (D.size === 0) {
+        Bi = B;
+        BiKey = Bkey;
+      }
 
-      const child = yield* bmssp(graph, l - 1, Bi, Si, k, t, dist, pred, settleState);
+      const child = yield* bmssp(graph, l - 1, Bi, BiKey, Si, k, t, dist, pred, settleState);
       const Bpi = child.Bprime;
+      const BpiKey = child.BprimeKey;
       const Ui = child.U;
-      Uall.push(...Ui);
+
+      for (const v of Ui) {
+        if (inUall[v] === 0) {
+          inUall[v] = 1;
+          Uall.push(v);
+          uCount += 1;
+        }
+      }
 
       const K: DPair[] = [];
 
@@ -571,7 +643,16 @@ function* bmssp(
               pred[to] = u;
             }
 
-            if (Bi <= cand && cand < B && Number.isFinite(cand)) {
+            const inInsertBand =
+              Number.isFinite(cand) &&
+              !lessPair(cand, to, Bi, BiKey) &&
+              lessPair(cand, to, B, Bkey);
+            const inPrependBand =
+              Number.isFinite(cand) &&
+              !lessPair(cand, to, Bpi, BpiKey) &&
+              lessPair(cand, to, Bi, BiKey);
+
+            if (inInsertBand) {
               const insertResult = D.insert(to, cand);
               yield {
                 k: "dstruct",
@@ -579,60 +660,80 @@ function* bmssp(
                 n: insertResult.n,
                 cmps: insertResult.cmps,
               };
-            } else if (Bpi <= cand && cand < Bi) {
+            } else if (inPrependBand) {
+              K.push({ key: to, value: cand });
+            } else if (
+              Number.isFinite(cand) &&
+              settleState.settled[to] === 0 &&
+              lessPair(cand, to, B, Bkey)
+            ) {
+              // Assumption 2.1 unique lengths makes cand < B'i already complete.
+              // With ties, FindPivots may already have written the same label;
+              // an unsettled vertex must still enter D or it never relaxes out.
               K.push({ key: to, value: cand });
             }
           }
         }
       }
 
-      if (K.length > 0) {
-        const prependResult = D.batchPrepend(K);
-        yield {
-          k: "dstruct",
-          op: "batchPrepend",
-          n: prependResult.n,
-          cmps: prependResult.cmps,
-        };
-      }
-
       const siPairs: DPair[] = [];
       for (const x of Si) {
         const dx = dist[x];
-        if (dx !== undefined && Number.isFinite(dx) && Bpi <= dx && dx < Bi) {
+        if (
+          dx !== undefined &&
+          Number.isFinite(dx) &&
+          !lessPair(dx, x, Bpi, BpiKey) &&
+          lessPair(dx, x, Bi, BiKey)
+        ) {
           siPairs.push({ key: x, value: dx });
         }
       }
-      if (siPairs.length > 0) {
-        const siPrepend = D.batchPrepend(siPairs);
-        yield {
-          k: "dstruct",
-          op: "batchPrepend",
-          n: siPrepend.n,
-          cmps: siPrepend.cmps,
-        };
+      // Algorithm 3 line 21: one BatchPrepend of K ∪ Si-in-window. Two prepends
+      // would put Si in front of K and can hide smaller K keys from Pull's D0 prefix.
+      yield* ingestFrontBand(D, K.concat(siPairs), Bi, dstructB);
+
+      // Algorithm 3 prose step 5: D empty → successful execution, B' = B.
+      if (D.size === 0) {
+        Bprime = B;
+        BprimeKey = Bkey;
+        break;
+      }
+
+      // Algorithm 3 prose step 6 / Lemma 3.9: |U| >= k·2^{l·t} → partial, B' = B'_i.
+      if (uCount >= cap) {
+        Bprime = Bpi;
+        BprimeKey = BpiKey;
+        break;
       }
     }
 
-    const BprimeOut = B;
+    // Algorithm 3 final: U ← U ∪ {x ∈ W : d[x] < B'} in pair order.
+    const U: VertexId[] = [];
+    const inU = new Uint8Array(graph.n);
 
-    const extraW: VertexId[] = [];
+    for (const v of Uall) {
+      const dv = dist[v];
+      if (dv !== undefined && lessPair(dv, v, Bprime, BprimeKey)) {
+        U.push(v);
+        inU[v] = 1;
+      }
+    }
+
     for (const x of W) {
       const dx = dist[x];
-      if (dx !== undefined && dx < BprimeOut) {
-        extraW.push(x);
+      if (dx !== undefined && lessPair(dx, x, Bprime, BprimeKey)) {
+        yield* emitSettle(x, B, Bkey, dist, settleState);
+        if (inU[x] === 0) {
+          inU[x] = 1;
+          U.push(x);
+        }
       }
     }
 
-    if (extraW.length > 0) {
-      yield* boundedMultiSourceDijkstra(graph, B, extraW, dist, pred, settleState);
-    }
-
-    const U = Uall.concat(extraW);
-    result = { Bprime: BprimeOut, U };
+    result = { Bprime, BprimeKey, U };
   }
 
-  yield { k: "recurse", dir: "out", level: l, bound: B };
+  yield { k: "recurse", dir: "out", level: l, bound: result.Bprime };
   return result;
 }
 
@@ -670,7 +771,18 @@ export function* run(
     settled: new Uint8Array(n),
   };
 
-  yield* bmssp(graph, L, Number.POSITIVE_INFINITY, [source], k, t, dist, pred, settleState);
+  yield* bmssp(
+    graph,
+    L,
+    Number.POSITIVE_INFINITY,
+    BOUND_KEY_STRICT,
+    [source],
+    k,
+    t,
+    dist,
+    pred,
+    settleState,
+  );
 
   return { distances: dist, predecessors: pred };
 }

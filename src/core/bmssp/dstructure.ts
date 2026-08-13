@@ -26,10 +26,12 @@ export type DPullResult = {
   readonly cmps: number;
 };
 
-/** Internal block: unsorted pairs plus an upper bound (D1 only; D0 bounds unused). */
+/** Internal block: unsorted pairs plus a pair-order upper bound (D1 only; D0 bounds unused). */
 type Block = {
   pairs: DPair[];
   upperBound: number;
+  /** Key cut at `upperBound`; `+Infinity` on the D1 tail so any key at that value is covered. */
+  upperBoundKey: number;
 };
 
 /** Locator for a key: block object reference and offset within that block. */
@@ -74,13 +76,22 @@ export class BlockListD {
     this.B = B;
     this.cmps = 0;
     this.d0 = [];
-    this.d1 = [{ pairs: [], upperBound: B }];
+    this.d1 = [this.emptyTailBlock()];
     this.locators = new Map();
   }
 
   /** Number of unique keys currently stored in D. */
   get size(): number {
     return this.locators.size;
+  }
+
+  /** Empty D1 tail block whose pair bound is `(B, +∞)`. */
+  private emptyTailBlock(): Block {
+    return {
+      pairs: [],
+      upperBound: this.B,
+      upperBoundKey: Number.POSITIVE_INFINITY,
+    };
   }
 
   /**
@@ -111,7 +122,7 @@ export class BlockListD {
       this.removePairAtLocator(existing);
     }
 
-    const blockIndex = this.findD1BlockForValue(value);
+    const blockIndex = this.findD1BlockForPair(key, value);
     const block = this.d1[blockIndex];
     if (block === undefined) {
       throw new Error(`dstruct insert: missing D1 block at index ${blockIndex}`);
@@ -174,7 +185,8 @@ export class BlockListD {
    * prefix pairs plus the first nonempty unconsumed D0/D1 block — not a full
    * |D| scan. Empty holes (BatchPrepend deleting the last key of a later
    * block) are skipped without billed compares.
-   * Ties among equal values are broken by key inside the prefix only.
+   * Ties among equal values are broken by key. D1 block bounds are pair-ordered
+   * so the O(M) prefix contains the true min even when several keys share a value.
    */
   pull(): DPullResult {
     this.cmps = 0;
@@ -189,7 +201,7 @@ export class BlockListD {
       const keys = this.sortedKeysFromPairs(allPairs);
       this.locators.clear();
       this.d0 = [];
-      this.d1 = [{ pairs: [], upperBound: this.B }];
+      this.d1 = [this.emptyTailBlock()];
       return { keys, bound: this.B, n: keys.length, cmps: this.cmps };
     }
 
@@ -292,8 +304,20 @@ export class BlockListD {
     }
   }
 
-  /** Leftmost D1 block index whose upper bound is ≥ value (Lemma 3.3 Insert step 2). */
-  private findD1BlockForValue(value: number): number {
+  /**
+   * Whether D1 block `block` can hold `(value, key)`: its pair bound is ≥ that pair.
+   * Bills one comparison (Lemma 3.3 Insert binary search).
+   */
+  private blockCoversPair(block: Block, value: number, key: number): boolean {
+    this.cmps += 1;
+    if (block.upperBound !== value) {
+      return block.upperBound > value;
+    }
+    return block.upperBoundKey >= key;
+  }
+
+  /** Leftmost D1 block whose pair bound is ≥ `(value, key)` (Lemma 3.3 Insert step 2). */
+  private findD1BlockForPair(key: number, value: number): number {
     let lo = 0;
     let hi = this.d1.length;
 
@@ -303,8 +327,7 @@ export class BlockListD {
       if (block === undefined) {
         throw new Error(`dstruct findD1: missing block at index ${mid}`);
       }
-      this.cmps += 1;
-      if (block.upperBound >= value) {
+      if (this.blockCoversPair(block, value, key)) {
         hi = mid;
       } else {
         lo = mid + 1;
@@ -335,6 +358,7 @@ export class BlockListD {
       const { left: leftPairs, right: rightPairs } = this.partitionByMedian(block.pairs);
 
       const rightUpper = block.upperBound;
+      const rightUpperKey = block.upperBoundKey;
       const replacement: Block[] = [];
       const leftMax = this.maxPair(leftPairs);
 
@@ -342,10 +366,15 @@ export class BlockListD {
         replacement.push({
           pairs: leftPairs,
           upperBound: leftMax === undefined ? rightUpper : leftMax.value,
+          upperBoundKey: leftMax === undefined ? rightUpperKey : leftMax.key,
         });
       }
       if (rightPairs.length > 0) {
-        replacement.push({ pairs: rightPairs, upperBound: rightUpper });
+        replacement.push({
+          pairs: rightPairs,
+          upperBound: rightUpper,
+          upperBoundKey: rightUpperKey,
+        });
       }
 
       this.d1.splice(index, 1, ...replacement);
@@ -406,7 +435,7 @@ export class BlockListD {
     }
 
     if (collapsed.length <= this.M) {
-      return [{ pairs: collapsed.slice(), upperBound: Number.NaN }];
+      return [{ pairs: collapsed.slice(), upperBound: Number.NaN, upperBoundKey: Number.NaN }];
     }
 
     const cap = Math.ceil(this.M / 2);
@@ -419,7 +448,7 @@ export class BlockListD {
    */
   private splitIntoBlocksRecursive(pairs: DPair[], cap: number): Block[] {
     if (pairs.length <= cap) {
-      return [{ pairs, upperBound: Number.NaN }];
+      return [{ pairs, upperBound: Number.NaN, upperBoundKey: Number.NaN }];
     }
 
     const { left: leftPairs, right: rightPairs } = this.partitionByMedian(pairs);
@@ -674,7 +703,7 @@ export class BlockListD {
     this.d0 = this.d0.filter((block) => block.pairs.length > 0);
     this.d1 = this.d1.filter((block) => block.pairs.length > 0);
     if (this.d1.length === 0) {
-      this.d1.push({ pairs: [], upperBound: this.B });
+      this.d1.push(this.emptyTailBlock());
     }
   }
 }

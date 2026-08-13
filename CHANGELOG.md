@@ -9,6 +9,11 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- BMSSP re-enqueues an unsettled neighbor below B even when FindPivots already wrote the same label (tie-aware; unique lengths would have completed it) so that vertex can still relax outward (#11).
+- D1 Insert places a key in the leftmost block whose pair bound `(upperBound, upperBoundKey)` covers it, so M=1 Pull cannot skip a smaller key at a tied value behind a later block (#9, #11).
+- BMSSP BatchPrepends K and incomplete Si as one Algorithm 3 batch so a later Si prepend cannot hide smaller K keys from D0's Pull prefix; tied values at `Bᵢ` still go through Insert (#11).
+- BMSSP BaseCase heap-pushes on `cand ≤ dist` (Remark 3.4) so FindPivots-labeled neighbors still enter U0; tied distances use D's (value, key) pair bound after Pull so sources with `dist = Bi` are not dropped (#11).
+- BMSSP follows Algorithm 3: level-dependent M=2^{(l-1)t}, singleton BaseCase, |U| workload cap with partial B'=B'_i, and W-append instead of a non-paper extraW Dijkstra so the work clock measures BMSSP not a cleanup sweep (#11).
 - D Pull's remaining-min bound skips empty unconsumed D0/D1 holes (BatchPrepend can empty a later block without compacting) so a smaller later D0 pair is not hidden behind a vacant slot (#9).
 - D Pull's separator bound reads only the first unconsumed D0 block (prepends are value-ordered front-to-back), so prepend-heavy workloads stay O(M) billed comparisons (#9).
 - FindPivots only adds a vertex to the next Bellman-Ford layer when the relax succeeds (`cand ≤ dist` and `cand < B`), matching Algorithm 1 so 2-cycles no longer re-queue stale vertices (#10).
@@ -17,7 +22,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
-- Instrumented BMSSP lane `run(graph, source)` in `src/core/bmssp/bmssp.ts`: Algorithm 3 recursion with FindPivots + BlockListD (`M = 2^t`), base-case mini-Dijkstra (≤ k+1), extraW finish, and full recurse/dstruct/settle/heap/relax traces (#11).
+- Instrumented BMSSP lane `run(graph, source)` in `src/core/bmssp/bmssp.ts`: Algorithm 3 recursion with FindPivots + BlockListD (M = 2^{(l-1)t}), singleton base-case mini-Dijkstra at l=0, |U| workload cap with partial B′, W-append settle, and full recurse/dstruct/settle/heap/relax traces (#11).
 - BMSSP unit/golden tests: small graphs, ties vs Dijkstra, recurse/dstruct shape, TraceWriter round-trip, bounded-settle invariant (#11).
 - BMSSP cross-check fixtures (`test/fixtures/bmssp/`) with Braeniac README oracle plus Dijkstra-verified small graphs; `test/bmssp-crosscheck.test.ts` and offline `bench/generate-bmssp-braeniac-fixtures.ts` (#11).
 - BMSSP differential fuzz: 5000 seeded graphs (ties included) vs Dijkstra and Bellman-Ford, trace distance audit, and bounded-settle invariant (#11).

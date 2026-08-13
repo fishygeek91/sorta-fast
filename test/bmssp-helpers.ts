@@ -144,10 +144,11 @@ export function auditBmsspDistancesFromTrace(
  * Check the BMSSP bounded-settle invariant on a trace and distance array.
  *
  * Maintains a stack of active distance upper bounds from `recurse` events:
- * `dir: "in"` pushes `bound`, `dir: "out"` pops. On each `settle` event, the
- * settled vertex must satisfy `distances[v] <` the stack top bound (strict —
- * arXiv 2504.17033: never settle at distance ≥ B inside a bounded call). The
- * top-level call pushes `bound: Infinity`, so finite distances always pass there.
+ * `dir: "in"` pushes `bound`, `dir: "out"` pops. On each `settle` event,
+ * `distances[v] >` the stack top is a violation. Paper Assumption 2.1
+ * (unique path lengths) gives strict `dist < B`; with ties, D's (value, key)
+ * order can settle at `dist === B` for keys below Pull's pair cut, and recurse
+ * events only carry the scalar bound. The top-level call pushes `Infinity`.
  *
  * Also reports mismatched recurse nesting (out without in, or unclosed stack at
  * end) and settles seen with an empty bound stack.
@@ -195,9 +196,9 @@ export function assertBoundedSettleInvariant(
       continue;
     }
 
-    if (!(dv < bound)) {
+    if (dv > bound) {
       violations.push(
-        `settle vertex ${v}: distance ${String(dv)} is not strictly less than bound ${String(bound)}`,
+        `settle vertex ${v}: distance ${String(dv)} is greater than bound ${String(bound)}`,
       );
     }
   }
@@ -409,4 +410,169 @@ export function auditFindPivotsTrace(
   }
 
   return violations;
+}
+
+/** Active recurse frame: recursion level and distance upper bound B. */
+export type RecurseFrame = { level: number; bound: number };
+
+/**
+ * Compute 2^exp with the same overflow rules as {@link blockCapacity} in `bmssp.ts`.
+ */
+function pow2(exp: number): number {
+  if (!Number.isInteger(exp) || exp < 0) {
+    throw new Error(`pow2 exp must be a non-negative integer, got ${String(exp)}`);
+  }
+  if (exp === 0) {
+    return 1;
+  }
+  if (exp < 31) {
+    return 1 << exp;
+  }
+  if (exp < 53) {
+    return 2 ** exp;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Detect heap trace events emitted outside level-0 recursion (base mini-Dijkstra).
+ *
+ * Walks the trace maintaining a stack of active recurse levels (`in` pushes,
+ * `out` pops). Any `heap` event while the stack is empty or the top level is
+ * not `0` is a violation — Algorithm 3 uses the heap only in the base case.
+ *
+ * @returns Empty array when all heap ops occur at level 0; otherwise violation messages.
+ */
+export function heapEventsOutsideLevelZero(events: readonly TraceEvent[]): string[] {
+  const violations: string[] = [];
+  const levelStack: number[] = [];
+
+  for (const event of events) {
+    if (event.k === "recurse") {
+      if (event.dir === "in") {
+        levelStack.push(event.level);
+      } else if (levelStack.length === 0) {
+        violations.push("recurse out without matching recurse in");
+      } else {
+        levelStack.pop();
+      }
+      continue;
+    }
+
+    if (event.k !== "heap") {
+      continue;
+    }
+
+    const top = levelStack[levelStack.length - 1];
+    if (levelStack.length === 0) {
+      violations.push(`heap ${event.op} with empty recurse stack`);
+    } else if (top !== 0) {
+      violations.push(`heap ${event.op} at level ${String(top)} (expected level 0 only)`);
+    }
+  }
+
+  if (levelStack.length !== 0) {
+    violations.push(`unclosed recurse nesting: depth ${levelStack.length} at end of trace`);
+  }
+
+  return violations;
+}
+
+/**
+ * Detect D-structure Pull events whose operand size exceeds M = 2^{(l-1)·t}.
+ *
+ * Walks the trace with a recurse level stack. On each `dstruct` pull, the active
+ * level is the stack top; pulls must occur only at l ≥ 1 with n ≤ M.
+ *
+ * @param events - BMSSP trace events from a full `run`.
+ * @param t - Block parameter t from {@link bmsspParams}.
+ * @returns Empty array when every pull respects the level-dependent cap.
+ */
+export function pullSizeViolations(events: readonly TraceEvent[], t: number): string[] {
+  const violations: string[] = [];
+  const levelStack: number[] = [];
+
+  for (const event of events) {
+    if (event.k === "recurse") {
+      if (event.dir === "in") {
+        levelStack.push(event.level);
+      } else if (levelStack.length === 0) {
+        violations.push("recurse out without matching recurse in");
+      } else {
+        levelStack.pop();
+      }
+      continue;
+    }
+
+    if (event.k !== "dstruct" || event.op !== "pull") {
+      continue;
+    }
+
+    if (levelStack.length === 0) {
+      violations.push(`pull n=${event.n} with empty recurse stack`);
+      continue;
+    }
+
+    const level = levelStack[levelStack.length - 1];
+    if (level === undefined) {
+      violations.push(`pull n=${event.n} with missing active level`);
+      continue;
+    }
+
+    if (level < 1) {
+      violations.push(`pull n=${event.n} at level ${String(level)} (pulls only at l >= 1)`);
+      continue;
+    }
+
+    const exp = (level - 1) * t;
+    const M = pow2(exp);
+    if (event.n > M) {
+      violations.push(`pull n=${event.n} at level ${String(level)} exceeds M=${String(M)}`);
+    }
+  }
+
+  if (levelStack.length !== 0) {
+    violations.push(`unclosed recurse nesting: depth ${levelStack.length} at end of trace`);
+  }
+
+  return violations;
+}
+
+/**
+ * Whether any recurse `out` event reports B′ strictly less than its matching `in` bound.
+ *
+ * Partial exit (Algorithm 3 step 6 / Lemma 3.9) tightens B′ below the call's input B.
+ * Finite B′ &lt; Infinity counts as partial when the matching `in` bound is Infinity.
+ *
+ * @returns `true` when at least one paired recurse exit has `out.bound < in.bound`.
+ */
+export function hasPartialRecurseExit(events: readonly TraceEvent[]): boolean {
+  const boundStack: number[] = [];
+
+  for (const event of events) {
+    if (event.k !== "recurse") {
+      continue;
+    }
+
+    if (event.dir === "in") {
+      boundStack.push(event.bound);
+      continue;
+    }
+
+    if (boundStack.length === 0) {
+      continue;
+    }
+
+    const inBound = boundStack.pop();
+    if (inBound === undefined) {
+      continue;
+    }
+
+    const outBound = event.bound;
+    if (outBound < inBound) {
+      return true;
+    }
+  }
+
+  return false;
 }

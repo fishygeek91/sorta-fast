@@ -130,39 +130,9 @@ class NaiveD {
     }
     return min;
   }
-
-  /** Copy of current key→value map for Pull value-multiset checks. */
-  snapshot(): Map<number, number> {
-    return new Map(this.map);
-  }
 }
 
 function keysEqual(a: readonly number[], b: readonly number[]): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function valuesOfKeys(keys: readonly number[], snapshot: ReadonlyMap<number, number>): number[] {
-  const values: number[] = [];
-  for (const key of keys) {
-    const value = snapshot.get(key);
-    if (value === undefined) {
-      return [];
-    }
-    values.push(value);
-  }
-  values.sort((a, b) => a - b);
-  return values;
-}
-
-function valuesEqual(a: readonly number[], b: readonly number[]): boolean {
   if (a.length !== b.length) {
     return false;
   }
@@ -219,7 +189,6 @@ describe("BlockListD differential fuzz", () => {
           }
         } else if (r < 0.75) {
           const sizeBefore = d.size;
-          const snapshot = naive.snapshot();
           const dResult = d.pull();
           const naiveResult = naive.pull();
 
@@ -230,20 +199,9 @@ describe("BlockListD differential fuzz", () => {
             );
           }
 
-          if (sizeBefore <= M) {
-            if (!keysEqual(dResult.keys, naiveResult.keys)) {
-              violations.push(
-                `seed=${seed} op=${op} pull keys mismatch d=${formatKeys(dResult.keys)} naive=${formatKeys(naiveResult.keys)}`,
-              );
-            }
-          } else if (
-            !valuesEqual(
-              valuesOfKeys(dResult.keys, snapshot),
-              valuesOfKeys(naiveResult.keys, snapshot),
-            )
-          ) {
+          if (!keysEqual(dResult.keys, naiveResult.keys)) {
             violations.push(
-              `seed=${seed} op=${op} pull value multiset mismatch d=${formatKeys(dResult.keys)} naive=${formatKeys(naiveResult.keys)}`,
+              `seed=${seed} op=${op} pull keys mismatch d=${formatKeys(dResult.keys)} naive=${formatKeys(naiveResult.keys)}`,
             );
           }
           if (dResult.bound !== naiveResult.bound) {

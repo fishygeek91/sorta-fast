@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { run as bmsspRun } from "../src/core/bmssp/bmssp.ts";
-import { packCsr } from "../src/core/graph.ts";
+import { bmsspParams } from "../src/core/bmssp/params.ts";
+import { generateGraph, packCsr } from "../src/core/graph.ts";
 import { costOf, decodeChunk, OP_COST, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import {
   assertBoundedSettleInvariant,
   auditBmsspDistancesFromTrace,
   drainBmsspRun,
+  hasPartialRecurseExit,
+  heapEventsOutsideLevelZero,
+  pullSizeViolations,
 } from "./bmssp-helpers.ts";
 import { drainRun } from "./dijkstra-helpers.ts";
 
@@ -162,5 +166,108 @@ describe("bmssp bounded-settle invariant", () => {
 
     const { events, result } = drainBmsspRun(graph, 0);
     expect(assertBoundedSettleInvariant(events, result.distances)).toEqual([]);
+  });
+});
+
+/** Build a directed chain 0 → 1 → … → n-1 with unit weights. */
+function packChain(n: number): ReturnType<typeof packCsr> {
+  const arcs: { from: number; to: number; weight: number }[] = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    arcs.push({ from: i, to: i + 1, weight: 1 });
+  }
+  const layoutX = new Float64Array(n);
+  const layoutY = new Float64Array(n);
+  for (let i = 0; i < n; i += 1) {
+    layoutX[i] = i;
+    layoutY[i] = 0;
+  }
+  return packCsr(n, arcs, layoutX, layoutY);
+}
+
+describe("bmssp Algorithm 3 structure", () => {
+  const sparseGraph = generateGraph("sparse", 64, 7);
+  const chain3 = packCsr(
+    3,
+    [
+      { from: 0, to: 1, weight: 1 },
+      { from: 1, to: 2, weight: 1 },
+    ],
+    [0, 1, 2],
+    [0, 0, 0],
+  );
+
+  it("emits heap events only inside level-0 base mini-Dijkstra", () => {
+    for (const graph of [sparseGraph, chain3]) {
+      const { events } = drainBmsspRun(graph, 0);
+      expect(heapEventsOutsideLevelZero(events)).toEqual([]);
+    }
+  });
+
+  it("keeps dstruct pull operand size n <= 2^{(l-1)t}", () => {
+    const { events } = drainBmsspRun(sparseGraph, 0);
+    const { t } = bmsspParams(sparseGraph.n);
+    expect(pullSizeViolations(events, t)).toEqual([]);
+  });
+
+  it("has no post-loop Dijkstra sweep (heap only at l=0) and settles reachable vertices", () => {
+    const { events, result } = drainBmsspRun(sparseGraph, 0);
+
+    expect(heapEventsOutsideLevelZero(events)).toEqual([]);
+    expect(events.filter((e) => e.k === "heap").length).toBeGreaterThan(0);
+
+    const settleCount = events.filter((e) => e.k === "settle").length;
+    expect(settleCount).toBeGreaterThan(0);
+
+    const reachable = Array.from(result.distances).filter((d) => Number.isFinite(d)).length;
+    expect(settleCount).toBeLessThanOrEqual(reachable);
+    expect(reachable).toBeGreaterThan(1);
+  });
+
+  it("performs partial exit (recurse out bound < matching in bound) on a long chain", () => {
+    const graphs = [packChain(80), packChain(200), generateGraph("maze", 80, 42)];
+
+    let foundPartial = false;
+    for (const graph of graphs) {
+      const { events } = drainBmsspRun(graph, 0);
+      if (!hasPartialRecurseExit(events)) {
+        continue;
+      }
+
+      foundPartial = true;
+      const { result: bmsspResult } = drainBmsspRun(graph, 0);
+      const { result: dijkstraResult } = drainRun(graph, 0);
+      expectDistancesEqual(bmsspResult.distances, dijkstraResult.distances);
+      break;
+    }
+
+    expect(
+      foundPartial,
+      "expected at least one partial recurse exit (out.bound < in.bound) on chain n=80, n=200, or maze n=80",
+    ).toBe(true);
+  });
+
+  it("implies singleton base-case sources via heap-only-at-l=0 and pull caps", () => {
+    // baseMiniDijkstra rejects |S| > 1 but is not exported; heap events confined to
+    // level 0 plus pull-size caps at l >= 1 together enforce Algorithm 3 structure.
+    const { events } = drainBmsspRun(sparseGraph, 0);
+    expect(heapEventsOutsideLevelZero(events)).toEqual([]);
+    expect(pullSizeViolations(events, bmsspParams(sparseGraph.n).t)).toEqual([]);
+    expect(() => drainBmsspRun(sparseGraph, 0)).not.toThrow();
+  });
+});
+
+describe("bmssp tie-heavy generators", () => {
+  it("matches Dijkstra on maze seed 37 (unit-weight corridor through a tied D layer)", () => {
+    const graph = generateGraph("maze", 45, 37);
+    const { result: bmsspResult } = drainBmsspRun(graph, 37);
+    const { result: dijkstraResult } = drainRun(graph, 37);
+    expectDistancesEqual(bmsspResult.distances, dijkstraResult.distances);
+  });
+
+  it("matches Dijkstra on clusters seed 110 (near-tie Euclidean weights)", () => {
+    const graph = generateGraph("clusters", 38, 110);
+    const { result: bmsspResult } = drainBmsspRun(graph, 34);
+    const { result: dijkstraResult } = drainRun(graph, 34);
+    expectDistancesEqual(bmsspResult.distances, dijkstraResult.distances);
   });
 });
