@@ -6,6 +6,7 @@ import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer, type OverlayFlags } from "../render/renderer.ts";
+import { THEMES, type ThemeMode } from "../render/theme.ts";
 import {
   graphFromTraceMessage,
   parseWorkerToMain,
@@ -15,6 +16,7 @@ import { mountDisclosures } from "./disclosures.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
+import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
 /** Visible canvas edge length in CSS pixels. */
@@ -94,12 +96,31 @@ export function mountLens(): void {
   lensModeBtn.disabled = true;
 
   modeNav.append(raceModeBtn, lensModeBtn);
-  header.append(title, subtitle, modeNav);
 
   const canvas = document.createElement("canvas");
   canvas.className = "lens-canvas";
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
+
+  /**
+   * Sync lens canvas persona chrome to the active algorithm.
+   *
+   * @param algo - Lens algorithm slug from URL state.
+   */
+  function syncLensPersona(algo: LensAlgo): void {
+    canvas.dataset.persona = algo === "dijkstra" ? "marble" : "ember";
+  }
+
+  syncLensPersona(lensState.algo);
+
+  mountThemeToggle(modeNav, (mode: ThemeMode) => {
+    if (renderer !== null) {
+      renderer.setChrome(THEMES[mode]);
+      drawFrame();
+    }
+  });
+
+  header.append(title, subtitle, modeNav);
 
   const counters = document.createElement("div");
   counters.className = "lens-counters";
@@ -462,6 +483,7 @@ export function mountLens(): void {
    * Update subtitle, narration visibility, and BMSSP-only counter row for the active algo.
    */
   function syncAlgoUi(): void {
+    syncLensPersona(lensState.algo);
     if (lensState.algo === "bmssp") {
       subtitle.textContent = "Lens · BMSSP";
       bmsspCounters.hidden = false;
@@ -639,6 +661,7 @@ export function mountLens(): void {
           } else {
             renderer.setGraph(graph);
           }
+          renderer.setChrome(THEMES[readStoredTheme()]);
 
           clearStatus();
           syncScrubberUi();

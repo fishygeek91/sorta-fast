@@ -66,6 +66,7 @@ function buildExplainerBody(): HTMLDivElement {
   const personaList = document.createElement("ul");
   for (const persona of EXPLAINER_COPY.personas) {
     const item = document.createElement("li");
+    item.dataset.accent = persona.accent;
     item.textContent = `${persona.lane} — ${persona.persona} (${persona.accent}). ${persona.blurb}`;
     personaList.append(item);
   }

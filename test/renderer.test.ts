@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { packCsr, type Graph } from "../src/core/graph.ts";
 import { LaneState } from "../src/harness/laneState.ts";
 import { GHOST_WINDOW_OPS, PHOTO_FINISH_GOLD, Renderer } from "../src/render/renderer.ts";
+import { EMBER_RGB, THEMES } from "../src/render/theme.ts";
 import {
   createFakeSurface,
   getFakeContext,
@@ -10,10 +11,7 @@ import {
   type FakeCanvasSurface,
 } from "./helpers/fake-canvas.ts";
 
-const GHOST_STROKE = "rgba(40, 40, 40, 0.35)";
-
-/** BMSSP ember accent — must match renderer.ts. */
-const EMBER_RGB = "180, 70, 40";
+const GHOST_STROKE = THEMES.dark.ghost;
 
 /** Recursion tint alpha for depth 3 — must match renderer.ts constants. */
 const RECURSION_TINT_DEPTH_3_ALPHA = Math.min(1, 3 / 5) * 0.08;
@@ -38,6 +36,7 @@ function drawImageCount(surface: FakeCanvasSurface): number {
 function createRendererWithLayers(graph: Graph): {
   renderer: Renderer;
   target: FakeCanvasSurface;
+  edge: FakeCanvasSurface;
   overlay: FakeCanvasSurface;
   fx: FakeCanvasSurface;
 } {
@@ -56,6 +55,10 @@ function createRendererWithLayers(graph: Graph): {
   if (layers.length < 4) {
     throw new Error(`expected 4 offscreen layers, got ${String(layers.length)}`);
   }
+  const edge = layers[0];
+  if (edge === undefined) {
+    throw new Error("edge layer is missing");
+  }
   const overlay = layers[2];
   if (overlay === undefined) {
     throw new Error("overlay layer is missing");
@@ -64,7 +67,7 @@ function createRendererWithLayers(graph: Graph): {
   if (fx === undefined) {
     throw new Error("fx layer is missing");
   }
-  return { renderer, target, overlay, fx };
+  return { renderer, target, edge, overlay, fx };
 }
 
 function overlayCalls(overlay: FakeCanvasSurface): readonly DrawCall[] {
@@ -410,6 +413,18 @@ describe("Renderer", () => {
     });
 
     expect(fxGoldStrokeCalls(fx)).toHaveLength(0);
+  });
+
+  it("redraws edge layer paper fill when setChrome switches to light tokens", () => {
+    const graph = tinyGraph();
+    const { renderer, edge } = createRendererWithLayers(graph);
+
+    renderer.setChrome(THEMES.light);
+
+    const paperFill = getFakeContext(edge).calls.find(
+      (call) => call.op === "fillRect" && call.fillStyle === THEMES.light.paper,
+    );
+    expect(paperFill).toBeDefined();
   });
 
   it("draws source and finish vertex rings on the overlay layer", () => {

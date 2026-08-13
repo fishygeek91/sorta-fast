@@ -1,6 +1,27 @@
 :root {
-  color: #1a1a1a;
-  background: #f6f4ef;
+  color-scheme: dark;
+  --paper: rgb(22, 21, 19);
+  --ink: rgb(236, 230, 220);
+  --muted: rgb(168, 160, 148);
+  --panel: rgb(32, 30, 27);
+  --hairline: rgb(90, 86, 80);
+  --hover: rgb(42, 38, 34);
+  --marble: rgb(180, 176, 168);
+  --ember: rgb(180, 70, 40);
+  --moss: rgb(56, 128, 118);
+  --gold: rgb(212, 168, 55);
+  --text-title: 1.75rem;
+  --text-subtitle: 1rem;
+  --text-body: 1rem;
+  --text-ui: 0.875rem;
+  --text-counter: 1.35rem;
+  --text-label: 0.8rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  color: var(--ink);
+  background: var(--paper);
   font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   line-height: 1.5;
   font-weight: 400;
@@ -8,6 +29,17 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --paper: rgb(246, 244, 239);
+  --ink: rgb(26, 26, 26);
+  --muted: rgb(120, 112, 100);
+  --panel: rgb(255, 252, 247);
+  --hairline: rgb(180, 176, 168);
+  --hover: rgb(255, 248, 236);
+  --gold: rgb(148, 108, 20);
 }
 
 * {
@@ -25,12 +57,19 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--space-4);
   padding: 1.5rem;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(180, 70, 40, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 80% 70%, rgba(56, 128, 118, 0.16) 0%, transparent 40%),
+    linear-gradient(160deg, var(--paper) 0%, var(--panel) 100%);
+}
+
+[data-theme="light"] #app {
   background:
     radial-gradient(circle at 20% 20%, #ffe8c8 0%, transparent 45%),
     radial-gradient(circle at 80% 70%, #d9ebe3 0%, transparent 40%),
-    linear-gradient(160deg, #f6f4ef 0%, #ebe6dc 100%);
+    linear-gradient(160deg, var(--paper) 0%, #ebe6dc 100%);
 }
 
 .lens-header {
@@ -41,27 +80,27 @@ body {
 .lens-header .lens-graph-controls,
 .lens-header .race-gallery {
   justify-content: center;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
   flex-wrap: wrap;
 }
 
 .lens-mode-nav {
   display: flex;
   flex-direction: row;
-  gap: 0.5rem;
+  gap: var(--space-2);
   justify-content: center;
 }
 
 .lens-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   font-weight: 500;
   letter-spacing: 0.02em;
 }
 
 .lens-subtitle {
   margin: 0.15rem 0 0;
-  font-size: 0.95rem;
+  font-size: var(--text-subtitle);
   opacity: 0.75;
 }
 
@@ -70,9 +109,17 @@ body {
   width: min(720px, calc(100vw - 2rem));
   height: auto;
   aspect-ratio: 1;
-  border: 1px solid rgb(180, 176, 168);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(246, 244, 239);
+  background: var(--paper);
+}
+
+.lens-canvas[data-persona="marble"] {
+  border-color: var(--marble);
+}
+
+.lens-canvas[data-persona="ember"] {
+  border-color: var(--ember);
 }
 
 .lens-counters {
@@ -81,13 +128,12 @@ body {
   align-items: center;
   gap: 0.35rem;
   width: min(720px, calc(100vw - 2rem));
-  font-variant-numeric: tabular-nums;
 }
 
 .lens-counter {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lens-counter-headline {
@@ -95,7 +141,7 @@ body {
 }
 
 .lens-counter-headline .lens-counter-value {
-  font-size: 1.35rem;
+  font-size: var(--text-counter);
   font-weight: 500;
 }
 
@@ -117,7 +163,6 @@ body {
   line-height: 1.45;
   text-align: center;
   opacity: 0.8;
-  font-variant-numeric: tabular-nums;
 }
 
 .lens-counter-secondary {
@@ -133,14 +178,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: min(720px, calc(100vw - 2rem));
 }
 
 .lens-transport {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lens-transport button,
@@ -167,11 +212,11 @@ body {
 #race-lanes-select,
 #race-dice-button,
 #lens-dice-button {
-  font-size: 0.9rem;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid rgb(180, 176, 168);
+  font-size: var(--text-ui);
+  padding: 0.35rem var(--space-3);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(255, 252, 247);
+  background: var(--panel);
   color: inherit;
 }
 
@@ -189,30 +234,44 @@ body {
 #race-lanes-select:hover,
 #race-dice-button:hover,
 #lens-dice-button:hover {
-  background: rgb(255, 248, 236);
+  background: var(--hover);
+}
+
+.theme-toggle {
+  font: inherit;
+  font-size: var(--text-ui);
+  padding: 0.35rem var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--hover);
 }
 
 .lens-speed {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: var(--space-2);
+  font-size: var(--text-ui);
 }
 
 .lens-scrub {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.9rem;
+  font-size: var(--text-ui);
 }
 
 .lens-scrubber {
   width: 100%;
-  accent-color: rgb(80, 72, 60);
+  accent-color: var(--gold);
 }
 
 .lens-work {
-  font-variant-numeric: tabular-nums;
   text-align: center;
   opacity: 0.85;
 }
@@ -220,8 +279,8 @@ body {
 .lens-overlays {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.9rem;
+  gap: var(--space-4);
+  font-size: var(--text-ui);
 }
 
 .lens-overlay-toggle {
@@ -234,14 +293,14 @@ body {
 .lens-graph-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-  font-size: 0.9rem;
+  gap: var(--space-3) var(--space-4);
+  font-size: var(--text-ui);
 }
 
 .lens-graph-field {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lens-seed-input,
@@ -251,8 +310,21 @@ body {
 
 .lens-status {
   margin: 0;
-  font-size: 0.9rem;
-  color: rgb(120, 40, 40);
+  font-size: var(--text-ui);
+  color: var(--ember);
+}
+
+.lens-counters,
+.lens-counter-value,
+.lens-work,
+.lens-narration,
+.race-counters,
+.race-counter-value,
+.race-banner,
+.race-seed-input,
+.lens-seed-input {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* --- Race mode (issue #14) --- */
@@ -263,12 +335,12 @@ body {
   align-self: stretch;
   width: min(1200px, 100%);
   flex: 1;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .race-lanes {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
   width: 100%;
 }
 
@@ -299,23 +371,33 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid rgb(180, 176, 168);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(255, 252, 247);
+  background: var(--panel);
+}
+
+.race-lane-label {
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  font-weight: 500;
 }
 
 .race-lane[data-persona="marble"] {
-  box-shadow: inset 0 3px 0 rgb(180, 176, 168);
+  box-shadow: inset 0 3px 0 var(--marble);
 }
 
 .race-lane[data-persona="ember"] {
-  box-shadow: inset 0 3px 0 rgba(180, 70, 40, 0.55);
+  box-shadow: inset 0 3px 0 var(--ember);
 }
 
 .race-lane[data-persona="moss"] {
-  box-shadow: inset 0 3px 0 rgba(60, 110, 70, 0.55);
+  box-shadow: inset 0 3px 0 var(--moss);
+}
+
+.race-lane[data-persona="stub"] {
+  box-shadow: inset 0 3px 0 rgba(180, 176, 168, 0.45);
 }
 
 .race-canvas {
@@ -323,9 +405,9 @@ body {
   width: 100%;
   height: auto;
   aspect-ratio: 1;
-  border: 1px solid rgb(180, 176, 168);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(246, 244, 239);
+  background: var(--paper);
 }
 
 .race-counters {
@@ -334,11 +416,6 @@ body {
   align-items: center;
   gap: 0.35rem;
   width: 100%;
-  font-variant-numeric: tabular-nums;
-}
-
-.race-counter-value {
-  font-variant-numeric: tabular-nums;
 }
 
 .race-progress {
@@ -346,23 +423,23 @@ body {
   height: 0.35rem;
   border: none;
   border-radius: 2px;
-  background: rgb(235, 230, 220);
+  background: var(--panel);
   overflow: hidden;
-  accent-color: rgb(80, 72, 60);
+  accent-color: var(--gold);
 }
 
 .race-progress::-webkit-progress-bar {
-  background: rgb(235, 230, 220);
+  background: var(--panel);
   border-radius: 2px;
 }
 
 .race-progress::-webkit-progress-value {
-  background: rgb(80, 72, 60);
+  background: var(--muted);
   border-radius: 2px;
 }
 
 .race-progress::-moz-progress-bar {
-  background: rgb(80, 72, 60);
+  background: var(--muted);
   border-radius: 2px;
 }
 
@@ -370,7 +447,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: 100%;
 }
 
@@ -381,11 +458,11 @@ body {
 
 .race-transport button,
 .race-transport select {
-  font-size: 0.9rem;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid rgb(180, 176, 168);
+  font-size: var(--text-ui);
+  padding: 0.35rem var(--space-3);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(255, 252, 247);
+  background: var(--panel);
   color: inherit;
 }
 
@@ -395,19 +472,18 @@ body {
 
 .race-transport button:hover,
 .race-transport select:hover {
-  background: rgb(255, 248, 236);
+  background: var(--hover);
 }
 
 .race-banner {
   margin: 0;
-  padding: 1rem;
+  padding: var(--space-4);
   text-align: center;
   font-size: 1.1rem;
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  border: 1px solid rgb(180, 176, 168);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(255, 248, 236);
+  background: var(--hover);
 }
 
 .race-banner[hidden] {
@@ -423,27 +499,27 @@ body {
 .site-disclosures {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-4);
   width: 100%;
   align-items: stretch;
 }
 
 .site-disclosure {
   flex: 1 1 18rem;
-  border: 1px solid rgb(180, 176, 168);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgb(255, 252, 247);
+  background: var(--panel);
 }
 
 .site-disclosure > summary {
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
   font-size: 0.95rem;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .site-disclosure-body {
-  padding: 0 0.75rem 0.75rem;
+  padding: 0 var(--space-3) var(--space-3);
   max-width: 65ch;
   font-size: 0.88rem;
   line-height: 1.45;
@@ -455,15 +531,38 @@ body {
 }
 
 .site-disclosure-body a:hover {
-  color: rgb(80, 72, 60);
+  color: var(--muted);
 }
 
 .site-disclosure-body ul,
 .site-disclosure-body ol {
-  margin: 0.5rem 0;
+  margin: var(--space-2) 0;
   padding-left: 1.25rem;
 }
 
 .site-disclosure-body li + li {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
+}
+
+.site-disclosure-body li[data-accent="marble"]::before,
+.site-disclosure-body li[data-accent="ember"]::before,
+.site-disclosure-body li[data-accent="moss"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.65em;
+  height: 0.65em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+}
+
+.site-disclosure-body li[data-accent="marble"]::before {
+  background: var(--marble);
+}
+
+.site-disclosure-body li[data-accent="ember"]::before {
+  background: var(--ember);
+}
+
+.site-disclosure-body li[data-accent="moss"]::before {
+  background: var(--moss);
 }
