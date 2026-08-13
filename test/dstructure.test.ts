@@ -257,4 +257,59 @@ describe("BlockListD Pull comparison bound", () => {
     expect(result.cmps).toBeLessThanOrEqual(32 * M);
     expect(result.cmps).toBeLessThan(n);
   });
+
+  it("bills O(M) comparisons when pulling after many BatchPrepends (large D0)", () => {
+    const M = 4;
+    const B = 1_000_000;
+    const d = new BlockListD(M, B);
+
+    for (let p = 0; p < 100; p += 1) {
+      const base = p * 4;
+      d.batchPrepend([
+        { key: base + 0, value: -(base + 1) },
+        { key: base + 1, value: -(base + 2) },
+        { key: base + 2, value: -(base + 3) },
+        { key: base + 3, value: -(base + 4) },
+      ]);
+    }
+    expect(d.size).toBe(400);
+
+    const result = d.pull();
+    expect(result.n).toBe(M);
+    expect(d.size).toBe(400 - M);
+    expect(result.cmps).toBeLessThanOrEqual(32 * M);
+    expect(result.cmps).toBeLessThan(400);
+  });
+
+  it("Pull bound skips an empty D0 hole left by BatchPrepend of existing keys", () => {
+    const M = 4;
+    const B = 1_000_000;
+    const d = new BlockListD(M, B);
+
+    d.batchPrepend([
+      { key: 0, value: 10 },
+      { key: 1, value: 11 },
+      { key: 2, value: 12 },
+      { key: 3, value: 13 },
+    ]);
+    d.batchPrepend([
+      { key: 4, value: 0 },
+      { key: 5, value: 1 },
+      { key: 6, value: 2 },
+      { key: 7, value: 3 },
+    ]);
+    // Re-prepend keys 4–7: empties the middle D0 block without compacting.
+    d.batchPrepend([
+      { key: 4, value: -4 },
+      { key: 5, value: -3 },
+      { key: 6, value: -2 },
+      { key: 7, value: -1 },
+    ]);
+
+    const result = d.pull();
+    expect(result.keys).toEqual([4, 5, 6, 7]);
+    expect(result.bound).toBe(10);
+    expect(d.size).toBe(4);
+    expect(result.cmps).toBeLessThanOrEqual(32 * M);
+  });
 });

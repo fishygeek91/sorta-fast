@@ -171,7 +171,9 @@ export class BlockListD {
    * arXiv 2504.17033 Lemma 3.3 Pull: collect a prefix of D0 and D1 blocks until
    * each side has ≥ M pairs (O(M) pairs; each block has size ≤ M), select M
    * smallest from that union, delete them, and take the bound from leftover
-   * prefix pairs plus the next unconsumed block — not a full |D| scan.
+   * prefix pairs plus the first nonempty unconsumed D0/D1 block — not a full
+   * |D| scan. Empty holes (BatchPrepend deleting the last key of a later
+   * block) are skipped without billed compares.
    * Ties among equal values are broken by key inside the prefix only.
    */
   pull(): DPullResult {
@@ -190,6 +192,10 @@ export class BlockListD {
       this.d1 = [{ pairs: [], upperBound: this.B }];
       return { keys, bound: this.B, n: keys.length, cmps: this.cmps };
     }
+
+    // Drop blocks emptied by a prior BatchPrepend/Insert overwrite so prefix
+    // indices land on real data. Unbilled: length checks, not pair compares.
+    this.cleanupEmptyBlocks();
 
     // Lemma 3.3: prefix blocks until ≥ M pairs per sequence, then select.
     const d0Prefix = this.collectPrefix(this.d0, this.M);
@@ -600,9 +606,14 @@ export class BlockListD {
 
   /**
    * Bound after a prefix Pull: min leftover in the O(M) prefix, else min of
-   * unconsumed D0/D1 blocks. Unconsumed D0 is not always sorted after mixed
-   * prepend/split, so every remaining block is considered; each block has
-   * size ≤ M and we only walk blocks *after* the prefix.
+   * the first nonempty unconsumed D0/D1 block. D0 is value-ordered
+   * front-to-back (prepend contract: new batches < old D; rank-ordered splits
+   * within a batch; D0 never split after creation), so the remaining D0 min
+   * is in that first nonempty block — not a scan of every later D0 block.
+   *
+   * BatchPrepend of an existing key can leave an empty D0/D1 hole; walking
+   * those holes is unbilled (length checks). Only the first nonempty block
+   * is billed via {@link minPairInBlock}.
    */
   private boundAfterPrefixPull(
     leftover: readonly DPair[],
@@ -617,16 +628,26 @@ export class BlockListD {
         minPair = pair;
       }
     }
-    for (let i = d0End; i < d0.length; i += 1) {
-      minPair = this.minPairInBlock(d0[i], minPair);
-    }
-    // D1 blocks are ordered by upper bound (Lemma 3.3), so the min remaining
-    // D1 value is in the first unconsumed block.
-    minPair = this.minPairInBlock(d1[d1End], minPair);
+    minPair = this.minPairInBlock(this.firstNonEmptyBlock(d0, d0End), minPair);
+    minPair = this.minPairInBlock(this.firstNonEmptyBlock(d1, d1End), minPair);
     if (minPair === undefined) {
       return this.B;
     }
     return minPair.value;
+  }
+
+  /**
+   * First nonempty block at or after `start`, or undefined if none remain.
+   * Skips empty holes without billed pair comparisons.
+   */
+  private firstNonEmptyBlock(blocks: readonly Block[], start: number): Block | undefined {
+    for (let i = start; i < blocks.length; i += 1) {
+      const block = blocks[i];
+      if (block !== undefined && block.pairs.length > 0) {
+        return block;
+      }
+    }
+    return undefined;
   }
 
   private minPairInBlock(block: Block | undefined, current: DPair | undefined): DPair | undefined {

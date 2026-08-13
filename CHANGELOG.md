@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- D Pull's remaining-min bound skips empty unconsumed D0/D1 holes (BatchPrepend can empty a later block without compacting) so a smaller later D0 pair is not hidden behind a vacant slot (#9).
+- D Pull's separator bound reads only the first unconsumed D0 block (prepends are value-ordered front-to-back), so prepend-heavy workloads stay O(M) billed comparisons (#9).
 - FindPivots only adds a vertex to the next Bellman-Ford layer when the relax succeeds (`cand ≤ dist` and `cand < B`), matching Algorithm 1 so 2-cycles no longer re-queue stale vertices (#10).
 - D Pull collects an O(M) block prefix and derives the separator bound from leftover/next-block pairs, so billed comparisons match Lemma 3.3 instead of scanning all of D (#9).
 - `bmsspParams` uses log₂ so `k ≥ 2` at Lens-scale n (natural log left `k = 1` below ~3000 vertices) (#9, #10).
