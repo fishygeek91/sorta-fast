@@ -24,6 +24,11 @@ function formatBound(bound: number): string {
  *
  * Priority: active FindPivots batch → recent D pull → recurse level → idle.
  *
+ * The harness clears {@link LaneState.batchRound} on every `dstruct` event so
+ * FindPivots narration ends when the D phase begins (after pivots); pull and
+ * level narration can then surface. {@link LaneState.lastPullN} resets on
+ * `recurse.in` so child levels do not inherit the parent's last pull.
+ *
  * @param state - Lane playback snapshot after the latest trace event.
  * @returns A short status string for the BMSSP overlay narration UI.
  */

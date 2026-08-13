@@ -58,6 +58,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Lens BMSSP narration no longer stays on stale FindPivots text through D insert/pull: `batchRound` clears on `dstruct`; `lastPullN` resets on `recurse.in` (#12).
+- `TraceBuffer` throws on `recurse.out` past depth 0 instead of silently clamping (#12).
 - `TraceBuffer.appendChunk` replaces the trailing end keyframe instead of accumulating one per slab (#8).
 - Lens applies the current speed select when the worker graph arrives, so a mid-generation speed change is not ignored (#8).
 - Lens rAF paints only while playing so a paused 5k-node graph does not redraw every frame (#8).

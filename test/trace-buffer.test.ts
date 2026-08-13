@@ -336,6 +336,47 @@ describe("TraceBuffer live counters", () => {
 });
 
 describe("BMSSP overlay state", () => {
+  it("recurse out with empty stack throws", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const chunks = chunksFromEvents([{ k: "recurse", dir: "out", level: 0, bound: 100 }]);
+
+    expect(() => new TraceBuffer(graph, chunks)).toThrow(/recurse out with empty stack/);
+  });
+
+  it("dstruct clears batchRound after FindPivots batch rounds", () => {
+    const graph = packCsr(4, [], [0, 1, 2, 3], [0, 0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "recurse", dir: "in", level: 1, bound: 42 },
+      { k: "batch", phase: "start", level: 1, size: 3 },
+      { k: "batch", phase: "end", level: 1, size: 2 },
+      { k: "dstruct", op: "insert", n: 3, cmps: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.batchRound).toBe(1);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.batchRound).toBe(0);
+    expect(buf.state.dstructOps).toBe(1);
+  });
+
+  it("recurse in resets lastPullN inherited from parent level", () => {
+    const graph = packCsr(2, [], [0, 1], [0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "recurse", dir: "in", level: 1, bound: 10 },
+      { k: "dstruct", op: "pull", n: 5, cmps: 1 },
+      { k: "recurse", dir: "in", level: 0, bound: 20 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.recursionDepth).toBe(2);
+    expect(buf.state.lastPullN).toBe(0);
+  });
+
   it("recurse in then out: depth, bound, and findPivotsK", () => {
     const n = 5;
     const graph = packCsr(n, [], [0, 1, 2, 3, 4], [0, 0, 0, 0, 0]);

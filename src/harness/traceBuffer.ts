@@ -435,8 +435,12 @@ export class TraceBuffer {
           target.findPivotsK = target.n === 0 ? 1 : bmsspParams(Math.max(1, target.n)).k;
           target.pivotsFoundThisCall = 0;
           target.batchRound = 0;
+          target.lastPullN = 0;
         } else if (dir === RECURSE_DIR.out) {
-          target.recursionDepth = Math.max(0, target.recursionDepth - 1);
+          if (target.recursionDepth === 0) {
+            throw new Error(`recurse out with empty stack at event ${String(eventIndex)}`);
+          }
+          target.recursionDepth -= 1;
           target.currentBound = bound;
         } else {
           throw new Error(
@@ -450,6 +454,7 @@ export class TraceBuffer {
         break;
 
       case TRACE_KIND.dstruct: {
+        target.batchRound = 0;
         const op = chunk.aux0[row];
         const n = chunk.aux1[row];
         if (op === undefined || n === undefined) {
