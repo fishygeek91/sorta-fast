@@ -17,6 +17,39 @@ describe("parseRaceUrl", () => {
     expect(parseRaceUrl(new URLSearchParams())).toEqual(DEFAULT_RACE_URL);
   });
 
+  it("round-trips adversarial graph kind", () => {
+    const state: RaceUrlState = {
+      g: "adversarial",
+      n: 500,
+      seed: 7,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).toContain("g=adversarial");
+    expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("parses g=city&n=100000 even though generation would throw (issue #32)", () => {
+    expect(parseRaceUrl("?g=city&n=100000&seed=1")).toEqual({
+      g: "city",
+      n: 100000,
+      seed: 1,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    });
+  });
+
   it("round-trips city / 5000 / 1729 with t scrub position", () => {
     const state: RaceUrlState = {
       g: "city",

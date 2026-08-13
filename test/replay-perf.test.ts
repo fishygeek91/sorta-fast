@@ -11,7 +11,7 @@ import { runBmsspTraceJob, type BmsspTraceSpec } from "../src/workers/bmsspTrace
 import { createFakeSurface } from "./helpers/fake-canvas.ts";
 
 const TIMED_RUNS = 3;
-/** One rAF batch at speed ×8 (issue #6 60fps AC); CI headroom matches #35. */
+/** One rAF batch at speed ×8 (issue #6 60fps AC); CI headroom matches #35. Issue #20 keeps these 5k budgets unchanged — XL AC lives in render-perf-xl / race-xl-stall. */
 const FRAME_BUDGET_MS = 16.6;
 /** Backward seek to T=0 restores the initial keyframe (issue #7). */
 const SEEK_BACK_BUDGET_MS = 50;

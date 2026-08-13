@@ -29,6 +29,8 @@ export type BmsspTraceSpec = {
 export type JobSink = {
   onGraph: (graph: Graph) => void;
   onChunk: (chunk: TraceChunk) => void;
+  /** Optional graph-generation progress ratio in [0, 1] (issue #20). */
+  onProgress?: (ratio: number) => void;
 };
 
 /**
@@ -76,7 +78,7 @@ function validateSpec(spec: BmsspTraceSpec): void {
 export function runBmsspTraceJob(spec: BmsspTraceSpec, sink: JobSink): void {
   validateSpec(spec);
 
-  const graph = generateGraph(spec.kind, spec.n, spec.seed);
+  const graph = generateGraph(spec.kind, spec.n, spec.seed, sink.onProgress);
   sink.onGraph(graph);
 
   const writer = new TraceWriter(spec.chunkCapacity);

@@ -37,6 +37,8 @@ export type RacePoolHandlers = {
   onChunk: (lane: number, chunk: TraceChunk) => void;
   onLaneDone: (lane: number) => void;
   onError: (lane: number, message: string) => void;
+  /** Optional graph-generation progress ratio in [0, 1] (issue #20). */
+  onProgress?: (ratio: number) => void;
 };
 
 /**
@@ -166,6 +168,9 @@ export class RaceWorkerPool {
       }
       case "chunk":
         handlers.onChunk(lane, message.chunk);
+        break;
+      case "progress":
+        handlers.onProgress?.(message.ratio);
         break;
       case "done":
         handlers.onLaneDone(lane);

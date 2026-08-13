@@ -2,7 +2,7 @@
  * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12, #16, #52).
  */
 
-import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
+import { CITY_MAX_N, GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
@@ -32,6 +32,9 @@ const SOURCE_VERTEX = 0;
 
 /** Size presets exposed in the graph controls. */
 const LENS_SIZE_KEYS = ["S", "M", "L", "XL"] as const;
+
+/** Tooltip on the XL option when city is selected (issue #32). */
+const CITY_XL_OPTION_TITLE = "City preset caps at L — see #32";
 
 type LensSizeKey = (typeof LENS_SIZE_KEYS)[number];
 
@@ -403,10 +406,14 @@ export function mountLens(): void {
 
   const sizeSelect = document.createElement("select");
   sizeSelect.id = "lens-size-select";
+  let xlSizeOption: HTMLOptionElement | null = null;
   for (const key of LENS_SIZE_KEYS) {
     const option = document.createElement("option");
     option.value = key;
-    option.textContent = key;
+    option.textContent = key === "XL" ? "XL (stress)" : key;
+    if (key === "XL") {
+      xlSizeOption = option;
+    }
     sizeSelect.append(option);
   }
   sizeLabel.append(sizeSelect);
@@ -430,11 +437,35 @@ export function mountLens(): void {
 
   graphControls.append(algoLabel, bmsspLabel, kindLabel, sizeLabel, seedLabel, diceButton);
 
+  const genProgressWrap = document.createElement("div");
+  genProgressWrap.className = "lens-gen-progress-wrap";
+  genProgressWrap.hidden = true;
+
+  const genProgressLabel = document.createElement("span");
+  genProgressLabel.className = "lens-gen-progress-label";
+  genProgressLabel.textContent = "Generating graph";
+
+  const genProgress = document.createElement("progress");
+  genProgress.id = "lens-gen-progress";
+  genProgress.className = "lens-gen-progress";
+  genProgress.max = 100;
+  genProgress.value = 0;
+
+  genProgressWrap.append(genProgressLabel, genProgress);
+
   const statusEl = document.createElement("p");
   statusEl.className = "lens-status";
   statusEl.hidden = true;
 
-  controls.append(transport, speedLabel, scrubLabel, overlaysEl, graphControls, statusEl);
+  controls.append(
+    transport,
+    speedLabel,
+    scrubLabel,
+    overlaysEl,
+    graphControls,
+    genProgressWrap,
+    statusEl,
+  );
 
   root.append(header, canvas, counters, narrationEl, controls);
   mountDisclosures(root);
@@ -488,6 +519,22 @@ export function mountLens(): void {
   }
 
   /**
+   * Disable XL for city graphs (Delaunay is O(n²); issue #32).
+   */
+  function syncCityXlOption(): void {
+    if (xlSizeOption === null) {
+      return;
+    }
+    if (kindSelect.value === "city") {
+      xlSizeOption.disabled = true;
+      xlSizeOption.title = CITY_XL_OPTION_TITLE;
+    } else {
+      xlSizeOption.disabled = false;
+      xlSizeOption.removeAttribute("title");
+    }
+  }
+
+  /**
    * Sync graph control widgets to the current Lens URL state.
    */
   function syncGraphControls(): void {
@@ -496,6 +543,7 @@ export function mountLens(): void {
     kindSelect.value = lensState.g;
     sizeSelect.value = sizeKeyForN(lensState.n);
     seedInput.value = String(lensState.seed);
+    syncCityXlOption();
   }
 
   /**
@@ -546,6 +594,24 @@ export function mountLens(): void {
   function clearStatus(): void {
     statusEl.textContent = "";
     statusEl.hidden = true;
+  }
+
+  /**
+   * Show graph-generation progress from worker ratio in [0, 1].
+   *
+   * @param ratio - Generation progress fraction.
+   */
+  function showGenProgress(ratio: number): void {
+    genProgressWrap.hidden = false;
+    genProgress.value = Math.round(100 * ratio);
+  }
+
+  /**
+   * Hide the graph-generation progress bar after handoff or restart.
+   */
+  function hideGenProgress(): void {
+    genProgress.value = 100;
+    genProgressWrap.hidden = true;
   }
 
   /**
@@ -632,6 +698,7 @@ export function mountLens(): void {
     dstructValue.textContent = "0";
     syncNarration();
     clearStatus();
+    showGenProgress(0);
 
     const speed = Number(speedSelect.value);
     if (!Number.isFinite(speed)) {
@@ -659,7 +726,11 @@ export function mountLens(): void {
       }
 
       switch (message.type) {
+        case "progress":
+          showGenProgress(message.ratio);
+          break;
         case "graph": {
+          hideGenProgress();
           const graph = graphFromTraceMessage(message);
           const params = resolveBmsspRunParams(
             lensState.n,
@@ -869,9 +940,14 @@ export function mountLens(): void {
     const raw = kindSelect.value;
     if (!isGraphKind(raw)) {
       showStatus(`invalid graph kind: ${raw}`);
+      syncGraphControls();
       return;
     }
-    applyLensState({ ...lensState, g: raw });
+    let nextN = lensState.n;
+    if (raw === "city" && (lensState.n === SIZE_PRESETS.XL || lensState.n > CITY_MAX_N)) {
+      nextN = CITY_MAX_N;
+    }
+    applyLensState({ ...lensState, g: raw, n: nextN });
   });
 
   sizeSelect.addEventListener("change", () => {

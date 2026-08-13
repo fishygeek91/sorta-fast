@@ -9,6 +9,12 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Adversarial gallery kind (`g=adversarial`): Θ(√n) chain + wide fans, seeded, property-tested (#20).
+- City graphs reject n > L (25000); Race/Lens disable XL for city with #32 tooltip and clamp on kind switch (#20, #32).
+- Aggregated render at ≥25k nodes: 2px ImageData settle squares, undirected-once edge prerender, simplified overlays (#20).
+- Worker generate-progress messages + Race/Lens generating bar; chunk paints coalesced to rAF (#20).
+- XL labeled "XL (stress)" in pickers (#20).
+- Headless tests: generators, picker scans, protocol progress, aggregated renderer, `test/render-perf-xl.test.ts` (33.3ms XL draw), `test/race-xl-stall.test.ts` (50ms append+draw stall) (#20).
 - Shared `src/ui/bmsspUrl.ts` helpers for Race/Lens `bmssp`/`bk`/`bt` parse so the two codecs stay in sync (#52).
 - Race and Lens gallery control Demo (browser-scale) vs Paper (asymptotic) writes `bmssp=` and restarts the BMSSP worker; `Playback` takes optional `findPivotsK` so Lens narration matches paper/override k (#52).
 - `resolveBmsspRunParams` harness helper so Race/Lens can resolve k/t without importing `src/core/bmssp/` (#52).
@@ -40,6 +46,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- `docs/design.md` §3.4 city XL cap and aggregated-render xref §4.4 (#20).
 - Pre-#52 share URLs without `bmssp=` now replay under demo k/t (`k = max(4, paper k)`); append `&bmssp=paper` to reproduce the old paper-asymptotic run (#52).
 - BMSSP workers and `RaceSpec` accept optional `mode` (`demo`|`paper`); omitted k/t now resolve through demo `bmsspParams`, not the paper formula (#52).
 - Fairness panel `params` paragraph discloses BMSSP paper k/t vs demo defaults (`k = max(4, paper k)`, paper t), FindPivots abort at k=2, sweep evidence at `bench/bmssp-kt-sweep.md`, and `bmssp=paper` URL override (#52).

@@ -25,7 +25,10 @@ describe("dijkstra differential fuzz", () => {
     const violations: string[] = [];
 
     for (let seed = 0; seed < 1000; seed += 1) {
-      const kind = GRAPH_KINDS[seed % 4];
+      const kind = GRAPH_KINDS[seed % GRAPH_KINDS.length];
+      if (kind === undefined) {
+        throw new Error(`unexpected graph kind index for seed ${String(seed)}`);
+      }
       const n = 8 + (seed % 40);
       const source = seed % n;
       const graph = generateGraph(kind, n, seed);

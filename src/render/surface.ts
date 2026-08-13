@@ -35,6 +35,17 @@ export type DrawContext = {
   ): void;
   moveTo(x: number, y: number): void;
   lineTo(x: number, y: number): void;
+  getImageData(sx: number, sy: number, sw: number, sh: number): ImageData;
+  putImageData(imageData: ImageData, dx: number, dy: number): void;
+  putImageData(
+    imageData: ImageData,
+    dx: number,
+    dy: number,
+    dirtyX: number,
+    dirtyY: number,
+    dirtyWidth: number,
+    dirtyHeight: number,
+  ): void;
 };
 
 /** Offscreen or on-screen bitmap the renderer can target or blit. */

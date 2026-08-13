@@ -43,6 +43,9 @@ self.onmessage = (event: MessageEvent<TraceRunRequest>): void => {
         onChunk(chunk) {
           self.postMessage({ type: "chunk", chunk }, transferables(chunk));
         },
+        onProgress(ratio) {
+          self.postMessage({ type: "progress", phase: "generate", ratio });
+        },
       },
     );
     self.postMessage({ type: "done" });

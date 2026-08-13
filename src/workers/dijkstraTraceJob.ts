@@ -22,6 +22,8 @@ export type DijkstraTraceSpec = {
 export type JobSink = {
   onGraph: (graph: Graph) => void;
   onChunk: (chunk: TraceChunk) => void;
+  /** Optional graph-generation progress ratio in [0, 1] (issue #20). */
+  onProgress?: (ratio: number) => void;
 };
 
 /**
@@ -56,7 +58,7 @@ function validateSpec(spec: DijkstraTraceSpec): void {
 export function runDijkstraTraceJob(spec: DijkstraTraceSpec, sink: JobSink): void {
   validateSpec(spec);
 
-  const graph = generateGraph(spec.kind, spec.n, spec.seed);
+  const graph = generateGraph(spec.kind, spec.n, spec.seed, sink.onProgress);
   sink.onGraph(graph);
 
   const writer = new TraceWriter(spec.chunkCapacity);

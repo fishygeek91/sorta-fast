@@ -14,6 +14,33 @@ describe("parseLensUrl", () => {
     expect(parseLensUrl(new URLSearchParams())).toEqual(DEFAULT_LENS_URL);
   });
 
+  it("parses g=city&n=100000 even though generation would throw (issue #32)", () => {
+    expect(parseLensUrl("?g=city&n=100000&seed=1")).toEqual({
+      g: "city",
+      n: 100000,
+      seed: 1,
+      algo: "bmssp",
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    });
+  });
+
+  it("round-trips adversarial graph kind", () => {
+    const state: LensUrlState = {
+      g: "adversarial",
+      n: 500,
+      seed: 7,
+      algo: "bmssp",
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    };
+    const query = serializeLensUrl(state);
+    expect(query).toContain("g=adversarial");
+    expect(parseLensUrl(query)).toEqual(state);
+  });
+
   it("round-trips city / 500 / 42 with default bmssp algo", () => {
     const state: LensUrlState = {
       g: "city",

@@ -99,12 +99,12 @@ At browser scale (10³–10⁵ nodes), Dijkstra + binary heap will often win **w
 3. **Story** — a 90-second guided tour: what Dijkstra does → what sorting costs → how pivots cheat the barrier → the 2026 forest trick → free play. Scroll- or click-driven, ends by dropping you into Race mode.
 
 ### 3.4 Graph gallery (all seeded & URL-encoded)
-- **Delaunay/geometric city** — the flagship; looks like a road map, layouts are pretty.
+- **Delaunay/geometric city** — the flagship; looks like a road map, layouts are pretty. No XL size (capped at L / 25k nodes; issue #32).
 - **Grid maze** — recursion structure reads clearly.
 - **Ring of clusters** — makes batch-blooms dramatic (frontiers jump between clusters).
 - **Adversarial for Dijkstra** — long chains + wide fans; the heap thrashes.
 - **Sparse random (m ≈ 2n)** — the regime where the 2026 bound shines.
-- Sizes S/M/L/XL (500 / 5k / 25k / 100k nodes). XL uses aggregated rendering (§5.4).
+- Sizes S/M/L/XL (500 / 5k / 25k / 100k nodes). XL uses aggregated rendering (§4.4). City has no XL (Delaunay is O(n²); capped at L; issue #32).
 
 ### 3.5 Share loop
 - Full state in URL: `?g=city&n=5000&seed=1729&race=dijkstra,bmssp,dmsy&t=48210`.
@@ -160,7 +160,7 @@ Consequences: algorithms are testable headless in Node; the renderer never knows
 ### 4.4 Rendering
 - Canvas2D, layered: static edge layer (drawn once per graph) / dynamic fill layer (settle gradient, dirty-rect batched) / overlay layer (frontier, pivots, forest) / FX layer (blooms, photo-finish).
 - ≥25k nodes: nodes become 2px squares via `ImageData` writes; edges pre-rendered to an offscreen bitmap. 60fps target on M-size, 30fps floor on XL.
-- Layout precomputed at graph-gen time (geometric graphs come with coordinates; others get a seeded force layout done in the worker with a progress bar).
+- Layout coordinates come from each generator in the worker at graph-gen time (v1 gallery: maze grid, cluster ring, city Delaunay points, sparse unit square, adversarial chain/fan columns). A progress bar covers `generateGraph` in the worker; no spring embedder in v1.
 
 ---
 
