@@ -1,5 +1,5 @@
 /**
- * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12).
+ * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12, #16).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
@@ -11,6 +11,7 @@ import {
   parseWorkerToMain,
   type TraceRunRequest,
 } from "../workers/protocol.ts";
+import { mountDisclosures } from "./disclosures.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
@@ -397,6 +398,7 @@ export function mountLens(): void {
   controls.append(transport, speedLabel, scrubLabel, overlaysEl, graphControls, statusEl);
 
   root.append(header, canvas, counters, narrationEl, controls);
+  mountDisclosures(root);
 
   const target = wrapDomCanvas(canvas);
   let playback: Playback | null = null;

@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Footer disclosures in Race and Lens: Fairness rules (work-clock op-cost model + link to the `src/core/trace.ts` cost table), What am I looking at? (sorting-barrier story, Perfectionist / Batcher / Forester personas, visual vocabulary), and The papers (STOC 2025, arXiv 2504.17033, arXiv 2602.07868, Quanta). Opening a panel does not pause playback (#16).
+- Headless #16 tests: `test/site-copy.test.ts` syncs UI `FAIRNESS_COSTS` with `OP_COST`; `test/disclosures-mount.test.ts` source-scans Race/Lens wiring and forbids UI `trace.ts` imports; site-disclosure CSS coverage in `test/race-css.test.ts`.
 - Race header gallery: graph kind, S/M/L/XL, seed, dice, and 2-way vs 3-way lane pickers; `replaceState` on change; load seeks optional `t` and stays paused (#15).
 - Lens size picker includes XL; Dice button rolls a CSPRNG seed and reruns (#15).
 - Race URL codec encodes `race=` (comma-separated lanes) and optional `t=` (work-clock position); legacy `lane3=dijkstra` still parses as a third Dijkstra lane (#15).

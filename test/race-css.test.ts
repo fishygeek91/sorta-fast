@@ -63,3 +63,38 @@ describe("race mode CSS", () => {
     expect(css).toMatch(/#race-dice-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/);
   });
 });
+
+describe("site disclosures CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  /**
+   * Extract the first `@media (max-width: 720px)` block body from stylesheet text.
+   *
+   * @param stylesheet - Full `style.css` source.
+   * @returns Inner rules of the mobile breakpoint block.
+   */
+  function extractMobile720Block(stylesheet: string): string {
+    const mobileBlock = stylesheet.match(/@media\s*\(max-width:\s*720px\)\s*\{([\s\S]*?)\n\}/);
+    expect(mobileBlock).not.toBeNull();
+    return mobileBlock?.[1] ?? "";
+  }
+
+  it("defines site disclosure container and panel classes", () => {
+    expect(css).toContain(".site-disclosures");
+    expect(css).toContain(".site-disclosure");
+    expect(css).toContain(".site-disclosure-body");
+  });
+
+  it("matches lens control width when footer is direct child of #app", () => {
+    expect(css).toContain("#app > .site-disclosures");
+    expect(css).toMatch(
+      /#app\s*>\s*\.site-disclosures\s*\{[\s\S]*?width:\s*min\(720px,\s*calc\(100vw\s*-\s*2rem\)\)/,
+    );
+  });
+
+  it("stacks disclosures vertically below 720px", () => {
+    const block = extractMobile720Block(css);
+    expect(block).toContain(".site-disclosures");
+    expect(block).toMatch(/\.site-disclosures\s*\{[\s\S]*?flex-direction:\s*column/);
+  });
+});

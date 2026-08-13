@@ -284,6 +284,15 @@ body {
   .race-lanes {
     grid-template-columns: 1fr;
   }
+
+  .site-disclosures {
+    flex-direction: column;
+  }
+
+  .site-disclosure {
+    flex: 1 1 auto;
+    width: 100%;
+  }
 }
 
 .race-lane {
@@ -403,4 +412,58 @@ body {
 
 .race-banner[hidden] {
   display: none;
+}
+
+/* --- Site disclosures (issue #16) --- */
+
+#app > .site-disclosures {
+  width: min(720px, calc(100vw - 2rem));
+}
+
+.site-disclosures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+.site-disclosure {
+  flex: 1 1 18rem;
+  border: 1px solid rgb(180, 176, 168);
+  border-radius: 4px;
+  background: rgb(255, 252, 247);
+}
+
+.site-disclosure > summary {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #1a1a1a;
+}
+
+.site-disclosure-body {
+  padding: 0 0.75rem 0.75rem;
+  max-width: 65ch;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.site-disclosure-body a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.site-disclosure-body a:hover {
+  color: rgb(80, 72, 60);
+}
+
+.site-disclosure-body ul,
+.site-disclosure-body ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.site-disclosure-body li + li {
+  margin-top: 0.25rem;
 }
