@@ -12,6 +12,20 @@ import {
 
 const GHOST_STROKE = "rgba(40, 40, 40, 0.35)";
 
+/** BMSSP ember accent — must match renderer.ts. */
+const EMBER_RGB = "180, 70, 40";
+
+/** Recursion tint alpha for depth 3 — must match renderer.ts constants. */
+const RECURSION_TINT_DEPTH_3_ALPHA = Math.min(1, 3 / 5) * 0.08;
+
+/** Batch bloom fill alpha — must match renderer.ts. */
+const BLOOM_FILL_ALPHA = 0.2;
+
+/** D-structure strip height in pixels — must match renderer.ts. */
+const DSTRUCT_STRIP_HEIGHT = 16;
+
+const CANVAS_SIZE = 200;
+
 function tinyGraph(): Graph {
   return packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0.2, 0.8], [0.5, 0.5]);
 }
@@ -25,8 +39,9 @@ function createRendererWithLayers(graph: Graph): {
   renderer: Renderer;
   target: FakeCanvasSurface;
   overlay: FakeCanvasSurface;
+  fx: FakeCanvasSurface;
 } {
-  const target: FakeCanvasSurface = createFakeSurface(200, 200);
+  const target: FakeCanvasSurface = createFakeSurface(CANVAS_SIZE, CANVAS_SIZE);
   const layers: FakeCanvasSurface[] = [];
   const createSurface = (w: number, h: number): FakeCanvasSurface => {
     const s = createFakeSurface(w, h);
@@ -38,14 +53,18 @@ function createRendererWithLayers(graph: Graph): {
     createSurface,
     graph,
   });
-  if (layers.length < 3) {
-    throw new Error(`expected 3 offscreen layers, got ${String(layers.length)}`);
+  if (layers.length < 4) {
+    throw new Error(`expected 4 offscreen layers, got ${String(layers.length)}`);
   }
   const overlay = layers[2];
   if (overlay === undefined) {
     throw new Error("overlay layer is missing");
   }
-  return { renderer, target, overlay };
+  const fx = layers[3];
+  if (fx === undefined) {
+    throw new Error("fx layer is missing");
+  }
+  return { renderer, target, overlay, fx };
 }
 
 function overlayCalls(overlay: FakeCanvasSurface): readonly DrawCall[] {
@@ -66,6 +85,38 @@ function overlayLineToCount(overlay: FakeCanvasSurface): number {
   return overlayCalls(overlay).filter((call) => call.op === "lineTo").length;
 }
 
+function fxCalls(fx: FakeCanvasSurface): readonly DrawCall[] {
+  return getFakeContext(fx).calls;
+}
+
+function fxFillRects(fx: FakeCanvasSurface): DrawCall[] {
+  return fxCalls(fx).filter((call) => call.op === "fillRect");
+}
+
+function hasRecursionTintFill(fx: FakeCanvasSurface): boolean {
+  const expected = `rgba(${EMBER_RGB}, ${String(RECURSION_TINT_DEPTH_3_ALPHA)})`;
+  return fxFillRects(fx).some(
+    (call) =>
+      call.fillStyle === expected &&
+      call.args[0] === 0 &&
+      call.args[1] === 0 &&
+      call.args[2] === CANVAS_SIZE &&
+      call.args[3] === CANVAS_SIZE,
+  );
+}
+
+function hasBloomFill(fx: FakeCanvasSurface): boolean {
+  const expected = `rgba(${EMBER_RGB}, ${String(BLOOM_FILL_ALPHA)})`;
+  return fxFillRects(fx).some((call) => call.fillStyle === expected);
+}
+
+function dstructStripFillRects(fx: FakeCanvasSurface): DrawCall[] {
+  const stripY = CANVAS_SIZE - DSTRUCT_STRIP_HEIGHT;
+  return fxFillRects(fx).filter(
+    (call) => call.args[1] === stripY && call.args[3] === DSTRUCT_STRIP_HEIGHT,
+  );
+}
+
 describe("Renderer", () => {
   it("draws settled and frontier state without throwing", () => {
     const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0.2, 0.8], [0.5, 0.5]);
@@ -83,7 +134,7 @@ describe("Renderer", () => {
     expect(() => renderer.draw(state)).not.toThrow();
 
     const drawImages = drawImageCount(target);
-    expect(drawImages).toBeGreaterThanOrEqual(3);
+    expect(drawImages).toBeGreaterThanOrEqual(4);
   });
 
   it("blits only the dirty rect after the first full composite", () => {
@@ -106,7 +157,7 @@ describe("Renderer", () => {
     renderer.draw(state);
 
     const incremental = ctx.calls.slice(afterFirst).filter((call) => call.op === "drawImage");
-    expect(incremental).toHaveLength(3);
+    expect(incremental).toHaveLength(4);
     for (const call of incremental) {
       const sw = call.args[3];
       const sh = call.args[4];
@@ -190,5 +241,118 @@ describe("Renderer", () => {
 
     expect(overlayLineToCount(overlay)).toBe(0);
     expect(overlayGhostStrokeCalls(overlay)).toHaveLength(0);
+  });
+
+  it("draws recursion-depth tint on the fx layer by default", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.recursionDepth = 3;
+
+    renderer.draw(state);
+
+    expect(hasRecursionTintFill(fx)).toBe(true);
+  });
+
+  it("skips recursion-depth tint on the fx layer when recursionTint toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.recursionDepth = 3;
+
+    renderer.draw(state, { recursionTint: false });
+
+    expect(hasRecursionTintFill(fx)).toBe(false);
+    expect(fxFillRects(fx).some((call) => call.fillStyle?.includes(EMBER_RGB) === true)).toBe(
+      false,
+    );
+  });
+
+  it("draws pivot flare rings on the overlay beyond frontier rings", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.pivotFlareWork[0] = 0;
+    state.work = 0;
+
+    renderer.draw(state, { frontier: false, pivotFlares: true });
+
+    expect(overlayArcCount(overlay)).toBeGreaterThan(0);
+  });
+
+  it("skips pivot flare rings on the overlay when pivotFlares toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.pivotFlareWork[0] = 0;
+    state.work = 0;
+
+    renderer.draw(state, { frontier: false, pivotFlares: false });
+
+    expect(overlayArcCount(overlay)).toBe(0);
+  });
+
+  it("draws batch bloom fill on the fx layer by default", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.bloomActive = 1;
+    state.bloomMinX = 0.1;
+    state.bloomMinY = 0.4;
+    state.bloomMaxX = 0.9;
+    state.bloomMaxY = 0.6;
+
+    renderer.draw(state);
+
+    expect(hasBloomFill(fx)).toBe(true);
+  });
+
+  it("skips batch bloom fill on the fx layer when batchBlooms toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.bloomActive = 1;
+    state.bloomMinX = 0.1;
+    state.bloomMinY = 0.4;
+    state.bloomMaxX = 0.9;
+    state.bloomMaxY = 0.6;
+
+    renderer.draw(state, { batchBlooms: false });
+
+    expect(hasBloomFill(fx)).toBe(false);
+  });
+
+  it("draws D-structure strip segments on the fx layer by default", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.dBlockCount = 2;
+    state.dBlockSizes[0] = 3;
+    state.dBlockSizes[1] = 1;
+
+    renderer.draw(state);
+
+    expect(dstructStripFillRects(fx).length).toBeGreaterThan(0);
+  });
+
+  it("skips D-structure strip segments on the fx layer when dstructStrip toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.dBlockCount = 2;
+    state.dBlockSizes[0] = 3;
+    state.dBlockSizes[1] = 1;
+
+    renderer.draw(state, { dstructStrip: false });
+
+    expect(dstructStripFillRects(fx)).toHaveLength(0);
   });
 });

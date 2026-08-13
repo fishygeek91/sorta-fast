@@ -1,21 +1,30 @@
 /**
- * Lens URL codec for graph gallery state (issue #8).
+ * Lens URL codec for graph gallery state (issue #8, #12).
  *
- * Pure parse/serialize of `?g=&n=&seed=` — no DOM. Race, speed, overlays,
+ * Pure parse/serialize of `?g=&n=&seed=&algo=` — no DOM. Race, speed, overlays,
  * and scrub position are intentionally excluded until a later issue.
  */
 
 import { GRAPH_KINDS, type GraphKind } from "../core/graph.ts";
+
+/** Lens algorithm lane selected via the URL (`algo` query param). */
+export type LensAlgo = "dijkstra" | "bmssp";
 
 /** Graph gallery fields encoded in the Lens URL. */
 export type LensUrlState = {
   g: GraphKind;
   n: number;
   seed: number;
+  algo: LensAlgo;
 };
 
 /** Defaults match the current single-lane demo (`src/main.ts`). */
-export const DEFAULT_LENS_URL: LensUrlState = { g: "maze", n: 5000, seed: 1729 };
+export const DEFAULT_LENS_URL: LensUrlState = {
+  g: "maze",
+  n: 5000,
+  seed: 1729,
+  algo: "bmssp",
+};
 
 /**
  * @param value - Candidate graph-kind slug from the query string.
@@ -88,12 +97,34 @@ function parseInteger(raw: string | null, fallback: number): number {
 }
 
 /**
+ * @param value - Candidate `algo` slug from the query string.
+ * @returns Whether `value` is a supported {@link LensAlgo}.
+ */
+function isLensAlgo(value: string): value is LensAlgo {
+  return value === "dijkstra" || value === "bmssp";
+}
+
+/**
+ * @param raw - `algo` query value, or null when absent.
+ * @returns A valid lens algorithm, defaulting to BMSSP on invalid input.
+ */
+function parseLensAlgo(raw: string | null): LensAlgo {
+  if (raw === null || raw === "") {
+    return DEFAULT_LENS_URL.algo;
+  }
+  if (isLensAlgo(raw)) {
+    return raw;
+  }
+  return DEFAULT_LENS_URL.algo;
+}
+
+/**
  * Parse a query string or {@link URLSearchParams} into Lens gallery state.
  *
- * Unknown keys are ignored. Invalid or missing `g`, `n`, and `seed` values fall
- * back to {@link DEFAULT_LENS_URL} field-by-field without throwing.
+ * Unknown keys are ignored. Invalid or missing `g`, `n`, `seed`, and `algo`
+ * values fall back to {@link DEFAULT_LENS_URL} field-by-field without throwing.
  *
- * @param search - Query string (e.g. `"?g=city&n=500&seed=1"`) or parsed params.
+ * @param search - Query string (e.g. `"?g=city&n=500&seed=1&algo=bmssp"`) or parsed params.
  */
 export function parseLensUrl(search: string | URLSearchParams): LensUrlState {
   const params = toSearchParams(search);
@@ -101,6 +132,7 @@ export function parseLensUrl(search: string | URLSearchParams): LensUrlState {
     g: parseGraphKind(params.get("g")),
     n: parsePositiveInteger(params.get("n"), DEFAULT_LENS_URL.n),
     seed: parseInteger(params.get("seed"), DEFAULT_LENS_URL.seed),
+    algo: parseLensAlgo(params.get("algo")),
   };
 }
 
@@ -118,12 +150,15 @@ function assertValidLensUrlState(state: LensUrlState): void {
   if (!Number.isFinite(state.seed) || !Number.isInteger(state.seed)) {
     throw new Error(`seed must be a finite integer, got ${String(state.seed)}`);
   }
+  if (!isLensAlgo(state.algo)) {
+    throw new Error(`Invalid lens algo: ${state.algo}`);
+  }
 }
 
 /**
  * Serialize Lens gallery state to a canonical query string.
  *
- * The result always starts with `?` and contains only `g`, `n`, and `seed`.
+ * The result always starts with `?` and contains `g`, `n`, `seed`, and `algo`.
  *
  * @param state - Valid gallery state.
  * @throws When `state` fails {@link assertValidLensUrlState}.
@@ -134,5 +169,6 @@ export function serializeLensUrl(state: LensUrlState): string {
   params.set("g", state.g);
   params.set("n", String(state.n));
   params.set("seed", String(state.seed));
+  params.set("algo", state.algo);
   return `?${params.toString()}`;
 }

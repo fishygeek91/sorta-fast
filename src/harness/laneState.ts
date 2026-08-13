@@ -2,14 +2,17 @@
  * Typed-array visual state for one race lane (issue #7, design.md §4.3).
  *
  * Headless playback snapshot: settle order, frontier flags, event cursor,
- * billed work, and per-edge relax ghost data for lens mode. No DOM,
- * `Date.now()`, or `Math.random()`.
+ * billed work, per-edge relax ghost data for lens mode, and BMSSP overlay
+ * narration fields (issue #12). No DOM, `Date.now()`, or `Math.random()`.
  */
 
 import { SENTINEL } from "../core/trace.ts";
 
 /** Matches trace SENTINEL: vertex has not settled. Renderer imports this, not trace.ts. */
 export const UNSETTLED = SENTINEL;
+
+/** Maximum schematic D blocks tracked for BMSSP overlay narration. */
+export const D_BLOCK_CAP = 64;
 
 /**
  * Per-lane playback state derived from trace events.
@@ -18,7 +21,8 @@ export const UNSETTLED = SENTINEL;
  * 0-based settle index. `frontier[v]` is 1 when `v` is improved but not yet
  * settled. `lastRelaxWork[e]` is {@link UNSETTLED} until edge `e` improves,
  * then the billed work after that relax event. Scalars track how far playback
- * has advanced through the trace.
+ * has advanced through the trace. BMSSP fields hold visual/narration state for
+ * recurse depth, FindPivots batches, bloom regions, and schematic D blocks.
  */
 export class LaneState {
   readonly n: number;
@@ -43,6 +47,48 @@ export class LaneState {
   relaxations: number;
   /** Running count of heap trace events applied. */
   heapOps: number;
+
+  /** Nest depth from recurse in/out; 0 at top level when not inside a recurse. */
+  recursionDepth: number;
+  /** Active bound B from the latest recurse in; `Infinity` when unset or top-level. */
+  currentBound: number;
+  /** 1 if a FindPivots batch is currently open; otherwise 0. */
+  batchOpen: number;
+  /** Level of the open or most recent FindPivots batch. */
+  batchLevel: number;
+  /** 1-based FindPivots round at the current level (incremented on batch start). */
+  batchRound: number;
+  /** Narration k for FindPivots; 0 until set by TraceBuffer. */
+  findPivotsK: number;
+  /** Vertex count from the latest batch start (vertices relaxed this round). */
+  lastBatchSize: number;
+  /** Pivots seen since the last recurse-in at the current FindPivots window. */
+  pivotsFoundThisCall: number;
+  /** n from the latest dstruct pull; 0 if none yet. */
+  lastPullN: number;
+  /** Count of dstruct trace events applied. */
+  dstructOps: number;
+  /** Bloom bbox minimum x; `Infinity` when the bloom set is empty. */
+  bloomMinX: number;
+  /** Bloom bbox minimum y; `Infinity` when the bloom set is empty. */
+  bloomMinY: number;
+  /** Bloom bbox maximum x; `-Infinity` when the bloom set is empty. */
+  bloomMaxX: number;
+  /** Bloom bbox maximum y; `-Infinity` when the bloom set is empty. */
+  bloomMaxY: number;
+  /** 1 when the bloom region is valid for FX; otherwise 0. */
+  bloomActive: number;
+  /** Number of schematic D blocks currently in use. */
+  dBlockCount: number;
+  /**
+   * Billed work when vertex v last flared as a pivot, or {@link UNSETTLED} if
+   * never flared.
+   */
+  readonly pivotFlareWork: Int32Array;
+  /** 1 if vertex v is in the current bloom set; otherwise 0. */
+  readonly bloomVertex: Uint8Array;
+  /** Schematic D block sizes; only indices `0..dBlockCount-1` are meaningful. */
+  readonly dBlockSizes: Int32Array;
 
   /**
    * Allocate lane state for a graph with `n` vertices and `m` edges.
@@ -69,11 +115,30 @@ export class LaneState {
     this.settleOrder = new Int32Array(n);
     this.frontier = new Uint8Array(n);
     this.lastRelaxWork = new Int32Array(m);
+    this.pivotFlareWork = new Int32Array(n);
+    this.bloomVertex = new Uint8Array(n);
+    this.dBlockSizes = new Int32Array(D_BLOCK_CAP);
     this.settledCount = 0;
     this.eventIndex = 0;
     this.work = 0;
     this.relaxations = 0;
     this.heapOps = 0;
+    this.recursionDepth = 0;
+    this.currentBound = Infinity;
+    this.batchOpen = 0;
+    this.batchLevel = 0;
+    this.batchRound = 0;
+    this.findPivotsK = 0;
+    this.lastBatchSize = 0;
+    this.pivotsFoundThisCall = 0;
+    this.lastPullN = 0;
+    this.dstructOps = 0;
+    this.bloomMinX = Infinity;
+    this.bloomMinY = Infinity;
+    this.bloomMaxX = -Infinity;
+    this.bloomMaxY = -Infinity;
+    this.bloomActive = 0;
+    this.dBlockCount = 0;
     this.reset();
   }
 
@@ -84,11 +149,30 @@ export class LaneState {
     this.settleOrder.fill(UNSETTLED);
     this.frontier.fill(0);
     this.lastRelaxWork.fill(UNSETTLED);
+    this.pivotFlareWork.fill(UNSETTLED);
+    this.bloomVertex.fill(0);
+    this.dBlockSizes.fill(0);
     this.settledCount = 0;
     this.eventIndex = 0;
     this.work = 0;
     this.relaxations = 0;
     this.heapOps = 0;
+    this.recursionDepth = 0;
+    this.currentBound = Infinity;
+    this.batchOpen = 0;
+    this.batchLevel = 0;
+    this.batchRound = 0;
+    this.findPivotsK = 0;
+    this.lastBatchSize = 0;
+    this.pivotsFoundThisCall = 0;
+    this.lastPullN = 0;
+    this.dstructOps = 0;
+    this.bloomMinX = Infinity;
+    this.bloomMinY = Infinity;
+    this.bloomMaxX = -Infinity;
+    this.bloomMaxY = -Infinity;
+    this.bloomActive = 0;
+    this.dBlockCount = 0;
   }
 
   /**
@@ -122,10 +206,29 @@ export class LaneState {
     this.settleOrder.set(other.settleOrder);
     this.frontier.set(other.frontier);
     this.lastRelaxWork.set(other.lastRelaxWork);
+    this.pivotFlareWork.set(other.pivotFlareWork);
+    this.bloomVertex.set(other.bloomVertex);
+    this.dBlockSizes.set(other.dBlockSizes);
     this.settledCount = other.settledCount;
     this.eventIndex = other.eventIndex;
     this.work = other.work;
     this.relaxations = other.relaxations;
     this.heapOps = other.heapOps;
+    this.recursionDepth = other.recursionDepth;
+    this.currentBound = other.currentBound;
+    this.batchOpen = other.batchOpen;
+    this.batchLevel = other.batchLevel;
+    this.batchRound = other.batchRound;
+    this.findPivotsK = other.findPivotsK;
+    this.lastBatchSize = other.lastBatchSize;
+    this.pivotsFoundThisCall = other.pivotsFoundThisCall;
+    this.lastPullN = other.lastPullN;
+    this.dstructOps = other.dstructOps;
+    this.bloomMinX = other.bloomMinX;
+    this.bloomMinY = other.bloomMinY;
+    this.bloomMaxX = other.bloomMaxX;
+    this.bloomMaxY = other.bloomMaxY;
+    this.bloomActive = other.bloomActive;
+    this.dBlockCount = other.dBlockCount;
   }
 }

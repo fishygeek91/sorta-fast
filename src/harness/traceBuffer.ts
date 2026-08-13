@@ -6,9 +6,16 @@
  * backward seeks cheap. No DOM, `Date.now()`, or `Math.random()`.
  */
 
+import { bmsspParams } from "../core/bmssp/params.ts";
 import { type Graph } from "../core/graph.ts";
-import { TRACE_KIND, type TraceChunk } from "../core/trace.ts";
-import { LaneState, UNSETTLED } from "./laneState.ts";
+import {
+  BATCH_PHASE,
+  DSTRUCT_OP,
+  RECURSE_DIR,
+  TRACE_KIND,
+  type TraceChunk,
+} from "../core/trace.ts";
+import { D_BLOCK_CAP, LaneState, UNSETTLED } from "./laneState.ts";
 
 /** Keyframe interval in billed ops for backward scrub restores (design.md §4.3). */
 export const KEYFRAME_OPS = 250_000;
@@ -363,6 +370,9 @@ export class TraceBuffer {
             target.frontier[to] = 1;
           }
           target.lastRelaxWork[edge] = target.work + cost;
+          if (target.batchOpen === 1) {
+            this.expandBloomForVertex(target, to);
+          }
         }
         break;
       }
@@ -371,12 +381,98 @@ export class TraceBuffer {
         target.heapOps += 1;
         break;
 
-      case TRACE_KIND.pivot:
-      case TRACE_KIND.batch:
-      case TRACE_KIND.recurse:
-      case TRACE_KIND.forest:
-      case TRACE_KIND.dstruct:
+      case TRACE_KIND.pivot: {
+        const vertex = chunk.vertex[row];
+        if (vertex === undefined) {
+          throw new Error(`missing pivot vertex at event ${String(eventIndex)}`);
+        }
+        if (vertex < 0 || vertex >= target.n) {
+          throw new Error(
+            `pivot vertex ${String(vertex)} out of range [0, ${String(target.n)}) at event ${String(eventIndex)}`,
+          );
+        }
+        target.pivotFlareWork[vertex] = target.work + cost;
+        target.pivotsFoundThisCall += 1;
         break;
+      }
+
+      case TRACE_KIND.batch: {
+        const phase = chunk.aux0[row];
+        const level = chunk.aux1[row];
+        const size = chunk.aux2[row];
+        if (phase === undefined || level === undefined || size === undefined) {
+          throw new Error(`missing batch fields at event ${String(eventIndex)}`);
+        }
+        if (phase === BATCH_PHASE.start) {
+          target.batchOpen = 1;
+          target.batchLevel = level;
+          target.lastBatchSize = size;
+          target.batchRound += 1;
+          target.bloomVertex.fill(0);
+          target.bloomMinX = Infinity;
+          target.bloomMinY = Infinity;
+          target.bloomMaxX = -Infinity;
+          target.bloomMaxY = -Infinity;
+          target.bloomActive = 0;
+        } else if (phase === BATCH_PHASE.end) {
+          target.batchOpen = 0;
+          target.lastBatchSize = size;
+        } else {
+          throw new Error(`invalid batch phase ${String(phase)} at event ${String(eventIndex)}`);
+        }
+        break;
+      }
+
+      case TRACE_KIND.recurse: {
+        const dir = chunk.aux0[row];
+        const bound = chunk.auxF[row];
+        if (dir === undefined || bound === undefined) {
+          throw new Error(`missing recurse fields at event ${String(eventIndex)}`);
+        }
+        if (dir === RECURSE_DIR.in) {
+          target.recursionDepth += 1;
+          target.currentBound = bound;
+          target.findPivotsK = target.n === 0 ? 1 : bmsspParams(Math.max(1, target.n)).k;
+          target.pivotsFoundThisCall = 0;
+          target.batchRound = 0;
+          target.lastPullN = 0;
+        } else if (dir === RECURSE_DIR.out) {
+          if (target.recursionDepth === 0) {
+            throw new Error(`recurse out with empty stack at event ${String(eventIndex)}`);
+          }
+          target.recursionDepth -= 1;
+          target.currentBound = bound;
+        } else {
+          throw new Error(
+            `invalid recurse direction ${String(dir)} at event ${String(eventIndex)}`,
+          );
+        }
+        break;
+      }
+
+      case TRACE_KIND.forest:
+        break;
+
+      case TRACE_KIND.dstruct: {
+        target.batchRound = 0;
+        const op = chunk.aux0[row];
+        const n = chunk.aux1[row];
+        if (op === undefined || n === undefined) {
+          throw new Error(`missing dstruct fields at event ${String(eventIndex)}`);
+        }
+        target.dstructOps += 1;
+        if (op === DSTRUCT_OP.insert) {
+          this.appendDBlock(target, n);
+        } else if (op === DSTRUCT_OP.batchPrepend) {
+          this.prependDBlock(target, n);
+        } else if (op === DSTRUCT_OP.pull) {
+          target.lastPullN = n;
+          this.pullDBlockKeys(target, n);
+        } else {
+          throw new Error(`invalid dstruct op ${String(op)} at event ${String(eventIndex)}`);
+        }
+        break;
+      }
 
       default:
         throw new Error(`unknown trace kind ${String(kind)} at event ${String(eventIndex)}`);
@@ -384,6 +480,103 @@ export class TraceBuffer {
 
     target.work += cost;
     target.eventIndex += 1;
+  }
+
+  /**
+   * Mark vertex `v` in the bloom set and expand the bloom bounding box.
+   *
+   * @param target - Lane state whose bloom fields are updated.
+   * @param v - Vertex index in `[0, target.n)`.
+   * @throws If layout coordinates for `v` are missing.
+   */
+  private expandBloomForVertex(target: LaneState, v: number): void {
+    const x = this.graph.x[v];
+    const y = this.graph.y[v];
+    if (x === undefined || y === undefined) {
+      throw new Error(`missing layout coordinates for vertex ${String(v)}`);
+    }
+    target.bloomVertex[v] = 1;
+    if (x < target.bloomMinX) {
+      target.bloomMinX = x;
+    }
+    if (y < target.bloomMinY) {
+      target.bloomMinY = y;
+    }
+    if (x > target.bloomMaxX) {
+      target.bloomMaxX = x;
+    }
+    if (y > target.bloomMaxY) {
+      target.bloomMaxY = y;
+    }
+    target.bloomActive = 1;
+  }
+
+  /**
+   * Append a schematic D block of size `n` to the tail of `target`'s block list.
+   * When at capacity, drops the oldest block.
+   *
+   * @param target - Lane state whose {@link LaneState.dBlockSizes} list is mutated.
+   * @param n - Block size (non-negative integer keys).
+   */
+  private appendDBlock(target: LaneState, n: number): void {
+    if (target.dBlockCount < D_BLOCK_CAP) {
+      target.dBlockSizes[target.dBlockCount] = n;
+      target.dBlockCount += 1;
+      return;
+    }
+    for (let i = 0; i < D_BLOCK_CAP - 1; i += 1) {
+      target.dBlockSizes[i] = target.dBlockSizes[i + 1] ?? 0;
+    }
+    target.dBlockSizes[D_BLOCK_CAP - 1] = n;
+    target.dBlockCount = D_BLOCK_CAP;
+  }
+
+  /**
+   * Prepend a schematic D block of size `n` to the front of `target`'s block list.
+   * When at capacity, drops the tail block before prepending.
+   *
+   * @param target - Lane state whose {@link LaneState.dBlockSizes} list is mutated.
+   * @param n - Block size (non-negative integer keys).
+   */
+  private prependDBlock(target: LaneState, n: number): void {
+    if (target.dBlockCount < D_BLOCK_CAP) {
+      for (let i = target.dBlockCount; i > 0; i -= 1) {
+        target.dBlockSizes[i] = target.dBlockSizes[i - 1] ?? 0;
+      }
+      target.dBlockSizes[0] = n;
+      target.dBlockCount += 1;
+      return;
+    }
+    for (let i = D_BLOCK_CAP - 1; i > 0; i -= 1) {
+      target.dBlockSizes[i] = target.dBlockSizes[i - 1] ?? 0;
+    }
+    target.dBlockSizes[0] = n;
+  }
+
+  /**
+   * Remove `n` keys from the front of `target`'s schematic D block list.
+   *
+   * @param target - Lane state whose {@link LaneState.dBlockSizes} list is mutated.
+   * @param n - Number of keys to consume from the front.
+   */
+  private pullDBlockKeys(target: LaneState, n: number): void {
+    let remaining = n;
+    while (remaining > 0 && target.dBlockCount > 0) {
+      const front = target.dBlockSizes[0];
+      if (front === undefined) {
+        break;
+      }
+      if (front <= remaining) {
+        remaining -= front;
+        for (let i = 0; i < target.dBlockCount - 1; i += 1) {
+          target.dBlockSizes[i] = target.dBlockSizes[i + 1] ?? 0;
+        }
+        target.dBlockCount -= 1;
+      } else {
+        target.dBlockSizes[0] = front - remaining;
+        remaining = 0;
+      }
+    }
   }
 
   /**

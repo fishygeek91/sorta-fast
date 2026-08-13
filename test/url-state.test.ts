@@ -14,10 +14,28 @@ describe("parseLensUrl", () => {
     expect(parseLensUrl(new URLSearchParams())).toEqual(DEFAULT_LENS_URL);
   });
 
-  it("round-trips city / 500 / 42", () => {
-    const state: LensUrlState = { g: "city", n: 500, seed: 42 };
+  it("round-trips city / 500 / 42 with default bmssp algo", () => {
+    const state: LensUrlState = { g: "city", n: 500, seed: 42, algo: "bmssp" };
     const query = serializeLensUrl(state);
     expect(parseLensUrl(query)).toEqual(state);
+  });
+
+  it("round-trips dijkstra and bmssp algo values", () => {
+    const dijkstra: LensUrlState = { g: "maze", n: 100, seed: 1, algo: "dijkstra" };
+    const bmssp: LensUrlState = { g: "maze", n: 100, seed: 1, algo: "bmssp" };
+    expect(parseLensUrl(serializeLensUrl(dijkstra))).toEqual(dijkstra);
+    expect(parseLensUrl(serializeLensUrl(bmssp))).toEqual(bmssp);
+  });
+
+  it("defaults algo to bmssp when missing or invalid", () => {
+    expect(parseLensUrl("?g=city&n=100&seed=1")).toEqual({
+      g: "city",
+      n: 100,
+      seed: 1,
+      algo: "bmssp",
+    });
+    expect(parseLensUrl("?algo=dmsy")).toEqual(DEFAULT_LENS_URL);
+    expect(parseLensUrl("?algo=")).toEqual(DEFAULT_LENS_URL);
   });
 
   it("falls back to default g on invalid graph kind", () => {
@@ -53,24 +71,32 @@ describe("parseLensUrl", () => {
 
   it("ignores extra query keys", () => {
     const parsed = parseLensUrl("?g=sparse&n=1000&seed=7&race=dijkstra&speed=4");
-    expect(parsed).toEqual({ g: "sparse", n: 1000, seed: 7 });
+    expect(parsed).toEqual({ g: "sparse", n: 1000, seed: 7, algo: "bmssp" });
   });
 });
 
 describe("serializeLensUrl", () => {
-  it("starts with ? and contains g, n, and seed", () => {
-    const query = serializeLensUrl({ g: "clusters", n: 25000, seed: 99 });
+  it("starts with ? and contains g, n, seed, and algo", () => {
+    const query = serializeLensUrl({ g: "clusters", n: 25000, seed: 99, algo: "bmssp" });
     expect(query.startsWith("?")).toBe(true);
     expect(query).toContain("g=clusters");
     expect(query).toContain("n=25000");
     expect(query).toContain("seed=99");
+    expect(query).toContain("algo=bmssp");
   });
 
   it("throws on invalid state", () => {
-    expect(() => serializeLensUrl({ g: "maze", n: 0, seed: 1 })).toThrow(/n must be an integer/);
-    expect(() => serializeLensUrl({ g: "maze", n: 1.5, seed: 1 })).toThrow(/n must be an integer/);
-    expect(() => serializeLensUrl({ g: "maze", n: 1, seed: Number.NaN })).toThrow(
+    expect(() => serializeLensUrl({ g: "maze", n: 0, seed: 1, algo: "bmssp" })).toThrow(
+      /n must be an integer/,
+    );
+    expect(() => serializeLensUrl({ g: "maze", n: 1.5, seed: 1, algo: "bmssp" })).toThrow(
+      /n must be an integer/,
+    );
+    expect(() => serializeLensUrl({ g: "maze", n: 1, seed: Number.NaN, algo: "bmssp" })).toThrow(
       /seed must be a finite integer/,
+    );
+    expect(() => serializeLensUrl({ g: "maze", n: 1, seed: 1, algo: "dmsy" as "bmssp" })).toThrow(
+      /Invalid lens algo/,
     );
   });
 });

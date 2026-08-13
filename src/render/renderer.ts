@@ -1,13 +1,22 @@
 /**
- * Layered Canvas2D renderer: static edges, dirty-rect settle fills, frontier overlay (issue #6).
+ * Layered Canvas2D renderer: static edges, dirty-rect settle fills, frontier overlay (issue #6),
+ * and BMSSP FX overlays (issue #12).
  *
- * Consumes {@link LaneState} only — no algorithm or trace imports.
+ * Four offscreen layers: edge, fill, overlay, fx. Consumes {@link LaneState} only — no algorithm
+ * or trace imports.
  */
 
 import { type Graph } from "../core/graph.ts";
 import { LaneState, UNSETTLED } from "../harness/laneState.ts";
 import { fitCamera, projectX, projectY, type Camera } from "./camera.ts";
-import { createDirtyRect, includeNode, markFull, resetDirty, type DirtyRect } from "./dirtyRect.ts";
+import {
+  createDirtyRect,
+  DIRTY_HIT_CAP,
+  includeNode,
+  markFull,
+  resetDirty,
+  type DirtyRect,
+} from "./dirtyRect.ts";
 import { cssColorForSettleOrder } from "./palette.ts";
 import { type CanvasSurface, type DrawContext, type SurfaceFactory } from "./surface.ts";
 
@@ -37,6 +46,53 @@ const TAU = Math.PI * 2;
 
 /** Ghost trail window in billed ops (scrub-safe; not wall-clock). */
 export const GHOST_WINDOW_OPS = 10_000;
+
+/** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
+export const PIVOT_FLARE_WINDOW_OPS = 10_000;
+
+/** Optional overlay toggles for frontier, ghosts, and BMSSP narration FX. */
+export type OverlayFlags = {
+  frontier?: boolean;
+  relaxedEdges?: boolean;
+  recursionTint?: boolean;
+  pivotFlares?: boolean;
+  batchBlooms?: boolean;
+  dstructStrip?: boolean;
+};
+
+/** Resolved overlay toggles — omitted keys default to enabled. */
+type ResolvedOverlayFlags = {
+  frontier: boolean;
+  relaxedEdges: boolean;
+  recursionTint: boolean;
+  pivotFlares: boolean;
+  batchBlooms: boolean;
+  dstructStrip: boolean;
+};
+
+/** BMSSP ember accent (lane persona). */
+const EMBER_RGB = "180, 70, 40";
+
+/** Recursion-depth tint alpha scale (full canvas on fx layer). */
+const RECURSION_TINT_ALPHA_SCALE = 0.08;
+
+/** Recursion depth contributing at most this value to tint alpha. */
+const RECURSION_DEPTH_CAP = 5;
+
+/** Pivot flare outer ring radius multiplier vs node radius. */
+const PIVOT_FLARE_OUTER_SCALE = 2.2;
+
+/** Pivot flare inner ring radius multiplier vs node radius. */
+const PIVOT_FLARE_INNER_SCALE = 1.35;
+
+/** Batch bloom fill alpha on the fx layer. */
+const BLOOM_FILL_ALPHA = 0.2;
+
+/** Schematic D-structure strip height in pixels along the canvas bottom. */
+const DSTRUCT_STRIP_HEIGHT = 16;
+
+/** Stone fill for alternating D-block segments. */
+const STONE_FILL = "rgb(180, 176, 168)";
 
 /**
  * Obtain a 2D draw context from `surface`, throwing when unavailable.
@@ -121,14 +177,28 @@ function buildSrcOfEdge(graph: Graph): Uint32Array {
 /**
  * Resolve overlay toggles: omitted argument or missing keys default to enabled.
  */
-function resolveOverlayFlags(overlays?: { frontier?: boolean; relaxedEdges?: boolean }): {
-  frontier: boolean;
-  relaxedEdges: boolean;
-} {
+function resolveOverlayFlags(overlays?: OverlayFlags): ResolvedOverlayFlags {
   return {
     frontier: overlays?.frontier !== false,
     relaxedEdges: overlays?.relaxedEdges !== false,
+    recursionTint: overlays?.recursionTint !== false,
+    pivotFlares: overlays?.pivotFlares !== false,
+    batchBlooms: overlays?.batchBlooms !== false,
+    dstructStrip: overlays?.dstructStrip !== false,
   };
+}
+
+/**
+ * True when lane state carries a finite FindPivots bloom bounding box for FX.
+ */
+function hasFiniteBloomBbox(state: LaneState): boolean {
+  return (
+    state.bloomActive === 1 &&
+    Number.isFinite(state.bloomMinX) &&
+    Number.isFinite(state.bloomMinY) &&
+    Number.isFinite(state.bloomMaxX) &&
+    Number.isFinite(state.bloomMaxY)
+  );
 }
 
 /**
@@ -141,14 +211,22 @@ export class Renderer {
   private readonly edgeLayer: CanvasSurface;
   private readonly fillLayer: CanvasSurface;
   private readonly overlayLayer: CanvasSurface;
+  private readonly fxLayer: CanvasSurface;
   private lastSettle: Int32Array;
   private lastFrontier: Uint8Array;
   private srcOfEdge: Uint32Array;
   private lastGhost: Uint8Array;
   private lastFrontierOverlay: boolean;
   private lastRelaxedEdgesOverlay: boolean;
+  private lastRecursionTintOverlay: boolean;
+  private lastPivotFlaresOverlay: boolean;
+  private lastBatchBloomsOverlay: boolean;
+  private lastDstructStripOverlay: boolean;
+  private lastRecursionDepth: number;
+  private lastBloomActive: number;
+  private lastDBlockCount: number;
   private readonly dirty: DirtyRect;
-  /** True until the first composite or after {@link setGraph}; forces a full three-layer blit. */
+  /** True until the first composite or after {@link setGraph}; forces a full four-layer blit. */
   private needsFullComposite: boolean;
 
   /**
@@ -167,6 +245,13 @@ export class Renderer {
     this.lastGhost = new Uint8Array(opts.graph.m);
     this.lastFrontierOverlay = true;
     this.lastRelaxedEdgesOverlay = true;
+    this.lastRecursionTintOverlay = true;
+    this.lastPivotFlaresOverlay = true;
+    this.lastBatchBloomsOverlay = true;
+    this.lastDstructStripOverlay = true;
+    this.lastRecursionDepth = 0;
+    this.lastBloomActive = 0;
+    this.lastDBlockCount = 0;
     this.needsFullComposite = true;
 
     const width = opts.target.width;
@@ -176,6 +261,7 @@ export class Renderer {
     this.edgeLayer = opts.createSurface(width, height);
     this.fillLayer = opts.createSurface(width, height);
     this.overlayLayer = opts.createSurface(width, height);
+    this.fxLayer = opts.createSurface(width, height);
 
     this.drawEdgeLayer();
     this.clearFillLayer();
@@ -193,6 +279,9 @@ export class Renderer {
     this.srcOfEdge = buildSrcOfEdge(graph);
     this.lastGhost = new Uint8Array(graph.m);
     this.needsFullComposite = true;
+    this.lastRecursionDepth = 0;
+    this.lastBloomActive = 0;
+    this.lastDBlockCount = 0;
     resetDirty(this.dirty);
     markFull(this.dirty, this.target.width, this.target.height);
     this.drawEdgeLayer();
@@ -204,14 +293,15 @@ export class Renderer {
    * - new settles: fill circles with {@link cssColorForSettleOrder}, `includeNode` dirty
    * - any unsettle: clear fill layer, redraw ALL settled nodes, `markFull`
    *
-   * Overlay pass: clear overlay, optionally draw frontier rings and relaxed-edge ghost trails.
-   * Dirty frontier and ghost changes expand the dirty rect before overlay paint.
+   * Overlay pass: clear overlay, optionally draw frontier rings, ghost trails, and pivot flares.
+   * FX pass: clear fx, optionally draw recursion tint, batch blooms, and D-structure strip.
+   * Dirty frontier, ghost, flare, bloom, and strip changes expand the dirty rect before paint.
    * Composite onto target: full blit on first frame, {@link setGraph}, unsettle, or hit cap;
-   * otherwise blit only the dirty rect (edges + fill + overlay).
+   * otherwise blit only the dirty rect (edges + fill + overlay + fx).
    *
-   * @param overlays - Optional toggles; omitted keys default to enabled (frontier on, ghosts on).
+   * @param overlays - Optional toggles; omitted keys default to enabled.
    */
-  draw(state: LaneState, overlays?: { frontier?: boolean; relaxedEdges?: boolean }): void {
+  draw(state: LaneState, overlays?: OverlayFlags): void {
     if (state.n !== this.graph.n) {
       throw new Error(
         `lane vertex count ${String(state.n)} does not match graph n ${String(this.graph.n)}`,
@@ -227,12 +317,15 @@ export class Renderer {
     const m = state.m;
     const width = this.target.width;
     const height = this.target.height;
-    const { frontier: frontierEnabled, relaxedEdges: relaxedEdgesEnabled } =
-      resolveOverlayFlags(overlays);
+    const flags = resolveOverlayFlags(overlays);
 
     if (
-      frontierEnabled !== this.lastFrontierOverlay ||
-      relaxedEdgesEnabled !== this.lastRelaxedEdgesOverlay
+      flags.frontier !== this.lastFrontierOverlay ||
+      flags.relaxedEdges !== this.lastRelaxedEdgesOverlay ||
+      flags.recursionTint !== this.lastRecursionTintOverlay ||
+      flags.pivotFlares !== this.lastPivotFlaresOverlay ||
+      flags.batchBlooms !== this.lastBatchBloomsOverlay ||
+      flags.dstructStrip !== this.lastDstructStripOverlay
     ) {
       markFull(this.dirty, width, height);
       this.needsFullComposite = true;
@@ -289,7 +382,7 @@ export class Renderer {
       }
     }
 
-    if (relaxedEdgesEnabled) {
+    if (flags.relaxedEdges) {
       const targets = this.graph.targets;
       for (let e = 0; e < m; e += 1) {
         const shouldDraw = this.shouldDrawGhost(e, state);
@@ -305,7 +398,28 @@ export class Renderer {
       }
     }
 
-    this.drawOverlay(state, frontierEnabled, relaxedEdgesEnabled);
+    if (flags.pivotFlares) {
+      this.includePivotFlareDirty(state);
+    }
+
+    if (flags.recursionTint && (state.recursionDepth > 0 || this.lastRecursionDepth > 0)) {
+      markFull(this.dirty, width, height);
+    }
+
+    if (flags.batchBlooms) {
+      if (hasFiniteBloomBbox(state)) {
+        this.includeBloomDirty(state);
+      } else if (this.lastBloomActive === 1) {
+        markFull(this.dirty, width, height);
+      }
+    }
+
+    if (flags.dstructStrip && (state.dBlockCount > 0 || this.lastDBlockCount > 0)) {
+      this.includeRectDirty(0, height - DSTRUCT_STRIP_HEIGHT, width - 1, height - 1);
+    }
+
+    this.drawOverlay(state, flags);
+    this.drawFx(state, flags);
 
     this.compositeToTarget();
 
@@ -323,12 +437,19 @@ export class Renderer {
     }
 
     for (let e = 0; e < m; e += 1) {
-      const drawn = relaxedEdgesEnabled && this.shouldDrawGhost(e, state) ? 1 : 0;
+      const drawn = flags.relaxedEdges && this.shouldDrawGhost(e, state) ? 1 : 0;
       this.lastGhost[e] = drawn;
     }
 
-    this.lastFrontierOverlay = frontierEnabled;
-    this.lastRelaxedEdgesOverlay = relaxedEdgesEnabled;
+    this.lastFrontierOverlay = flags.frontier;
+    this.lastRelaxedEdgesOverlay = flags.relaxedEdges;
+    this.lastRecursionTintOverlay = flags.recursionTint;
+    this.lastPivotFlaresOverlay = flags.pivotFlares;
+    this.lastBatchBloomsOverlay = flags.batchBlooms;
+    this.lastDstructStripOverlay = flags.dstructStrip;
+    this.lastRecursionDepth = state.recursionDepth;
+    this.lastBloomActive = state.bloomActive;
+    this.lastDBlockCount = state.dBlockCount;
 
     resetDirty(this.dirty);
   }
@@ -408,6 +529,98 @@ export class Renderer {
   }
 
   /**
+   * Union an inclusive pixel rectangle into the dirty rect, clipped to the canvas.
+   */
+  private includeRectDirty(x0: number, y0: number, x1: number, y1: number): void {
+    const canvasWidth = this.target.width;
+    const canvasHeight = this.target.height;
+    const dirty = this.dirty;
+
+    if (dirty.full) {
+      return;
+    }
+
+    const clipX0 = Math.max(0, Math.floor(x0));
+    const clipY0 = Math.max(0, Math.floor(y0));
+    const clipX1 = Math.min(canvasWidth - 1, Math.floor(x1));
+    const clipY1 = Math.min(canvasHeight - 1, Math.floor(y1));
+
+    if (clipX0 > clipX1 || clipY0 > clipY1) {
+      return;
+    }
+
+    dirty.hits += 1;
+    if (dirty.hits > DIRTY_HIT_CAP) {
+      markFull(dirty, canvasWidth, canvasHeight);
+      return;
+    }
+
+    if (dirty.w === 0 && dirty.h === 0) {
+      dirty.x = clipX0;
+      dirty.y = clipY0;
+      dirty.w = clipX1 - clipX0 + 1;
+      dirty.h = clipY1 - clipY0 + 1;
+      return;
+    }
+
+    const unionX0 = Math.min(dirty.x, clipX0);
+    const unionY0 = Math.min(dirty.y, clipY0);
+    const unionX1 = Math.max(dirty.x + dirty.w - 1, clipX1);
+    const unionY1 = Math.max(dirty.y + dirty.h - 1, clipY1);
+
+    dirty.x = unionX0;
+    dirty.y = unionY0;
+    dirty.w = unionX1 - unionX0 + 1;
+    dirty.h = unionY1 - unionY0 + 1;
+  }
+
+  /**
+   * Expand the dirty rect for every vertex showing an active pivot flare ring.
+   */
+  private includePivotFlareDirty(state: LaneState): void {
+    const n = state.n;
+    const radius = this.camera.radius;
+    const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
+
+    for (let v = 0; v < n; v += 1) {
+      if (!this.shouldDrawPivotFlare(v, state)) {
+        continue;
+      }
+      const cx = projectX(this.camera, vertexX(this.graph, v));
+      const cy = projectY(this.camera, vertexY(this.graph, v));
+      includeNode(this.dirty, cx, cy, outerRadius, this.target.width, this.target.height);
+    }
+  }
+
+  /**
+   * Expand the dirty rect for the projected FindPivots bloom bounding box.
+   */
+  private includeBloomDirty(state: LaneState): void {
+    const camera = this.camera;
+    const pad = camera.radius * 2;
+    const x0 = projectX(camera, state.bloomMinX) - pad;
+    const y0 = projectY(camera, state.bloomMinY) - pad;
+    const x1 = projectX(camera, state.bloomMaxX) + pad;
+    const y1 = projectY(camera, state.bloomMaxY) + pad;
+    this.includeRectDirty(x0, y0, x1, y1);
+  }
+
+  /**
+   * Whether vertex `v` should show a pivot flare ring at the current work cursor.
+   */
+  private shouldDrawPivotFlare(v: number, state: LaneState): boolean {
+    const flareWork = state.pivotFlareWork[v];
+    if (flareWork === undefined) {
+      throw new Error(`pivotFlareWork[${String(v)}] is missing`);
+    }
+    if (flareWork === UNSETTLED) {
+      return false;
+    }
+    const age = state.work - flareWork;
+    return age >= 0 && age < PIVOT_FLARE_WINDOW_OPS;
+  }
+
+  /**
    * Whether edge `e` should show a relaxed-edge ghost trail at the current work cursor.
    */
   private shouldDrawGhost(e: number, state: LaneState): boolean {
@@ -423,13 +636,9 @@ export class Renderer {
   }
 
   /**
-   * Redraw the overlay layer: optional frontier rings and relaxed-edge ghost trails.
+   * Redraw the overlay layer: frontier rings, ghost trails, and pivot flare rings.
    */
-  private drawOverlay(
-    state: LaneState,
-    frontierEnabled: boolean,
-    relaxedEdgesEnabled: boolean,
-  ): void {
+  private drawOverlay(state: LaneState, flags: ResolvedOverlayFlags): void {
     const ctx = requireContext(this.overlayLayer, "overlayLayer");
     const graph = this.graph;
     const camera = this.camera;
@@ -438,7 +647,7 @@ export class Renderer {
 
     ctx.clearRect(0, 0, width, height);
 
-    if (frontierEnabled) {
+    if (flags.frontier) {
       ctx.strokeStyle = FRONTIER_STROKE;
       ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
@@ -462,7 +671,7 @@ export class Renderer {
       }
     }
 
-    if (relaxedEdgesEnabled) {
+    if (flags.relaxedEdges) {
       const m = state.m;
       const targets = graph.targets;
       const srcOfEdge = this.srcOfEdge;
@@ -495,10 +704,98 @@ export class Renderer {
         ctx.stroke();
       }
     }
+
+    if (flags.pivotFlares) {
+      const n = state.n;
+      const radius = camera.radius;
+      const innerRadius = radius * PIVOT_FLARE_INNER_SCALE;
+      const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
+
+      ctx.strokeStyle = `rgba(${EMBER_RGB}, 0.85)`;
+      ctx.lineWidth = FRONTIER_LINE_WIDTH;
+
+      for (let v = 0; v < n; v += 1) {
+        if (!this.shouldDrawPivotFlare(v, state)) {
+          continue;
+        }
+
+        const cx = projectX(camera, vertexX(graph, v));
+        const cy = projectY(camera, vertexY(graph, v));
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius, 0, TAU);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerRadius, 0, TAU);
+        ctx.stroke();
+      }
+    }
   }
 
   /**
-   * Blit edge, fill, and overlay layers onto the target canvas.
+   * Redraw the fx layer: recursion-depth tint, batch blooms, and D-structure strip.
+   */
+  private drawFx(state: LaneState, flags: ResolvedOverlayFlags): void {
+    const ctx = requireContext(this.fxLayer, "fxLayer");
+    const width = this.fxLayer.width;
+    const height = this.fxLayer.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (flags.recursionTint && state.recursionDepth > 0) {
+      const depthFactor = Math.min(1, state.recursionDepth / RECURSION_DEPTH_CAP);
+      const alpha = depthFactor * RECURSION_TINT_ALPHA_SCALE;
+      ctx.fillStyle = `rgba(${EMBER_RGB}, ${String(alpha)})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    if (flags.batchBlooms && hasFiniteBloomBbox(state)) {
+      const camera = this.camera;
+      const pad = camera.radius * 2;
+      const x0 = projectX(camera, state.bloomMinX) - pad;
+      const y0 = projectY(camera, state.bloomMinY) - pad;
+      const x1 = projectX(camera, state.bloomMaxX) + pad;
+      const y1 = projectY(camera, state.bloomMaxY) + pad;
+      ctx.fillStyle = `rgba(${EMBER_RGB}, ${String(BLOOM_FILL_ALPHA)})`;
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+
+    if (flags.dstructStrip && state.dBlockCount > 0) {
+      const blockCount = state.dBlockCount;
+      let totalKeys = 0;
+      for (let i = 0; i < blockCount; i += 1) {
+        const size = state.dBlockSizes[i];
+        if (size === undefined) {
+          throw new Error(`dBlockSizes[${String(i)}] is missing`);
+        }
+        totalKeys += Math.max(0, size);
+      }
+
+      const stripY = height - DSTRUCT_STRIP_HEIGHT;
+      let x = 0;
+      for (let i = 0; i < blockCount; i += 1) {
+        const size = state.dBlockSizes[i];
+        if (size === undefined) {
+          throw new Error(`dBlockSizes[${String(i)}] is missing`);
+        }
+        const segmentWidth =
+          totalKeys > 0
+            ? Math.round((Math.max(0, size) / totalKeys) * width)
+            : Math.round(width / blockCount);
+        const nextX = i === blockCount - 1 ? width : Math.min(width, x + segmentWidth);
+        const w = nextX - x;
+        if (w > 0) {
+          ctx.fillStyle = i % 2 === 0 ? `rgb(${EMBER_RGB})` : STONE_FILL;
+          ctx.fillRect(x, stripY, w, DSTRUCT_STRIP_HEIGHT);
+        }
+        x = nextX;
+      }
+    }
+  }
+
+  /**
+   * Blit edge, fill, overlay, and fx layers onto the target canvas.
    *
    * Dirty rect limits the compositing blit; a full pass runs on the first frame,
    * after {@link setGraph}, on unsettle ({@link markFull}), or when the hit cap is exceeded.
@@ -515,6 +812,7 @@ export class Renderer {
       targetCtx.drawImage(this.edgeLayer, 0, 0, width, height, 0, 0, width, height);
       targetCtx.drawImage(this.fillLayer, 0, 0, width, height, 0, 0, width, height);
       targetCtx.drawImage(this.overlayLayer, 0, 0, width, height, 0, 0, width, height);
+      targetCtx.drawImage(this.fxLayer, 0, 0, width, height, 0, 0, width, height);
       this.needsFullComposite = false;
       return;
     }
@@ -531,6 +829,7 @@ export class Renderer {
       targetCtx.drawImage(this.edgeLayer, sx, sy, sw, sh, dx, dy, dw, dh);
       targetCtx.drawImage(this.fillLayer, sx, sy, sw, sh, dx, dy, dw, dh);
       targetCtx.drawImage(this.overlayLayer, sx, sy, sw, sh, dx, dy, dw, dh);
+      targetCtx.drawImage(this.fxLayer, sx, sy, sw, sh, dx, dy, dw, dh);
     }
   }
 }
