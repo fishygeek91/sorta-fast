@@ -1,8 +1,11 @@
 /**
- * Race lane configuration derived from URL query params (issue #14).
+ * Race lane configuration derived from URL query params (issue #14, #15).
  *
- * Pure helpers — no DOM. Lane count is 2 by default or 3 when `lane3=dijkstra`.
+ * Pure helpers — no DOM. Lane list comes from `race=` (or legacy `lane3=dijkstra`)
+ * via {@link parseRaceUrl}; see design.md §3.5.
  */
+
+import { parseRaceUrl } from "./raceUrl.ts";
 
 /**
  * Per-lane display and algorithm binding for the multi-lane race UI.
@@ -14,47 +17,50 @@ export type RaceLaneConfig = {
   persona: "marble" | "ember" | "stub";
 };
 
-/** Default two-lane race: Dijkstra vs BMSSP. */
-const DEFAULT_TWO_LANES: readonly RaceLaneConfig[] = [
-  { algo: "dijkstra", id: "dijkstra", label: "Dijkstra", persona: "marble" },
-  { algo: "bmssp", id: "bmssp", label: "BMSSP '25", persona: "ember" },
-];
-
-/** Third lane appended when `lane3=dijkstra` (debug / comparison lane). */
-const DIJKSTRA_B_LANE: RaceLaneConfig = {
-  algo: "dijkstra",
-  id: "dijkstra-b",
-  label: "Dijkstra B",
-  persona: "stub",
+/** Running counts while mapping duplicate algo slugs to distinct lane ids. */
+type RaceLaneCounts = {
+  dijkstra: number;
+  bmssp: number;
 };
 
 /**
- * @param search - Raw query string (with or without leading `?`) or parsed params.
- * @returns A {@link URLSearchParams} view of `search`.
+ * Map one canonical race slug to a {@link RaceLaneConfig}, disambiguating duplicates.
+ *
+ * @param token - `dijkstra` or `bmssp` from the parsed race list.
+ * @param counts - Mutable per-algo occurrence counts for id/label suffixing.
  */
-function toSearchParams(search: string | URLSearchParams): URLSearchParams {
-  if (typeof search === "string") {
-    return new URLSearchParams(search);
+function raceLaneFromToken(token: "dijkstra" | "bmssp", counts: RaceLaneCounts): RaceLaneConfig {
+  if (token === "dijkstra") {
+    if (counts.dijkstra === 0) {
+      counts.dijkstra += 1;
+      return { algo: "dijkstra", id: "dijkstra", label: "Dijkstra", persona: "marble" };
+    }
+    counts.dijkstra += 1;
+    return { algo: "dijkstra", id: "dijkstra-b", label: "Dijkstra B", persona: "stub" };
   }
-  return search;
+  if (counts.bmssp === 0) {
+    counts.bmssp += 1;
+    return { algo: "bmssp", id: "bmssp", label: "BMSSP '25", persona: "ember" };
+  }
+  counts.bmssp += 1;
+  return { algo: "bmssp", id: "bmssp-b", label: "BMSSP B", persona: "ember" };
 }
 
 /**
  * Build the lane list for a race from URL search params.
  *
- * Default (no `lane3` or invalid `lane3`): two lanes — Dijkstra and BMSSP.
- * `lane3=dijkstra` (exact): append a third Dijkstra comparison lane.
- * `lane3=1` and other values are ignored (reserved for #27). Length is always 2 or 3.
+ * Derives lanes from {@link parseRaceUrl}: default two lanes (Dijkstra + BMSSP),
+ * three when `race=` or legacy `lane3=dijkstra` requests a third slot.
+ * `dmsy` tokens in `race=` are ignored until issue #27.
  *
  * @param search - Query string or parsed {@link URLSearchParams}.
  */
 export function lanesFromSearch(search: string | URLSearchParams): RaceLaneConfig[] {
-  const params = toSearchParams(search);
-  const lane3 = params.get("lane3");
-
-  if (lane3 === "dijkstra") {
-    return [...DEFAULT_TWO_LANES, DIJKSTRA_B_LANE];
+  const { race } = parseRaceUrl(search);
+  const counts: RaceLaneCounts = { dijkstra: 0, bmssp: 0 };
+  const lanes: RaceLaneConfig[] = [];
+  for (const token of race) {
+    lanes.push(raceLaneFromToken(token, counts));
   }
-
-  return [...DEFAULT_TWO_LANES];
+  return lanes;
 }
