@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Multi-lane race harness (#13): `RaceScheduler` shares one `WorkClock` across 2–3 `TraceBuffer`s with stream-while-generating (`streamCap` / `appliedCursor`), unequal-finish freeze wiring (`laneFinished`), and bidirectional seek/step. `RaceWorkerPool` spawns one existing Vite worker per lane from the same graphSpec+seed and routes chunks by lane index. `runTraceJob` dispatches Dijkstra/BMSSP jobs for headless tests. Worker parsers (`parseWorkerToMain`, `graphFromTraceMessage`, `isTraceChunk`) live in `protocol.ts` so Lens and the pool share them.
+- 3-lane × 25k stall budget test (`test/race-scheduler-perf.test.ts`): maze `SIZE_PRESETS.L` Dijkstra trace reused on three lanes; 124998 events; worst `appendChunk` 7.07ms, speed-8 `advance(1/60)` 0.34ms, seek-back 0.04ms vs 50ms (#13).
 - `test/replay-perf.test.ts` BMSSP M-size draw budget: maze `SIZE_PRESETS.M` via `runBmsspTraceJob`, fully settled `TraceBuffer`, stub-canvas `Renderer` with all overlay toggles on, best-of-3 vs `DRAW_BUDGET_MS` (50ms) plus optional speed-8 frame timing (#12).
 - `test/scrub-identity.test.ts` BMSSP scrub coverage: extended `compareLane` for all LaneState BMSSP overlay fields and maze-trace forward-vs-scrub-back parity at T=0, mid, event boundary, and totalWork (#12).
 - Lens BMSSP wiring (#12): algorithm select bound to URL `algo`, BMSSP/Dijkstra worker swap, narration strip via `formatBmsspNarration`, BMSSP overlay toggles and counters, and subtitle `Lens · BMSSP` / `Lens · Dijkstra`.
@@ -71,6 +73,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- `TraceWriter.freezeSlab` copies partial-flush columns to `count` length so worker transferables are not full 64k-row slabs (~2.3 MB); full slabs stay zero-copy (#13).
 - Removed the temporary #6/#7 main-thread Dijkstra scaffold in `src/main.ts` (#8).
 - Renderer composites only the dirty rect after the first full frame so Canvas2D blit cost matches settle/frontier diffs (#6).
 - `decodeAt` rejects detached chunk buffers instead of reporting an unknown kind (#3).

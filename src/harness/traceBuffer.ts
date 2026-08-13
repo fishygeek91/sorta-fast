@@ -252,6 +252,22 @@ export class TraceBuffer {
   }
 
   /**
+   * Cumulative billed work of the next unapplied event, or null at end of indexed events.
+   *
+   * @returns `workAfter[eventIndex]` when more events remain; otherwise `null`.
+   */
+  nextEventWork(): number | null {
+    if (this.state.eventIndex >= this.totalEvents) {
+      return null;
+    }
+    const work = this.workAfter[this.state.eventIndex];
+    if (work === undefined) {
+      throw new Error(`missing workAfter at index ${String(this.state.eventIndex)}`);
+    }
+    return work;
+  }
+
+  /**
    * Apply exactly one event if any remain.
    *
    * @returns `false` when {@link state}.`eventIndex` already equals {@link totalEvents}.

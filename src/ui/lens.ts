@@ -2,15 +2,14 @@
  * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12).
  */
 
-import { GRAPH_KINDS, SIZE_PRESETS, type Graph, type GraphKind } from "../core/graph.ts";
+import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer, type OverlayFlags } from "../render/renderer.ts";
 import {
-  type TraceChunkMessage,
-  type TraceGraphMessage,
+  graphFromTraceMessage,
+  parseWorkerToMain,
   type TraceRunRequest,
-  type WorkerToMain,
 } from "../workers/protocol.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
@@ -448,22 +447,6 @@ export function mountLens(): void {
   syncAlgoUi();
 
   /**
-   * @param message - Worker graph payload.
-   * @returns CSR graph for playback and renderer.
-   */
-  function graphFromMessage(message: TraceGraphMessage): Graph {
-    return {
-      n: message.n,
-      m: message.m,
-      offsets: message.offsets,
-      targets: message.targets,
-      weights: message.weights,
-      x: message.x,
-      y: message.y,
-    };
-  }
-
-  /**
    * Show a worker or validation error in the status line.
    *
    * @param message - Safe user-facing text.
@@ -544,69 +527,6 @@ export function mountLens(): void {
   }
 
   /**
-   * @param data - Raw `MessageEvent.data` from the trace worker.
-   * @returns A narrowed worker payload, or null when unrecognized.
-   */
-  function parseWorkerMessage(data: unknown): WorkerToMain | null {
-    if (typeof data !== "object" || data === null) {
-      return null;
-    }
-
-    const record: Record<string, unknown> = Object(data);
-
-    switch (record["type"]) {
-      case "graph": {
-        const n = record["n"];
-        const m = record["m"];
-        const offsets = record["offsets"];
-        const targets = record["targets"];
-        const weights = record["weights"];
-        const x = record["x"];
-        const y = record["y"];
-        if (
-          typeof n !== "number" ||
-          typeof m !== "number" ||
-          !(offsets instanceof Uint32Array) ||
-          !(targets instanceof Uint32Array) ||
-          !(weights instanceof Float64Array) ||
-          !(x instanceof Float64Array) ||
-          !(y instanceof Float64Array)
-        ) {
-          return null;
-        }
-        return {
-          type: "graph",
-          n,
-          m,
-          offsets,
-          targets,
-          weights,
-          x,
-          y,
-        };
-      }
-      case "chunk": {
-        const chunk = record["chunk"];
-        if (!isTraceChunk(chunk)) {
-          return null;
-        }
-        return { type: "chunk", chunk };
-      }
-      case "done":
-        return { type: "done" };
-      case "error": {
-        const message = record["message"];
-        if (typeof message !== "string") {
-          return null;
-        }
-        return { type: "error", message };
-      }
-      default:
-        return null;
-    }
-  }
-
-  /**
    * Terminate any in-flight worker and post a fresh Dijkstra trace run.
    */
   function startRun(): void {
@@ -646,7 +566,7 @@ export function mountLens(): void {
     worker = nextWorker;
 
     nextWorker.onmessage = (event: MessageEvent<unknown>): void => {
-      const message = parseWorkerMessage(event.data);
+      const message = parseWorkerToMain(event.data);
       if (message === null) {
         showStatus("unrecognized worker message");
         return;
@@ -654,7 +574,7 @@ export function mountLens(): void {
 
       switch (message.type) {
         case "graph": {
-          const graph = graphFromMessage(message);
+          const graph = graphFromTraceMessage(message);
           playback = new Playback(graph, []);
           playback.beginStreaming();
 
@@ -918,34 +838,4 @@ function isLensSizeKey(value: string): value is LensSizeKey {
     }
   }
   return false;
-}
-
-/**
- * @param value - Candidate trace slab from a worker chunk message.
- */
-function isTraceChunk(value: unknown): value is TraceChunkMessage["chunk"] {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const record: Record<string, unknown> = Object(value);
-  const count = record["count"];
-  const kind = record["kind"];
-  const vertex = record["vertex"];
-  const edge = record["edge"];
-  const aux0 = record["aux0"];
-  const aux1 = record["aux1"];
-  const aux2 = record["aux2"];
-  const auxF = record["auxF"];
-  const cost = record["cost"];
-  return (
-    typeof count === "number" &&
-    kind instanceof Uint8Array &&
-    vertex instanceof Int32Array &&
-    edge instanceof Int32Array &&
-    aux0 instanceof Int32Array &&
-    aux1 instanceof Int32Array &&
-    aux2 instanceof Int32Array &&
-    auxF instanceof Float64Array &&
-    cost instanceof Uint32Array
-  );
 }
