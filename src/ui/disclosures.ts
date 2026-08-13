@@ -104,6 +104,7 @@ function buildFairnessBody(): HTMLDivElement {
     createParagraph(FAIRNESS_COPY.headline),
     createParagraph(FAIRNESS_COPY.secondary),
     createParagraph(FAIRNESS_COPY.honesty),
+    createParagraph(FAIRNESS_COPY.params),
     createParagraph(FAIRNESS_COPY.sourceLead),
     createExternalLink(COST_TABLE_SOURCE_URL, COST_TABLE_LINK_LABEL),
   );

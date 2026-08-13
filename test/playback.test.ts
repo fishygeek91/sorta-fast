@@ -108,3 +108,15 @@ describe("Playback streaming append", () => {
     expect(pb.clock.playing).toBe(false);
   });
 });
+
+describe("Playback findPivotsK", () => {
+  it("forwards an explicit FindPivots k into TraceBuffer recurse-in state", () => {
+    const graph = packCsr(5, [], [0, 1, 2, 3, 4], [0, 0, 0, 0, 0]);
+    const chunks = chunksFromEvents([{ k: "recurse", dir: "in", level: 0, bound: 42 }]);
+    const overrideK = 8;
+    const pb = new Playback(graph, chunks, overrideK);
+
+    pb.stepEvent();
+    expect(pb.state.findPivotsK).toBe(overrideK);
+  });
+});

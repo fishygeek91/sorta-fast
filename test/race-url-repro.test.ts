@@ -135,7 +135,20 @@ function expectIdenticalTraceJobs(
  */
 function traceSpecFromRaceUrl(search: string): TraceJobSpec {
   const state = parseRaceUrl(search);
-  return { kind: state.g, n: state.n, seed: state.seed, source: 0 };
+  const spec: TraceJobSpec = {
+    kind: state.g,
+    n: state.n,
+    seed: state.seed,
+    source: 0,
+    mode: state.bmssp,
+  };
+  if (state.bk !== null) {
+    spec.k = state.bk;
+  }
+  if (state.bt !== null) {
+    spec.t = state.bt;
+  }
+  return spec;
 }
 
 describe("race URL reproducibility — trace jobs from parsed URL", () => {
@@ -171,6 +184,9 @@ describe("race URL reproducibility — seek to parsed t", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: midT,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     });
     const parsed = parseRaceUrl(query);
 

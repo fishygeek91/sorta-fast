@@ -421,6 +421,19 @@ describe("BMSSP overlay state", () => {
     expect(buf.state.findPivotsK).toBe(expectedK);
   });
 
+  it("recurse in uses explicit findPivotsK override", () => {
+    const n = 5;
+    const graph = packCsr(n, [], [0, 1, 2, 3, 4], [0, 0, 0, 0, 0]);
+    const boundIn = 42;
+    const chunks = chunksFromEvents([{ k: "recurse", dir: "in", level: 0, bound: boundIn }]);
+    const overrideK = 8;
+    const buf = new TraceBuffer(graph, chunks, 0, overrideK);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.findPivotsK).toBe(overrideK);
+    expect(buf.state.findPivotsK).not.toBe(bmsspParams(n).k);
+  });
+
   it("pivot sets pivotFlareWork and pivotsFoundThisCall without changing work", () => {
     const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
     const chunks = chunksFromEvents([

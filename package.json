@@ -14,6 +14,7 @@
     "format": "prettier --write .",
     "bench:trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/trace-write.ts",
     "bench:replay": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/replay-5k.ts",
+    "bench:bmssp-kt": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/bmssp-kt-sweep.ts",
     "test:build": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/build-workers.ts"
   },
   "devDependencies": {

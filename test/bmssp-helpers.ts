@@ -12,6 +12,7 @@
 
 import { type DPair, type DOpResult, type DPullResult } from "../src/core/bmssp/dstructure.ts";
 import { run, type BmsspResult } from "../src/core/bmssp/bmssp.ts";
+import { type BmsspParams } from "../src/core/bmssp/params.ts";
 import { findPivots, type FindPivotsResult } from "../src/core/bmssp/findPivots.ts";
 import { type Graph, type VertexId } from "../src/core/graph.ts";
 import { type TraceEvent } from "../src/core/trace.ts";
@@ -47,14 +48,16 @@ export function drainFindPivots(
 /**
  * Run BMSSP to completion, collecting all trace events and the final result.
  *
+ * @param params - Optional BMSSP level/block parameters forwarded to {@link run}.
  * @throws If the generator finishes without returning a result object.
  */
 export function drainBmsspRun(
   graph: Graph,
   source: VertexId,
+  params?: BmsspParams,
 ): { events: TraceEvent[]; result: BmsspResult } {
   const events: TraceEvent[] = [];
-  const gen = run(graph, source);
+  const gen = run(graph, source, params);
 
   for (;;) {
     const step = gen.next();

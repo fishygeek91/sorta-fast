@@ -41,6 +41,8 @@ export class TraceBuffer {
   private rowOfEvent: Uint32Array;
   private workAfter: Uint32Array;
   private readonly source: number;
+  /** FindPivots k narrated on recurse-in; from ctor arg or {@link bmsspParams}. */
+  private readonly findPivotsKParam: number;
   /** CSR edge index → tail vertex for relax pred/dist reconstruction. */
   private readonly edgeSources: Uint32Array;
   private readonly keyframes: LaneState[];
@@ -61,10 +63,16 @@ export class TraceBuffer {
    * @param chunks - Completed trace slabs (array copied; column buffers shared).
    *                 Pass `[]` for an empty trace that can grow via {@link appendChunk}.
    * @param source - SSSP source vertex; `dist[source]` is 0 at playback start (default 0).
-   * @throws If `graph.n` is invalid, `source` is out of range, a row cost is missing,
-   *         or a kind is unknown.
+   * @param findPivotsK - FindPivots k applied on each recurse-in (default `bmsspParams(n).k`).
+   * @throws If `graph.n` is invalid, `source` is out of range, `findPivotsK` is not an
+   *         integer >= 1, a row cost is missing, or a kind is unknown.
    */
-  constructor(graph: Graph, chunks: readonly TraceChunk[], source: number = 0) {
+  constructor(
+    graph: Graph,
+    chunks: readonly TraceChunk[],
+    source: number = 0,
+    findPivotsK?: number,
+  ) {
     if (!Number.isInteger(graph.n) || graph.n < 0) {
       throw new Error(`graph.n must be an integer >= 0, got ${String(graph.n)}`);
     }
@@ -76,8 +84,16 @@ export class TraceBuffer {
       }
     }
 
+    if (findPivotsK !== undefined) {
+      if (!Number.isInteger(findPivotsK) || findPivotsK < 1) {
+        throw new Error("findPivotsK must be an integer >= 1");
+      }
+    }
+
     this.graph = graph;
     this.source = source;
+    this.findPivotsKParam =
+      findPivotsK ?? (graph.n === 0 ? 1 : bmsspParams(Math.max(1, graph.n)).k);
     this.edgeSources = buildEdgeSources(graph);
     this.chunks = chunks.slice();
 
@@ -490,7 +506,7 @@ export class TraceBuffer {
         if (dir === RECURSE_DIR.in) {
           target.recursionDepth += 1;
           target.currentBound = bound;
-          target.findPivotsK = target.n === 0 ? 1 : bmsspParams(Math.max(1, target.n)).k;
+          target.findPivotsK = this.findPivotsKParam;
           target.pivotsFoundThisCall = 0;
           target.batchRound = 0;
           target.lastPullN = 0;

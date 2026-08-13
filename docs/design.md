@@ -40,7 +40,7 @@ Binary heap, decrease-key via lazy deletion. Every heap op and every edge relaxa
 
 ### 2.2 BMSSP — Duan, Mao, Mao, Shu, Yin (STOC 2025), `O(m log^{2/3} n)`, deterministic
 Key structures to implement (from arXiv 2504.17033):
-- **Parameters:** `k = ⌊log^{1/3} n⌋`, `t = ⌊log^{2/3} n⌋`; recursion depth ~ `(log n)/t` levels.
+- **Parameters:** `k = ⌊log^{1/3} n⌋`, `t = ⌊log^{2/3} n⌋`; recursion depth ~ `(log n)/t` levels. The in-browser demo uses swept k/t (`k = max(4, paper k)`, paper t) because asymptotic k is degenerate below n≈10⁸; the paper formula remains selectable.
 - **`FindPivots(B, S)`:** runs k rounds of Bellman-Ford–style relaxation from frontier S; vertices whose shortest-path trees grow to size ≥ k identify **pivots** — the only frontier vertices that must be handled in sorted order. Everything else gets settled inside the batch.
 - **`BMSSP(l, B, S)` recursion:** bounded multi-source shortest paths — settle every vertex with `dist < B` reachable via S, level by level, pulling `2^t`-size slices from the data structure.
 - **Data structure `D`** (Lemma 3.3): supports `Insert`, batch-prepend `BatchPrepend`, and `Pull` of the M smallest keys — a linked-list-of-blocks structure, *not* a full heap. This is the "partial sorting" heart of the paper.
@@ -200,7 +200,7 @@ Estimated effort: v1.0 ≈ 4–6 focused days; DMSY is the long pole of v2.0 (bu
 |---|---|
 | DMSY (2026) is misimplemented — no reference exists | Test-first from the paper; invariants + differential fuzzing (§5); ship behind flag; publish the test suite so others can check us. |
 | "Rigged" accusations re: speed | Work-clock fairness panel, open cost table, honest wall-clock page where Dijkstra wins small. |
-| BMSSP constants make batches look *slower* early on small graphs | It's true and it's *content* — Lens mode narrates it; default demo graph chosen (by seed-hunting) to tell the story well. |
+| BMSSP constants make batches look *slower* early on small graphs | The deficit is size-invariant under paper k=2 (FindPivots abort). Demo uses k=max(4, paper k); default race is sparse n=25000 seed=4 where BMSSP wins comparisons; Fairness panel discloses the deviation. |
 | Canvas perf on XL graphs | Aggregated rendering path (§4.4); XL is a labeled "stress" option, not the default. |
 | Paper ambiguities (tie-breaking, base cases) | Decisions logged in `docs/paper-notes.md` with section citations; becomes the companion blog post. |
 

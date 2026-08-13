@@ -262,4 +262,31 @@ describe("RaceWorkerPool validation", () => {
       ),
     ).toThrow(/lanes\.length must be 2 or 3/);
   });
+
+  it("forwards optional BMSSP mode, k, and t on every lane", () => {
+    const { spawn, records } = createFakeSpawn();
+    const pool = new RaceWorkerPool(spawn);
+
+    pool.start(
+      { ...BASE_SPEC, lanes: ["dijkstra", "bmssp"], mode: "paper", k: 8, t: 3 },
+      {
+        onGraph: () => {},
+        onChunk: () => {},
+        onLaneDone: () => {},
+        onError: () => {},
+      },
+    );
+
+    expect(records).toHaveLength(2);
+    for (const record of records) {
+      expect(record.posts).toHaveLength(1);
+      const message = record.posts[0];
+      if (message === undefined) {
+        throw new Error("expected run message");
+      }
+      expect(message.mode).toBe("paper");
+      expect(message.k).toBe(8);
+      expect(message.t).toBe(3);
+    }
+  });
 });

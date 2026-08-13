@@ -59,6 +59,11 @@ describe("race mode CSS", () => {
     expect(css).toContain("#race-kind-select");
   });
 
+  it("defines BMSSP demo/paper select styling", () => {
+    expect(css).toContain("#race-bmssp-select");
+    expect(css).toContain("#lens-bmssp-select");
+  });
+
   it("uses pointer cursor on dice roll buttons", () => {
     expect(css).toMatch(/#race-dice-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/);
   });

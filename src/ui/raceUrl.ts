@@ -1,7 +1,7 @@
 /**
  * Race URL codec for graph gallery + race mode state (issue #14, #15).
  *
- * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&target=&t=` — no DOM.
+ * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&target=&t=&bmssp=&bk=&bt=` — no DOM.
  * Legacy `lane3=dijkstra` is parsed when `race=` is absent (issue #15).
  * Graph kind / size / seed parsing mirrors Lens (`src/ui/urlState.ts`).
  *
@@ -16,6 +16,9 @@ export type RaceMode = "race" | "lens";
 /** Canonical race-algorithm slug allowed in the `race=` param (after filtering). */
 export type RaceAlgoSlug = "dijkstra" | "bmssp";
 
+/** BMSSP parameter mode encoded in the `bmssp` query param (issue #52). */
+export type BmsspUrlMode = "demo" | "paper";
+
 /** Graph gallery and race fields encoded in the race URL. */
 export type RaceUrlState = {
   g: GraphKind;
@@ -28,17 +31,26 @@ export type RaceUrlState = {
   race: readonly RaceAlgoSlug[];
   /** Work-clock scrub position; `0` when omitted from the URL. */
   t: number;
+  /** BMSSP block-parameter mode; `demo` when omitted from the URL. */
+  bmssp: BmsspUrlMode;
+  /** BMSSP block size `k`; `null` when omitted (demo or paper mode default). */
+  bk: number | null;
+  /** BMSSP block count `t`; `null` when omitted (demo or paper mode default). */
+  bt: number | null;
 };
 
-/** Defaults match the race demo preset (maze / 5000 / 1729, two lanes). */
+/** Defaults match the sweep-winning race preset (sparse / 25000 / 4, two lanes). */
 export const DEFAULT_RACE_URL: RaceUrlState = {
-  g: "maze",
-  n: 5000,
-  seed: 1729,
+  g: "sparse",
+  n: 25000,
+  seed: 4,
   mode: "race",
   target: null,
   race: ["dijkstra", "bmssp"],
   t: 0,
+  bmssp: "demo",
+  bk: null,
+  bt: null,
 };
 
 const DEFAULT_RACE_LIST: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp"];
@@ -150,6 +162,32 @@ function parseTarget(raw: string | null): number | null {
 }
 
 /**
+ * @param raw - `bmssp` query value, or null when absent.
+ * @returns `paper` only when `raw` is exactly `paper`; otherwise `demo`.
+ */
+function parseBmsspMode(raw: string | null): BmsspUrlMode {
+  if (raw === "paper") {
+    return "paper";
+  }
+  return "demo";
+}
+
+/**
+ * @param raw - `bk` or `bt` query value, or null when absent.
+ * @returns A positive integer block parameter, or `null` when unset/invalid.
+ */
+function parseOptionalBlockParam(raw: string | null): number | null {
+  if (raw === null || raw === "") {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
  * @param raw - `t` query value, or null when absent.
  * @returns A non-negative finite integer work-clock position; `0` when unset/invalid.
  */
@@ -219,6 +257,9 @@ export function parseRaceUrl(search: string | URLSearchParams): RaceUrlState {
     target: parseTarget(params.get("target")),
     race: parseRaceList(params),
     t: parseWorkClockPosition(params.get("t")),
+    bmssp: parseBmsspMode(params.get("bmssp")),
+    bk: parseOptionalBlockParam(params.get("bk")),
+    bt: parseOptionalBlockParam(params.get("bt")),
   };
 }
 
@@ -255,6 +296,19 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
   if (!Number.isFinite(state.t) || !Number.isInteger(state.t) || state.t < 0) {
     throw new Error(`t must be a non-negative integer, got ${String(state.t)}`);
   }
+  if (state.bmssp !== "demo" && state.bmssp !== "paper") {
+    throw new Error(`Invalid bmssp mode: ${state.bmssp}`);
+  }
+  if (state.bk !== null) {
+    if (!Number.isFinite(state.bk) || !Number.isInteger(state.bk) || state.bk < 1) {
+      throw new Error(`bk must be a positive integer or null, got ${String(state.bk)}`);
+    }
+  }
+  if (state.bt !== null) {
+    if (!Number.isFinite(state.bt) || !Number.isInteger(state.bt) || state.bt < 1) {
+      throw new Error(`bt must be a positive integer or null, got ${String(state.bt)}`);
+    }
+  }
 }
 
 /**
@@ -262,6 +316,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
  *
  * The result always starts with `?` and contains `g`, `n`, `seed`, `mode`, and `race`.
  * `target` is included only when non-null; `t` only when greater than zero.
+ * `bmssp` is included only when `paper`; `bk` and `bt` only when non-null.
  * Legacy `lane3=` is never written.
  *
  * @param state - Valid race URL state.
@@ -280,6 +335,15 @@ export function serializeRaceUrl(state: RaceUrlState): string {
   }
   if (state.t > 0) {
     params.set("t", String(state.t));
+  }
+  if (state.bmssp === "paper") {
+    params.set("bmssp", "paper");
+  }
+  if (state.bk !== null) {
+    params.set("bk", String(state.bk));
+  }
+  if (state.bt !== null) {
+    params.set("bt", String(state.bt));
   }
   return `?${params.toString()}`;
 }

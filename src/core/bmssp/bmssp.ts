@@ -1,5 +1,5 @@
 /**
- * BMSSP bounded multi-source shortest paths (issue #11); design.md §2.2.
+ * BMSSP bounded multi-source shortest paths (issues #11, #52); design.md §2.2.
  *
  * arXiv 2504.17033 Algorithm 3: recursive BMSSP with FindPivots, data structure D,
  * base-case mini-Dijkstra, and bounded relaxation. Emits {@link TraceEvent}s only;
@@ -10,7 +10,7 @@ import { type Graph, type VertexId } from "../graph.ts";
 import { OP_COST, SENTINEL, type TraceEvent } from "../trace.ts";
 import { BlockListD, type DPair } from "./dstructure.ts";
 import { findPivots } from "./findPivots.ts";
-import { bmsspParams } from "./params.ts";
+import { bmsspParams, type BmsspParams } from "./params.ts";
 
 /** Initial heap capacity before doubling growth (matches Dijkstra lane). */
 const INITIAL_HEAP_CAPACITY = 16;
@@ -746,17 +746,34 @@ function* bmssp(
  *
  * @param graph - CSR directed graph with non-negative weights.
  * @param source - Source vertex in `0 .. graph.n - 1`.
+ * @param params - Optional BMSSP level/block parameters; defaults to {@link bmsspParams}(n).
  */
 export function* run(
   graph: Graph,
   source: VertexId,
+  params?: BmsspParams,
 ): Generator<TraceEvent, BmsspResult, undefined> {
   if (!Number.isInteger(source) || source < 0 || source >= graph.n) {
     throw new Error(`source must be an integer in [0, ${graph.n}), got ${String(source)}`);
   }
 
   const n = graph.n;
-  const { k, t } = bmsspParams(n);
+
+  let k: number;
+  let t: number;
+  if (params === undefined) {
+    ({ k, t } = bmsspParams(n));
+  } else {
+    if (!Number.isInteger(params.k) || params.k < 1) {
+      throw new Error(`k must be an integer >= 1, got ${String(params.k)}`);
+    }
+    if (!Number.isInteger(params.t) || params.t < 1) {
+      throw new Error(`t must be an integer >= 1, got ${String(params.t)}`);
+    }
+    k = params.k;
+    t = params.t;
+  }
+
   const L = Math.max(1, Math.ceil(Math.log2(Math.max(2, n)) / t));
 
   const dist = new Float64Array(n);

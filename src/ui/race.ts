@@ -1,8 +1,9 @@
 /**
- * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18).
+ * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18, #52).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
+import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
@@ -32,7 +33,13 @@ import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
-import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
+import {
+  parseRaceUrl,
+  serializeRaceUrl,
+  type BmsspUrlMode,
+  type RaceAlgoSlug,
+  type RaceUrlState,
+} from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 
@@ -196,7 +203,23 @@ export function mountRace(): void {
   lanesSelect.append(twoLanesOption, threeLanesOption);
   lanesLabel.append(lanesSelect);
 
-  graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel);
+  const bmsspLabel = document.createElement("label");
+  bmsspLabel.className = "lens-graph-field";
+  bmsspLabel.textContent = "BMSSP ";
+
+  const bmsspSelect = document.createElement("select");
+  bmsspSelect.id = "race-bmssp-select";
+  bmsspSelect.setAttribute("aria-label", "BMSSP parameter mode");
+  const demoOption = document.createElement("option");
+  demoOption.value = "demo";
+  demoOption.textContent = "Demo (browser-scale)";
+  const paperOption = document.createElement("option");
+  paperOption.value = "paper";
+  paperOption.textContent = "Paper (asymptotic)";
+  bmsspSelect.append(demoOption, paperOption);
+  bmsspLabel.append(bmsspSelect);
+
+  graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel, bmsspLabel);
   header.append(title, subtitle, modeNav, graphControls);
 
   const raceRoot = document.createElement("div");
@@ -381,6 +404,7 @@ export function mountRace(): void {
     sizeSelect.value = sizeKeyForN(raceState.n);
     seedInput.value = String(raceState.seed);
     lanesSelect.value = lanesKeyForRace(raceState.race);
+    bmsspSelect.value = raceState.bmssp;
   }
 
   /**
@@ -545,6 +569,7 @@ export function mountRace(): void {
     seedInput.disabled = disabled;
     diceButton.disabled = disabled;
     lanesSelect.disabled = disabled;
+    bmsspSelect.disabled = disabled;
     speedSelect.disabled = disabled;
     skipStartBtn.disabled = disabled;
     stepBackBtn.disabled = disabled;
@@ -787,17 +812,26 @@ export function mountRace(): void {
       return;
     }
 
+    const params = resolveBmsspRunParams(raceState.n, raceState.bmssp, raceState.bk, raceState.bt);
+
     const spec: RaceSpec = {
       kind: raceState.g,
       n: raceState.n,
       seed: raceState.seed,
       source: SOURCE_VERTEX,
+      mode: raceState.bmssp,
       lanes: configs.map((config) => config.algo),
     };
+    if (raceState.bk !== null) {
+      spec.k = raceState.bk;
+    }
+    if (raceState.bt !== null) {
+      spec.t = raceState.bt;
+    }
 
     pool.start(spec, {
       onGraph: (graph) => {
-        race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX);
+        race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX, params.k);
         race.setSpeed(speed);
 
         const resolution = resolveRaceFinishVertex(graph, SOURCE_VERTEX, raceState.target);
@@ -1077,6 +1111,16 @@ export function mountRace(): void {
     applyRaceState({ ...raceState, race: raceFromLanesKey(raw) });
   });
 
+  bmsspSelect.addEventListener("change", () => {
+    const raw = bmsspSelect.value;
+    if (!isBmsspUrlMode(raw)) {
+      showStatus(`invalid bmssp mode: ${raw}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, bmssp: raw });
+  });
+
   let lastFrameMs = performance.now();
 
   /**
@@ -1246,14 +1290,17 @@ function raceCompositionEqual(a: readonly RaceAlgoSlug[], b: readonly RaceAlgoSl
 /**
  * @param prev - Previous race URL state.
  * @param next - Candidate next state.
- * @returns Whether graph kind, size, seed, or lane composition changed.
+ * @returns Whether graph kind, size, seed, lanes, or BMSSP params changed.
  */
 function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
   return (
     prev.g !== next.g ||
     prev.n !== next.n ||
     prev.seed !== next.seed ||
-    !raceCompositionEqual(prev.race, next.race)
+    !raceCompositionEqual(prev.race, next.race) ||
+    prev.bmssp !== next.bmssp ||
+    prev.bk !== next.bk ||
+    prev.bt !== next.bt
   );
 }
 
@@ -1291,4 +1338,11 @@ function isRaceLanesKey(value: string): value is RaceLanesKey {
     }
   }
   return false;
+}
+
+/**
+ * @param value - Candidate BMSSP mode from a select option.
+ */
+function isBmsspUrlMode(value: string): value is BmsspUrlMode {
+  return value === "demo" || value === "paper";
 }

@@ -38,9 +38,10 @@ export class RaceScheduler {
    * @param graph - CSR graph shared by all lanes.
    * @param laneCount - Number of race lanes; must be 2 or 3.
    * @param source - SSSP source vertex for every lane buffer (default 0).
+   * @param findPivotsK - FindPivots k passed to each lane {@link TraceBuffer} (default `bmsspParams(n).k`).
    * @throws If `laneCount` is not 2 or 3, `source` is out of range, or graph validation fails.
    */
-  constructor(graph: Graph, laneCount: number, source: number = 0) {
+  constructor(graph: Graph, laneCount: number, source: number = 0, findPivotsK?: number) {
     if (!Number.isInteger(laneCount) || (laneCount !== 2 && laneCount !== 3)) {
       throw new Error(`laneCount must be 2 or 3, got ${String(laneCount)}`);
     }
@@ -60,7 +61,7 @@ export class RaceScheduler {
     this.laneCompleteFlags = [];
 
     for (let lane = 0; lane < laneCount; lane += 1) {
-      this.buffers.push(new TraceBuffer(graph, [], source));
+      this.buffers.push(new TraceBuffer(graph, [], source, findPivotsK));
       this.laneCompleteFlags.push(false);
     }
   }
