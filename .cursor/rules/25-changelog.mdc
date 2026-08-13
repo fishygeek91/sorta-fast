@@ -1,0 +1,21 @@
+---
+description: Update CHANGELOG.md in the same change as the work
+alwaysApply: true
+---
+
+# Changelog stays current
+
+`CHANGELOG.md` is Keep a Changelog. Every change that lands in the repo updates it **in the same turn** — not at session end, not in a follow-up commit.
+
+1. Add a bullet under `## [Unreleased]` in the matching section: `Added`, `Changed`, `Fixed`, `Removed`, `Deprecated`, or `Security`.
+2. Write for a reader who did not see the diff: what changed and why it matters. Link the issue (`#N`) when the work is issue-scoped.
+3. Newest bullets go at the **top** of their section. Do not invent a version heading or bump `package.json` unless the human asked to release.
+4. Skip only: whitespace/format-only edits, lockfile-only churn, and edits that are solely this changelog.
+
+```markdown
+### Added
+- CSR `packCsr` rejects duplicate arcs so SSSP lanes can assume a simple digraph (#2).
+
+### Fixed
+- M-size CSR property tests no longer time out on per-edge expects (#2).
+```
