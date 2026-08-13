@@ -19,6 +19,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Fairness intro describes lanes advancing to the shared clock tick; explainer names four of the five 2025 authors for the Feb 2026 record (#16).
 - Canonical race share links write `race=` and omit `lane3=`; old `?lane3=dijkstra` links still parse as a third Dijkstra lane (#15).
 - `resolveRaceFinishVertex` and `isBfsReachable` so Race can warn on `?target=` equal to the source, out of range, or unreachable instead of silently substituting (#14).
 - `mountRace` UI (#14): multi-lane canvases, shared transport/scrubber, per-lane counters and progress, photo-finish banner, and `RaceWorkerPool` wiring; default app entry is Race mode with Lens via `?mode=lens`.

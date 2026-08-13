@@ -56,7 +56,7 @@ export type FairnessCopy = {
  */
 export const FAIRNESS_COPY: FairnessCopy = {
   intro:
-    "The race clock is a work clock, not wall-clock time. Every lane advances on identical accounting rules: each trace event bills a fixed op cost, and the shared scheduler stops a lane only when its billed work reaches the current clock tick.",
+    "The race clock is a work clock, not wall-clock time. Every lane advances on identical accounting rules: each trace event bills a fixed op cost, and each lane advances until its cumulative billed cost reaches the shared clock's current tick.",
   billed: [
     `comparison = ${String(FAIRNESS_COSTS.comparison)} (each distance or key comparison)`,
     `heap op = cmps × comparison (${String(FAIRNESS_COSTS.comparison)} per comparison inside the heap)`,
@@ -113,7 +113,7 @@ export type ExplainerCopy = {
  */
 export const EXPLAINER_COPY: ExplainerCopy = {
   barrier:
-    "For 66 years, shortest-path algorithms bowed to the same rule: process vertices in sorted distance order, and sorting costs n log n. Dijkstra's algorithm is that rule made flesh. In 2025, Duan, Mao, Mao, Shu and Yin broke the barrier with O(m log^{2/3} n) (STOC 2025 Best Paper). In February 2026 they set a new record of O(m√(log n·log log n)) on sparse graphs (arXiv 2602.07868).",
+    "For 66 years, shortest-path algorithms bowed to the same rule: process vertices in sorted distance order, and sorting costs n log n. Dijkstra's algorithm is that rule made flesh. In 2025, Duan, Mao, Mao, Shu and Yin broke the barrier with O(m log^{2/3} n) (STOC 2025 Best Paper). In February 2026 four of them set a new record of O(m√(log n·log log n)) on sparse graphs (arXiv 2602.07868).",
   argument: "Dijkstra pays for perfect order; the barrier-breakers pay only for enough order.",
   personas: [
     {

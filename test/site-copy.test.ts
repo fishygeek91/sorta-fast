@@ -71,6 +71,7 @@ describe("siteCopy", () => {
       expect(barrier).toContain("66");
       expect(includesIgnoreCase(barrier, "STOC 2025")).toBe(true);
       expect(barrier).toContain("2602.07868");
+      expect(includesIgnoreCase(barrier, "four of them")).toBe(true);
     });
 
     it("argument contrasts perfect order with enough order", () => {

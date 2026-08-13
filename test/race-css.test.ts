@@ -68,15 +68,18 @@ describe("site disclosures CSS", () => {
   const css = readFileSync(STYLE_CSS, "utf8");
 
   /**
-   * Extract the first `@media (max-width: 720px)` block body from stylesheet text.
+   * Slice of the stylesheet from the first 720px media query onward.
+   *
+   * Avoids brace-matching that depends on indented inner `}` closings.
    *
    * @param stylesheet - Full `style.css` source.
-   * @returns Inner rules of the mobile breakpoint block.
+   * @returns Text from `@media (max-width: 720px)` to the end of the file.
    */
-  function extractMobile720Block(stylesheet: string): string {
-    const mobileBlock = stylesheet.match(/@media\s*\(max-width:\s*720px\)\s*\{([\s\S]*?)\n\}/);
-    expect(mobileBlock).not.toBeNull();
-    return mobileBlock?.[1] ?? "";
+  function cssFromMedia720(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(index);
   }
 
   it("defines site disclosure container and panel classes", () => {
@@ -93,8 +96,8 @@ describe("site disclosures CSS", () => {
   });
 
   it("stacks disclosures vertically below 720px", () => {
-    const block = extractMobile720Block(css);
-    expect(block).toContain(".site-disclosures");
-    expect(block).toMatch(/\.site-disclosures\s*\{[\s\S]*?flex-direction:\s*column/);
+    const afterMedia = cssFromMedia720(css);
+    expect(afterMedia).toContain(".site-disclosures");
+    expect(afterMedia).toMatch(/\.site-disclosures\s*\{[\s\S]*?flex-direction:\s*column/);
   });
 });
