@@ -9,7 +9,11 @@ import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { mountDisclosures } from "./disclosures.ts";
-import { captureCanvasPng, exportPhotoFinish, triggerDownload } from "./exportDownload.ts";
+import {
+  captureCanvasPng,
+  exportPhotoFinishWhenPainted,
+  triggerDownload,
+} from "./exportDownload.ts";
 import {
   canExportPhotoFinish,
   exportCaption,
@@ -19,9 +23,9 @@ import {
 import { paintRaceExportSheet } from "./exportPaint.ts";
 import {
   createCanvasRecorder,
+  createStreamRecorder,
   exportKindFromMime,
   pickRecorderMimeType,
-  type MediaRecorderLike,
 } from "./exportRecorder.ts";
 import { sheetSize, type ExportSheetSpec } from "./exportSheet.ts";
 import { mountLens } from "./lens.ts";
@@ -640,18 +644,22 @@ export function mountRace(): void {
 
   /**
    * Composite lane tiles and footer onto the offscreen export sheet.
+   *
+   * @returns `true` when the sheet was painted; `false` when status was shown instead.
    */
-  function paintExportSheet(): void {
+  function paintExportSheet(): boolean {
     const sheet = ensureSheetCanvas();
     if (sheet === null) {
       showStatus("export sheet canvas unavailable");
-      return;
+      return false;
     }
     try {
       paintRaceExportSheet(sheet, buildExportSheetSpec());
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       showStatus(message);
+      return false;
     }
   }
 
@@ -727,9 +735,10 @@ export function mountRace(): void {
     syncExportButtons();
 
     if (recording) {
-      paintExportSheet();
-      if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
-        void finishVideoRecording();
+      if (paintExportSheet()) {
+        if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
+          void finishVideoRecording();
+        }
       }
     }
   }
@@ -739,9 +748,17 @@ export function mountRace(): void {
    */
   function startRun(): void {
     if (recording) {
+      const recorder = activeCanvasRecorder;
       activeCanvasRecorder = null;
       finishingVideo = false;
       restoreRecordingUi();
+      if (recorder !== null) {
+        try {
+          void recorder.stop().catch(() => undefined);
+        } catch {
+          // already stopped
+        }
+      }
     }
     pool.terminate();
     race = null;
@@ -913,11 +930,10 @@ export function mountRace(): void {
       return;
     }
 
-    paintExportSheet();
-
+    const painted = paintExportSheet();
     void (async () => {
       try {
-        await exportPhotoFinish({
+        await exportPhotoFinishWhenPainted(painted, {
           filename: exportFilename(raceState, "png"),
           capturePng: () => captureCanvasPng(sheet),
           download: triggerDownload,
@@ -963,12 +979,15 @@ export function mountRace(): void {
     syncRecordingControls();
 
     drawFrame();
-    paintExportSheet();
+    if (!paintExportSheet()) {
+      restoreRecordingUi();
+      return;
+    }
 
     const stream = sheet.captureStream(30);
     const recorder = createCanvasRecorder({
       mimeType,
-      createRecorder: (mt) => createNativeMediaRecorderLike(stream, mt),
+      createRecorder: (mt) => createStreamRecorder(stream, mt),
     });
     activeCanvasRecorder = recorder;
 
@@ -1272,64 +1291,4 @@ function isRaceLanesKey(value: string): value is RaceLanesKey {
     }
   }
   return false;
-}
-
-/**
- * Bridge a browser {@link MediaRecorder} to {@link MediaRecorderLike}.
- *
- * @param stream - Canvas capture stream from {@link HTMLCanvasElement.captureStream}.
- * @param mimeType - Recorder MIME type from {@link pickRecorderMimeType}.
- */
-function createNativeMediaRecorderLike(stream: MediaStream, mimeType: string): MediaRecorderLike {
-  const native = new MediaRecorder(stream, { mimeType });
-  let dataHandler: ((event: { data: Blob }) => void) | null = null;
-  let stopHandler: (() => void) | null = null;
-  let errorHandler: ((event: { error?: Error }) => void) | null = null;
-
-  native.addEventListener("dataavailable", (event: BlobEvent) => {
-    if (dataHandler !== null) {
-      dataHandler({ data: event.data });
-    }
-  });
-  native.addEventListener("stop", () => {
-    if (stopHandler !== null) {
-      stopHandler();
-    }
-  });
-  native.addEventListener("error", () => {
-    if (errorHandler !== null) {
-      errorHandler({ error: new Error("MediaRecorder error") });
-    }
-  });
-
-  return {
-    start(timesliceMs?: number): void {
-      if (timesliceMs !== undefined) {
-        native.start(timesliceMs);
-      } else {
-        native.start();
-      }
-    },
-    stop(): void {
-      native.stop();
-    },
-    get ondataavailable() {
-      return dataHandler;
-    },
-    set ondataavailable(handler) {
-      dataHandler = handler;
-    },
-    get onstop() {
-      return stopHandler;
-    },
-    set onstop(handler) {
-      stopHandler = handler;
-    },
-    get onerror() {
-      return errorHandler;
-    },
-    set onerror(handler) {
-      errorHandler = handler;
-    },
-  };
 }

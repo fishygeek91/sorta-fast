@@ -55,10 +55,11 @@ export type MediaRecorderLike = {
 };
 
 /**
- * Structural subset of the browser {@link MediaRecorder} event surface.
+ * Structural recorder surface used by {@link wrapMediaRecorder}.
  *
- * {@link MediaRecorder} is assignable here: {@link BlobEvent} exposes `data`,
- * and error callbacks receive an {@link Event} that may carry `error`.
+ * Browser {@link MediaRecorder} is not assigned here directly (its event
+ * handler types are not a match). Use {@link createStreamRecorder} to bridge
+ * a real `MediaRecorder` via `addEventListener`.
  */
 export type NativeRecorder = {
   start(timesliceMs?: number): void;
@@ -69,7 +70,8 @@ export type NativeRecorder = {
 };
 
 /**
- * Map a native {@link MediaRecorder} (or test stub) onto {@link MediaRecorderLike}.
+ * Map a {@link NativeRecorder} (test stub or {@link createStreamRecorder} bridge)
+ * onto {@link MediaRecorderLike}.
  *
  * Forwards `start` / `stop`. Native `ondataavailable`, `onstop`, and `onerror`
  * handlers delegate to the **current** callbacks on the returned like object so
@@ -104,6 +106,56 @@ export function wrapMediaRecorder(recorder: NativeRecorder): MediaRecorderLike {
   };
 
   return like;
+}
+
+/**
+ * Construct a browser {@link MediaRecorder} on `stream` and wrap it as
+ * {@link MediaRecorderLike}.
+ *
+ * Native events are forwarded onto a {@link NativeRecorder} bridge so
+ * {@link wrapMediaRecorder} can extract `ev.error` from error events.
+ *
+ * @param stream - Canvas capture stream from {@link HTMLCanvasElement.captureStream}.
+ * @param mimeType - Recorder MIME type from {@link pickRecorderMimeType}.
+ */
+export function createStreamRecorder(stream: MediaStream, mimeType: string): MediaRecorderLike {
+  const native = new MediaRecorder(stream, { mimeType });
+  const bridge: NativeRecorder = {
+    start(timesliceMs?: number): void {
+      if (timesliceMs === undefined) {
+        native.start();
+      } else {
+        native.start(timesliceMs);
+      }
+    },
+    stop(): void {
+      native.stop();
+    },
+    ondataavailable: null,
+    onstop: null,
+    onerror: null,
+  };
+
+  native.addEventListener("dataavailable", (event: BlobEvent) => {
+    const handler = bridge.ondataavailable;
+    if (handler !== null) {
+      handler({ data: event.data });
+    }
+  });
+  native.addEventListener("stop", () => {
+    const handler = bridge.onstop;
+    if (handler !== null) {
+      handler();
+    }
+  });
+  native.addEventListener("error", (event: Event) => {
+    const handler = bridge.onerror;
+    if (handler !== null) {
+      handler(event);
+    }
+  });
+
+  return wrapMediaRecorder(bridge);
 }
 
 /** Prefer `ev.error` when the host exposes a real {@link Error}; else a generic message. */

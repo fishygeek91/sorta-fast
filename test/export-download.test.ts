@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   exportPhotoFinish,
+  exportPhotoFinishWhenPainted,
   triggerDownload,
   type DownloadAnchor,
   type DownloadEnv,
@@ -107,6 +108,38 @@ describe("issue #18 export download", () => {
 
       expect(capturePng).toHaveBeenCalledOnce();
       expect(download).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("exportPhotoFinishWhenPainted", () => {
+    it("skips capture and download when the sheet did not paint", async () => {
+      const capturePng = vi.fn(async () => new Blob(["png"], { type: "image/png" }));
+      const download = vi.fn();
+
+      await exportPhotoFinishWhenPainted(false, {
+        filename: "sorta-fast-maze-5000-seed-1729.png",
+        capturePng,
+        download,
+      });
+
+      expect(capturePng).not.toHaveBeenCalled();
+      expect(download).not.toHaveBeenCalled();
+    });
+
+    it("exports when the sheet painted", async () => {
+      const blob = new Blob(["png"], { type: "image/png" });
+      const capturePng = vi.fn(async () => blob);
+      const download = vi.fn();
+      const filename = "sorta-fast-maze-5000-seed-1729.png";
+
+      await exportPhotoFinishWhenPainted(true, {
+        filename,
+        capturePng,
+        download,
+      });
+
+      expect(capturePng).toHaveBeenCalledOnce();
+      expect(download).toHaveBeenCalledWith(blob, filename);
     });
   });
 });

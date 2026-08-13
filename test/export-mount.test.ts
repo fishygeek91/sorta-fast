@@ -40,9 +40,9 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("race-export-webm");
   });
 
-  it("race.ts wires exportPhotoFinish and createCanvasRecorder", () => {
-    expect(raceSource).toContain("exportPhotoFinish");
-    expect(raceSource).toContain("createCanvasRecorder");
+  it("race.ts wires exportPhotoFinishWhenPainted and createStreamRecorder", () => {
+    expect(raceSource).toContain("exportPhotoFinishWhenPainted");
+    expect(raceSource).toContain("createStreamRecorder");
   });
 
   it("race.ts gates export on canExportPhotoFinish", () => {
@@ -55,8 +55,17 @@ describe("issue #18 export mount wiring", () => {
     );
   });
 
+  it("race.ts skips PNG download when sheet paint fails", () => {
+    expect(raceSource).toContain("exportPhotoFinishWhenPainted(painted");
+    expect(raceSource).toContain("function paintExportSheet(): boolean");
+  });
+
   it("race.ts seeks to the start before WebM replay export", () => {
     expect(raceSource).toContain("seek(0)");
+  });
+
+  it("race.ts stops an in-flight recorder when startRun aborts recording", () => {
+    expect(raceSource).toContain("recorder.stop().catch");
   });
 
   it("race.ts does not import core algorithm modules directly", () => {

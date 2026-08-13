@@ -123,3 +123,23 @@ export async function exportPhotoFinish(options: {
 
   download(blob, filename);
 }
+
+/**
+ * Run {@link exportPhotoFinish} only when the export sheet painted successfully.
+ *
+ * @param painted - False when sheet layout/draw failed (caller already showed status).
+ * @param options - Same options as {@link exportPhotoFinish}.
+ */
+export async function exportPhotoFinishWhenPainted(
+  painted: boolean,
+  options: {
+    filename: string;
+    capturePng: () => Promise<Blob>;
+    download: (blob: Blob, filename: string) => void;
+  },
+): Promise<void> {
+  if (!painted) {
+    return;
+  }
+  await exportPhotoFinish(options);
+}

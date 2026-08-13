@@ -92,6 +92,9 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Aborting a WebM recording (e.g. `startRun` mid-capture) best-effort `stop()`s the canvas recorder instead of leaking a native `MediaRecorder` (#18).
+- PNG export no longer downloads a blank sheet when compositing fails; `exportPhotoFinishWhenPainted` skips capture unless the sheet painted (#18).
+- Race video export uses `createStreamRecorder` → `wrapMediaRecorder` so MediaRecorder errors keep their `ev.error` message (#18).
 - Production `vite build` emits Dijkstra and BMSSP worker chunks: Lens and `RaceWorkerPool` construct workers with inline `new Worker(new URL("…", import.meta.url), { type: "module" })` so Play works on GitHub Pages (#48).
 - Photo-finish freeze no longer forward-replays then rewinds frozen lanes on every `syncLanes` call; clamp to `settleWork[finish]` before the seek so later frames no-op (#14).
 - Lens URL writes keep `mode=lens` so refresh stays on Lens after Race became the default mount (#14).
