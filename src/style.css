@@ -38,6 +38,13 @@ body {
   text-align: center;
 }
 
+.lens-header .lens-graph-controls,
+.lens-header .race-gallery {
+  justify-content: center;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .lens-mode-nav {
   display: flex;
   flex-direction: row;
@@ -141,14 +148,25 @@ body {
 .lens-overlays label,
 .lens-graph-controls label,
 .lens-graph-controls select,
-.lens-graph-controls input {
+.lens-graph-controls input,
+#race-kind-select,
+#race-size-select,
+#race-lanes-select,
+#race-dice-button,
+#lens-dice-button {
   font: inherit;
 }
 
 .lens-transport button,
 .lens-speed select,
 .lens-graph-controls select,
-.lens-seed-input {
+.lens-seed-input,
+.race-seed-input,
+#race-kind-select,
+#race-size-select,
+#race-lanes-select,
+#race-dice-button,
+#lens-dice-button {
   font-size: 0.9rem;
   padding: 0.35rem 0.75rem;
   border: 1px solid rgb(180, 176, 168);
@@ -157,13 +175,20 @@ body {
   color: inherit;
 }
 
-.lens-transport button {
+.lens-transport button,
+#race-dice-button,
+#lens-dice-button {
   cursor: pointer;
 }
 
 .lens-transport button:hover,
 .lens-speed select:hover,
-.lens-graph-controls select:hover {
+.lens-graph-controls select:hover,
+#race-kind-select:hover,
+#race-size-select:hover,
+#race-lanes-select:hover,
+#race-dice-button:hover,
+#lens-dice-button:hover {
   background: rgb(255, 248, 236);
 }
 
@@ -219,7 +244,8 @@ body {
   gap: 0.5rem;
 }
 
-.lens-seed-input {
+.lens-seed-input,
+.race-seed-input {
   width: 6rem;
 }
 

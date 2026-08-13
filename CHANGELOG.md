@@ -9,6 +9,15 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Race header gallery: graph kind, S/M/L/XL, seed, dice, and 2-way vs 3-way lane pickers; `replaceState` on change; load seeks optional `t` and stays paused (#15).
+- Lens size picker includes XL; Dice button rolls a CSPRNG seed and reruns (#15).
+- Race URL codec encodes `race=` (comma-separated lanes) and optional `t=` (work-clock position); legacy `lane3=dijkstra` still parses as a third Dijkstra lane (#15).
+- Headless URL tests: `test/race-url.test.ts` codec round-trips, `test/race-url-repro.test.ts` identical traces/counters plus seek-to-`t`, `test/roll-seed.test.ts` for the dice helper (#15).
+- Pure `rollSeed` helper in `src/ui/rollSeed.ts` for the gallery dice button: CSPRNG via `crypto.getRandomValues` (or injectable `fill`), returns a `Uint32` seed without touching core/harness determinism (#15).
+
+### Changed
+
+- Canonical race share links write `race=` and omit `lane3=`; old `?lane3=dijkstra` links still parse as a third Dijkstra lane (#15).
 - `resolveRaceFinishVertex` and `isBfsReachable` so Race can warn on `?target=` equal to the source, out of range, or unreachable instead of silently substituting (#14).
 - `mountRace` UI (#14): multi-lane canvases, shared transport/scrubber, per-lane counters and progress, photo-finish banner, and `RaceWorkerPool` wiring; default app entry is Race mode with Lens via `?mode=lens`.
 - Headless race UI acceptance tests in `test/race-ui-ac.test.ts`: lanesFromSearch, live counters, 3-lane stub, photo-finish banner/rewind, and Dijkstra OOO=0 (#14).

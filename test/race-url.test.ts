@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { generateGraph } from "../src/core/graph.ts";
 import { lanesFromSearch } from "../src/ui/raceLanes.ts";
 import {
   DEFAULT_RACE_URL,
@@ -16,29 +17,46 @@ describe("parseRaceUrl", () => {
     expect(parseRaceUrl(new URLSearchParams())).toEqual(DEFAULT_RACE_URL);
   });
 
-  it("round-trips city / 500 / 42 with lens mode, target, and lane3", () => {
+  it("round-trips city / 5000 / 1729 with t scrub position", () => {
     const state: RaceUrlState = {
       g: "city",
-      n: 500,
-      seed: 42,
-      mode: "lens",
-      target: 10,
-      lane3: "dijkstra",
+      n: 5000,
+      seed: 1729,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 48210,
     };
     const query = serializeRaceUrl(state);
     expect(parseRaceUrl(query)).toEqual(state);
   });
 
-  it("round-trips race defaults without optional fields", () => {
+  it("omits t from serialize when zero and parses missing t as zero", () => {
     const state: RaceUrlState = {
-      g: "sparse",
-      n: 1000,
-      seed: 7,
+      g: "maze",
+      n: 5000,
+      seed: 1729,
       mode: "race",
       target: null,
-      lane3: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
     };
-    expect(parseRaceUrl(serializeRaceUrl(state))).toEqual(state);
+    const query = serializeRaceUrl(state);
+    expect(query).not.toContain("t=");
+    expect(parseRaceUrl(query)).toEqual(state);
+    expect(parseRaceUrl("?g=maze&n=5000&seed=1729&mode=race&race=dijkstra,bmssp")).toEqual(state);
+  });
+
+  it("falls back field-by-field on invalid g, n, seed, and t", () => {
+    expect(parseRaceUrl("?g=grid")).toEqual(DEFAULT_RACE_URL);
+    expect(parseRaceUrl("?n=0")).toEqual({ ...DEFAULT_RACE_URL, n: DEFAULT_RACE_URL.n });
+    expect(parseRaceUrl("?n=-5")).toEqual({ ...DEFAULT_RACE_URL, n: DEFAULT_RACE_URL.n });
+    expect(parseRaceUrl("?seed=1.5")).toEqual({
+      ...DEFAULT_RACE_URL,
+      seed: DEFAULT_RACE_URL.seed,
+    });
+    expect(parseRaceUrl("?t=-1")).toEqual({ ...DEFAULT_RACE_URL, t: 0 });
+    expect(parseRaceUrl("?t=abc")).toEqual({ ...DEFAULT_RACE_URL, t: 0 });
   });
 
   it("defaults mode to race when missing or invalid", () => {
@@ -48,7 +66,8 @@ describe("parseRaceUrl", () => {
       seed: 1,
       mode: "race",
       target: null,
-      lane3: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
     });
     expect(parseRaceUrl("?mode=race")).toEqual({
       ...DEFAULT_RACE_URL,
@@ -63,16 +82,6 @@ describe("parseRaceUrl", () => {
       ...DEFAULT_RACE_URL,
       mode: "lens",
     });
-  });
-
-  it("parses lane3=dijkstra and ignores lane3=1 and other values", () => {
-    expect(parseRaceUrl("?lane3=dijkstra")).toEqual({
-      ...DEFAULT_RACE_URL,
-      lane3: "dijkstra",
-    });
-    expect(parseRaceUrl("?lane3=1")).toEqual(DEFAULT_RACE_URL);
-    expect(parseRaceUrl("?lane3=bmssp")).toEqual(DEFAULT_RACE_URL);
-    expect(parseRaceUrl("?lane3=")).toEqual(DEFAULT_RACE_URL);
   });
 
   it("parses non-negative target and nulls invalid target", () => {
@@ -111,42 +120,92 @@ describe("parseRaceUrl", () => {
       seed: 7,
       mode: "race",
       target: null,
-      lane3: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
     });
+  });
+
+  it("drops dmsy from race list and keeps dijkstra and bmssp", () => {
+    expect(parseRaceUrl("?race=dijkstra,bmssp,dmsy")).toEqual({
+      ...DEFAULT_RACE_URL,
+      race: ["dijkstra", "bmssp"],
+    });
+  });
+
+  it("defaults to two lanes when race has only dmsy or a single valid token", () => {
+    expect(parseRaceUrl("?race=dmsy")).toEqual({
+      ...DEFAULT_RACE_URL,
+      race: ["dijkstra", "bmssp"],
+    });
+    expect(parseRaceUrl("?race=dijkstra")).toEqual({
+      ...DEFAULT_RACE_URL,
+      race: ["dijkstra", "bmssp"],
+    });
+  });
+
+  it("expands legacy lane3=dijkstra to three lanes without race param", () => {
+    const parsed = parseRaceUrl("?lane3=dijkstra");
+    expect(parsed.race).toEqual(["dijkstra", "bmssp", "dijkstra"]);
+    const query = serializeRaceUrl(parsed);
+    const params = new URLSearchParams(query.slice(1));
+    expect(params.get("race")).toBe("dijkstra,bmssp,dijkstra");
+    expect(query).not.toContain("lane3=");
+  });
+
+  it("prefers race= over lane3= and preserves bmssp,dijkstra order", () => {
+    expect(parseRaceUrl("?race=bmssp,dijkstra&lane3=dijkstra")).toEqual({
+      ...DEFAULT_RACE_URL,
+      race: ["bmssp", "dijkstra"],
+    });
+  });
+
+  it("round-trips lens mode", () => {
+    const state: RaceUrlState = {
+      g: "sparse",
+      n: 500,
+      seed: 42,
+      mode: "lens",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+    };
+    expect(parseRaceUrl(serializeRaceUrl(state))).toEqual(state);
+  });
+
+  it("includes target when set and round-trips", () => {
+    const state: RaceUrlState = {
+      g: "clusters",
+      n: 1000,
+      seed: 7,
+      mode: "race",
+      target: 42,
+      race: ["dijkstra", "bmssp"],
+      t: 100,
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).toContain("target=42");
+    expect(parseRaceUrl(query)).toEqual(state);
   });
 });
 
 describe("serializeRaceUrl", () => {
-  it("starts with ? and always includes g, n, seed, and mode", () => {
+  it("starts with ? and contains g, n, seed, mode, and race", () => {
     const query = serializeRaceUrl({
-      g: "clusters",
+      g: "sparse",
       n: 25000,
       seed: 99,
       mode: "race",
       target: null,
-      lane3: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
     });
     expect(query.startsWith("?")).toBe(true);
-    expect(query).toContain("g=clusters");
+    expect(query).toContain("g=sparse");
     expect(query).toContain("n=25000");
     expect(query).toContain("seed=99");
     expect(query).toContain("mode=race");
-    expect(query).not.toContain("target=");
-    expect(query).not.toContain("lane3=");
-  });
-
-  it("includes target and lane3 only when set", () => {
-    const withOptional = serializeRaceUrl({
-      g: "maze",
-      n: 5000,
-      seed: 1729,
-      mode: "lens",
-      target: 42,
-      lane3: "dijkstra",
-    });
-    expect(withOptional).toContain("target=42");
-    expect(withOptional).toContain("lane3=dijkstra");
-    expect(withOptional).toContain("mode=lens");
+    const params = new URLSearchParams(query.slice(1));
+    expect(params.get("race")).toBe("dijkstra,bmssp");
   });
 
   it("throws on invalid state", () => {
@@ -157,7 +216,8 @@ describe("serializeRaceUrl", () => {
         seed: 1,
         mode: "race",
         target: null,
-        lane3: null,
+        race: ["dijkstra", "bmssp"],
+        t: 0,
       }),
     ).toThrow(/n must be an integer/);
     expect(() =>
@@ -167,7 +227,8 @@ describe("serializeRaceUrl", () => {
         seed: Number.NaN,
         mode: "race",
         target: null,
-        lane3: null,
+        race: ["dijkstra", "bmssp"],
+        t: 0,
       }),
     ).toThrow(/seed must be a finite integer/);
     expect(() =>
@@ -177,9 +238,32 @@ describe("serializeRaceUrl", () => {
         seed: 1,
         mode: "race",
         target: -1,
-        lane3: null,
+        race: ["dijkstra", "bmssp"],
+        t: 0,
       }),
     ).toThrow(/target must be a non-negative integer/);
+    expect(() =>
+      serializeRaceUrl({
+        g: "maze",
+        n: 1,
+        seed: 1,
+        mode: "race",
+        target: null,
+        race: ["dijkstra", "bmssp"],
+        t: -1,
+      }),
+    ).toThrow(/t must be a non-negative integer/);
+    expect(() =>
+      serializeRaceUrl({
+        g: "maze",
+        n: 1,
+        seed: 1,
+        mode: "race",
+        target: null,
+        race: ["dijkstra"],
+        t: 0,
+      }),
+    ).toThrow(/race must have length 2 or 3/);
   });
 });
 
@@ -195,17 +279,17 @@ describe("lens URL mode contract", () => {
 });
 
 describe("lanesFromSearch", () => {
-  it("returns two default lanes when lane3 is absent or invalid", () => {
-    expect(lanesFromSearch("")).toHaveLength(2);
-    expect(lanesFromSearch("?")).toHaveLength(2);
-    expect(lanesFromSearch("?lane3=1")).toHaveLength(2);
-    expect(lanesFromSearch("?lane3=bmssp")).toHaveLength(2);
-    expect(lanesFromSearch(new URLSearchParams())).toHaveLength(2);
+  it("returns two default lane ids on empty search", () => {
+    const lanes = lanesFromSearch("");
+    expect(lanes.length).toBe(2);
+    expect(lanes[0].id).toBe("dijkstra");
+    expect(lanes[1].id).toBe("bmssp");
   });
 
-  it("returns three lanes when lane3=dijkstra", () => {
+  it("adds dijkstra-b as third lane when lane3=dijkstra", () => {
     const lanes = lanesFromSearch("?lane3=dijkstra");
-    expect(lanes).toHaveLength(3);
+    expect(lanes.length).toBe(3);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dijkstra-b"]);
     expect(lanes[0]).toEqual({
       algo: "dijkstra",
       id: "dijkstra",
@@ -224,5 +308,38 @@ describe("lanesFromSearch", () => {
       label: "Dijkstra B",
       persona: "stub",
     });
+  });
+
+  it("maps three dijkstra,bmssp,dijkstra race tokens to the same lane ids", () => {
+    const lanes = lanesFromSearch("?race=dijkstra,bmssp,dijkstra");
+    expect(lanes.length).toBe(3);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dijkstra-b"]);
+  });
+
+  it("ignores lane3 when value is not dijkstra", () => {
+    const lanes = lanesFromSearch("?lane3=1");
+    expect(lanes.length).toBe(2);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp"]);
+  });
+
+  it("serializes three-lane parse without lane3 param", () => {
+    const parsed = parseRaceUrl("?lane3=dijkstra");
+    const query = serializeRaceUrl(parsed);
+    const params = new URLSearchParams(query.slice(1));
+    expect(params.get("race")).toBe("dijkstra,bmssp,dijkstra");
+    expect(query).not.toContain("lane3=");
+  });
+});
+
+describe("race URL graph reproducibility", () => {
+  it("generates identical CSR and layout from parsed URL params", () => {
+    const state = parseRaceUrl("?g=maze&n=40&seed=42&race=dijkstra,bmssp");
+    const first = generateGraph(state.g, state.n, state.seed);
+    const second = generateGraph(state.g, state.n, state.seed);
+    expect(first.offsets).toEqual(second.offsets);
+    expect(first.targets).toEqual(second.targets);
+    expect(first.weights).toEqual(second.weights);
+    expect(first.x).toEqual(second.x);
+    expect(first.y).toEqual(second.y);
   });
 });

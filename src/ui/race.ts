@@ -1,7 +1,8 @@
 /**
- * Race mode UI: multi-lane playback with worker-streamed traces (issue #14).
+ * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15).
  */
 
+import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
@@ -10,7 +11,8 @@ import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
-import { parseRaceUrl, serializeRaceUrl, type RaceUrlState } from "./raceUrl.ts";
+import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
+import { rollSeed } from "./rollSeed.ts";
 
 /** Visible canvas edge length in CSS pixels per lane. */
 const CANVAS_SIZE = 400;
@@ -20,6 +22,25 @@ const DEFAULT_SPEED = 8;
 
 /** Source vertex for race SSSP runs. */
 const SOURCE_VERTEX = 0;
+
+/** Size presets exposed in the race graph gallery (includes XL). */
+const RACE_SIZE_KEYS = ["S", "M", "L", "XL"] as const;
+
+type RaceSizeKey = (typeof RACE_SIZE_KEYS)[number];
+
+/** Lane-count presets in the race gallery select. */
+const RACE_LANES_KEYS = ["two", "three"] as const;
+
+type RaceLanesKey = (typeof RACE_LANES_KEYS)[number];
+
+/** Two-lane race: Dijkstra vs BMSSP. */
+const TWO_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp"];
+
+/** Three-lane race: Dijkstra vs BMSSP vs Dijkstra B. */
+const THREE_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dijkstra"];
+
+/** Minimum interval between URL `t` writes while playback is running. */
+const URL_WRITE_THROTTLE_MS = 250;
 
 /** DOM handles for one race lane panel. */
 type LaneUi = {
@@ -48,7 +69,7 @@ export function mountRace(): void {
     throw new Error("Missing #app root element in index.html");
   }
 
-  const raceState: RaceUrlState = parseRaceUrl(window.location.search);
+  let raceState: RaceUrlState = parseRaceUrl(window.location.search);
   if (raceState.mode === "lens") {
     mountLens();
     return;
@@ -56,7 +77,8 @@ export function mountRace(): void {
 
   history.replaceState(null, "", serializeRaceUrl(raceState) + window.location.hash);
 
-  const configs = lanesFromSearch(window.location.search);
+  const configs = lanesFromRaceState(raceState);
+  let pendingT = raceState.t;
   root.replaceChildren();
 
   const header = document.createElement("header");
@@ -89,7 +111,71 @@ export function mountRace(): void {
   });
 
   modeNav.append(raceModeBtn, lensModeBtn);
-  header.append(title, subtitle, modeNav);
+
+  const graphControls = document.createElement("div");
+  graphControls.className = "lens-graph-controls race-gallery";
+
+  const kindLabel = document.createElement("label");
+  kindLabel.className = "lens-graph-field";
+  kindLabel.textContent = "Graph ";
+
+  const kindSelect = document.createElement("select");
+  kindSelect.id = "race-kind-select";
+  for (const kind of GRAPH_KINDS) {
+    const option = document.createElement("option");
+    option.value = kind;
+    option.textContent = kind;
+    kindSelect.append(option);
+  }
+  kindLabel.append(kindSelect);
+
+  const sizeLabel = document.createElement("label");
+  sizeLabel.className = "lens-graph-field";
+  sizeLabel.textContent = "Size ";
+
+  const sizeSelect = document.createElement("select");
+  sizeSelect.id = "race-size-select";
+  for (const key of RACE_SIZE_KEYS) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = key;
+    sizeSelect.append(option);
+  }
+  sizeLabel.append(sizeSelect);
+
+  const seedLabel = document.createElement("label");
+  seedLabel.className = "lens-graph-field";
+  seedLabel.textContent = "Seed ";
+
+  const seedInput = document.createElement("input");
+  seedInput.type = "number";
+  seedInput.className = "race-seed-input";
+  seedInput.step = "1";
+  seedLabel.append(seedInput);
+
+  const diceButton = document.createElement("button");
+  diceButton.type = "button";
+  diceButton.id = "race-dice-button";
+  diceButton.textContent = "Dice";
+  diceButton.setAttribute("aria-label", "Roll a new seed");
+
+  const lanesLabel = document.createElement("label");
+  lanesLabel.className = "lens-graph-field";
+  lanesLabel.textContent = "Lanes ";
+
+  const lanesSelect = document.createElement("select");
+  lanesSelect.id = "race-lanes-select";
+  const twoLanesOption = document.createElement("option");
+  twoLanesOption.value = "two";
+  twoLanesOption.textContent = "Dijkstra vs BMSSP";
+  const threeLanesOption = document.createElement("option");
+  threeLanesOption.value = "three";
+  threeLanesOption.textContent = "Dijkstra vs BMSSP vs Dijkstra B";
+  lanesSelect.append(twoLanesOption, threeLanesOption);
+  lanesLabel.append(lanesSelect);
+
+  graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel);
+  header.append(title, subtitle, modeNav, graphControls);
 
   const raceRoot = document.createElement("div");
   raceRoot.className = "race-root";
@@ -201,6 +287,90 @@ export function mountRace(): void {
 
   /** True while the user is dragging the scrubber thumb. */
   let scrubberPointerDown = false;
+
+  /** Last time `t` was written to the URL during playback (for throttling). */
+  let lastUrlWriteMs = 0;
+
+  /**
+   * @param n - Node count from URL state.
+   * @returns Matching S/M/L/XL preset key, or `"M"` when `n` is not a preset value.
+   */
+  function sizeKeyForN(n: number): RaceSizeKey {
+    for (const key of RACE_SIZE_KEYS) {
+      if (SIZE_PRESETS[key] === n) {
+        return key;
+      }
+    }
+    return "M";
+  }
+
+  /**
+   * Sync graph gallery widgets to the current race URL state.
+   */
+  function syncGalleryControls(): void {
+    kindSelect.value = raceState.g;
+    sizeSelect.value = sizeKeyForN(raceState.n);
+    seedInput.value = String(raceState.seed);
+    lanesSelect.value = lanesKeyForRace(raceState.race);
+  }
+
+  /**
+   * Write the applied work-clock position into the URL when it changes.
+   */
+  function writeClockToUrl(): void {
+    if (race === null) {
+      return;
+    }
+    const t = Math.floor(race.appliedCursor);
+    if (t === raceState.t) {
+      return;
+    }
+    raceState = { ...raceState, t };
+    history.replaceState(null, "", serializeRaceUrl(raceState) + window.location.hash);
+  }
+
+  /**
+   * Seek to {@link pendingT} once enough trace data has streamed in.
+   */
+  function applyPendingSeek(): void {
+    if (race === null || pendingT <= 0) {
+      return;
+    }
+    race.seek(pendingT);
+    if (race.appliedCursor >= pendingT || race.allComplete) {
+      pendingT = 0;
+      writeClockToUrl();
+    }
+  }
+
+  /**
+   * Apply gallery / URL state: remount when lane layout changes, else restart workers.
+   *
+   * @param next - New race URL fields.
+   */
+  function applyRaceState(next: RaceUrlState): void {
+    const needsRemount =
+      next.race.length !== configs.length || !raceCompositionEqual(raceState.race, next.race);
+
+    if (graphGalleryChanged(raceState, next)) {
+      next = { ...next, t: 0 };
+      pendingT = 0;
+    }
+
+    raceState = next;
+    history.replaceState(null, "", serializeRaceUrl(raceState) + window.location.hash);
+    syncGalleryControls();
+
+    if (needsRemount) {
+      teardown();
+      mountRace();
+      return;
+    }
+
+    startRun();
+  }
+
+  syncGalleryControls();
 
   /**
    * @param work - Current applied work cursor.
@@ -386,6 +556,7 @@ export function mountRace(): void {
           });
         }
 
+        applyPendingSeek();
         drawFrame();
       },
       onChunk: (lane, chunk) => {
@@ -394,6 +565,7 @@ export function mountRace(): void {
           return;
         }
         race.appendChunk(lane, chunk);
+        applyPendingSeek();
         syncScrubberUi();
         drawFrame();
       },
@@ -403,6 +575,7 @@ export function mountRace(): void {
           return;
         }
         race.markLaneComplete(lane);
+        applyPendingSeek();
         syncScrubberUi();
         drawFrame();
       },
@@ -426,6 +599,7 @@ export function mountRace(): void {
   skipStartBtn.addEventListener("click", () => {
     race?.pause();
     race?.seek(0);
+    writeClockToUrl();
     drawFrame();
   });
 
@@ -435,6 +609,7 @@ export function mountRace(): void {
     }
     race.pause();
     race.seek(Math.max(0, race.appliedCursor - 1));
+    writeClockToUrl();
     drawFrame();
   });
 
@@ -444,6 +619,7 @@ export function mountRace(): void {
 
   pauseBtn.addEventListener("click", () => {
     race?.pause();
+    writeClockToUrl();
   });
 
   skipEndBtn.addEventListener("click", () => {
@@ -453,18 +629,21 @@ export function mountRace(): void {
     race.pause();
     const end = race.allComplete ? race.maxTotalWork : race.streamCap;
     race.seek(end);
+    writeClockToUrl();
     drawFrame();
   });
 
   stepEventBtn.addEventListener("click", () => {
     race?.pause();
     race?.stepEvent();
+    writeClockToUrl();
     drawFrame();
   });
 
   stepOpBtn.addEventListener("click", () => {
     race?.pause();
     race?.stepOp();
+    writeClockToUrl();
     drawFrame();
   });
 
@@ -487,7 +666,52 @@ export function mountRace(): void {
       return;
     }
     race.seek(t);
+    writeClockToUrl();
     drawFrame();
+  });
+
+  diceButton.addEventListener("click", () => {
+    applyRaceState({ ...raceState, seed: rollSeed(), t: 0 });
+  });
+
+  kindSelect.addEventListener("change", () => {
+    const raw = kindSelect.value;
+    if (!isGraphKind(raw)) {
+      showStatus(`invalid graph kind: ${raw}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, g: raw });
+  });
+
+  sizeSelect.addEventListener("change", () => {
+    const raw = sizeSelect.value;
+    if (!isRaceSizeKey(raw)) {
+      showStatus(`invalid size preset: ${raw}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, n: SIZE_PRESETS[raw] });
+  });
+
+  seedInput.addEventListener("change", () => {
+    const parsed = Number(seedInput.value);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+      showStatus(`invalid seed: ${seedInput.value}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, seed: parsed });
+  });
+
+  lanesSelect.addEventListener("change", () => {
+    const raw = lanesSelect.value;
+    if (!isRaceLanesKey(raw)) {
+      showStatus(`invalid lanes preset: ${raw}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, race: raceFromLanesKey(raw) });
   });
 
   let lastFrameMs = performance.now();
@@ -518,6 +742,10 @@ export function mountRace(): void {
     if (race !== null && race.clock.playing) {
       race.advance(dtSeconds);
       drawFrame();
+      if (nowMs - lastUrlWriteMs >= URL_WRITE_THROTTLE_MS) {
+        writeClockToUrl();
+        lastUrlWriteMs = nowMs;
+      }
     }
 
     rafId = requestAnimationFrame(frame);
@@ -603,4 +831,101 @@ function createCounterBlock(
 
   block.append(label, value);
   return { block, value };
+}
+
+/**
+ * Build lane configs from parsed race URL state (uses `race` list only).
+ *
+ * @param state - Current race URL state.
+ */
+function lanesFromRaceState(state: RaceUrlState): RaceLaneConfig[] {
+  const params = new URLSearchParams();
+  params.set("race", state.race.join(","));
+  return lanesFromSearch(params);
+}
+
+/**
+ * @param race - Canonical race lane slug list from URL state.
+ * @returns Gallery select value: `"three"` when length is 3, otherwise `"two"`.
+ */
+function lanesKeyForRace(race: readonly RaceAlgoSlug[]): RaceLanesKey {
+  return race.length === 3 ? "three" : "two";
+}
+
+/**
+ * @param key - Gallery lanes select value.
+ * @returns Canonical race slug list for two or three lanes.
+ */
+function raceFromLanesKey(key: RaceLanesKey): readonly RaceAlgoSlug[] {
+  if (key === "three") {
+    return THREE_LANE_RACE;
+  }
+  return TWO_LANE_RACE;
+}
+
+/**
+ * @param a - First race lane list.
+ * @param b - Second race lane list.
+ * @returns Whether both lists have the same length and tokens in order.
+ */
+function raceCompositionEqual(a: readonly RaceAlgoSlug[], b: readonly RaceAlgoSlug[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param prev - Previous race URL state.
+ * @param next - Candidate next state.
+ * @returns Whether graph kind, size, seed, or lane composition changed.
+ */
+function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
+  return (
+    prev.g !== next.g ||
+    prev.n !== next.n ||
+    prev.seed !== next.seed ||
+    !raceCompositionEqual(prev.race, next.race)
+  );
+}
+
+/**
+ * @param value - Candidate graph-kind slug from a select option.
+ */
+function isGraphKind(value: string): value is GraphKind {
+  for (const kind of GRAPH_KINDS) {
+    if (kind === value) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @param value - Candidate size preset key from a select option.
+ */
+function isRaceSizeKey(value: string): value is RaceSizeKey {
+  for (const key of RACE_SIZE_KEYS) {
+    if (key === value) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @param value - Candidate lanes preset key from a select option.
+ */
+function isRaceLanesKey(value: string): value is RaceLanesKey {
+  for (const key of RACE_LANES_KEYS) {
+    if (key === value) {
+      return true;
+    }
+  }
+  return false;
 }

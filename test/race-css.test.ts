@@ -39,4 +39,27 @@ describe("race mode CSS", () => {
   it("does not define a per-lane scrubber class", () => {
     expect(css).not.toContain(".race-lane-scrubber");
   });
+
+  it("styles graph controls in the lens header", () => {
+    const hasGraphControls = css.includes(".lens-header .lens-graph-controls");
+    const hasRaceGallery = css.includes(".lens-header .race-gallery");
+    expect(hasGraphControls || hasRaceGallery).toBe(true);
+  });
+
+  it("defines race seed input styling", () => {
+    expect(css).toContain(".race-seed-input");
+  });
+
+  it("defines dice roll buttons for race and lens modes", () => {
+    expect(css).toContain("#race-dice-button");
+    expect(css).toContain("#lens-dice-button");
+  });
+
+  it("defines race kind select styling", () => {
+    expect(css).toContain("#race-kind-select");
+  });
+
+  it("uses pointer cursor on dice roll buttons", () => {
+    expect(css).toMatch(/#race-dice-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/);
+  });
 });

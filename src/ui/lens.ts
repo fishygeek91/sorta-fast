@@ -13,6 +13,7 @@ import {
 } from "../workers/protocol.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
+import { rollSeed } from "./rollSeed.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
 /** Visible canvas edge length in CSS pixels. */
@@ -24,8 +25,8 @@ const DEFAULT_SPEED = 8;
 /** Source vertex for Lens Dijkstra runs. */
 const SOURCE_VERTEX = 0;
 
-/** Size presets exposed in the graph controls (XL omitted). */
-const LENS_SIZE_KEYS = ["S", "M", "L"] as const;
+/** Size presets exposed in the graph controls. */
+const LENS_SIZE_KEYS = ["S", "M", "L", "XL"] as const;
 
 type LensSizeKey = (typeof LENS_SIZE_KEYS)[number];
 
@@ -378,9 +379,16 @@ export function mountLens(): void {
   seedInput.type = "number";
   seedInput.className = "lens-seed-input";
   seedInput.step = "1";
+
+  const diceButton = document.createElement("button");
+  diceButton.type = "button";
+  diceButton.id = "lens-dice-button";
+  diceButton.textContent = "Dice";
+  diceButton.setAttribute("aria-label", "Roll a new seed");
+
   seedLabel.append(seedInput);
 
-  graphControls.append(algoLabel, kindLabel, sizeLabel, seedLabel);
+  graphControls.append(algoLabel, kindLabel, sizeLabel, seedLabel, diceButton);
 
   const statusEl = document.createElement("p");
   statusEl.className = "lens-status";
@@ -417,7 +425,7 @@ export function mountLens(): void {
 
   /**
    * @param n - Node count from URL state.
-   * @returns Matching S/M/L preset key, or `"M"` when `n` is not a preset value.
+   * @returns Matching S/M/L/XL preset key, or `"M"` when `n` is not a preset value.
    */
   function sizeKeyForN(n: number): LensSizeKey {
     for (const key of LENS_SIZE_KEYS) {
@@ -814,6 +822,10 @@ export function mountLens(): void {
       return;
     }
     applyLensState({ ...lensState, seed: parsed });
+  });
+
+  diceButton.addEventListener("click", () => {
+    applyLensState({ ...lensState, seed: rollSeed() });
   });
 
   let lastFrameMs = performance.now();
