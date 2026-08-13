@@ -17,6 +17,11 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Instrumented BMSSP lane `run(graph, source)` in `src/core/bmssp/bmssp.ts`: Algorithm 3 recursion with FindPivots + BlockListD (`M = 2^t`), base-case mini-Dijkstra (≤ k+1), extraW finish, and full recurse/dstruct/settle/heap/relax traces (#11).
+- BMSSP unit/golden tests: small graphs, ties vs Dijkstra, recurse/dstruct shape, TraceWriter round-trip, bounded-settle invariant (#11).
+- BMSSP cross-check fixtures (`test/fixtures/bmssp/`) with Braeniac README oracle plus Dijkstra-verified small graphs; `test/bmssp-crosscheck.test.ts` and offline `bench/generate-bmssp-braeniac-fixtures.ts` (#11).
+- BMSSP differential fuzz: 5000 seeded graphs (ties included) vs Dijkstra and Bellman-Ford, trace distance audit, and bounded-settle invariant (#11).
+- BMSSP test helpers `drainBmsspRun`, `auditBmsspDistancesFromTrace`, and `assertBoundedSettleInvariant` for trace replay and bounded-settle audits without reusing Dijkstra helpers (#11).
 - FindPivots(B, S): k Bellman-Ford rounds, tight-forest pivots, and pivot/batch/relax traces so the BMSSP lane can flare pivots before the full recursion lands (#10).
 - Block-list data structure D (Lemma 3.3) with Insert, BatchPrepend, Pull, and billed comparison counts for `{k:'dstruct'}` events (#9).
 - Lens mode UI (canvas, live comparison/heap/relax counters, timeline, overlay toggles, worker streaming, shareable `?g=&n=&seed=`) (#8).
