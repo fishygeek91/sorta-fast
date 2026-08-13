@@ -20,10 +20,7 @@ const GOLD_ON_PAPER_MIN = 3;
 /** Minimum contrast for ink on raised panels. */
 const INK_ON_PANEL_MIN = 4.5;
 
-/**
- * Minimum pairwise sRGB distance between CVD-simulated lane accents.
- * Use 25 if 40 is too strict for the deuteranopia matrix on this palette.
- */
+/** Locked pairwise sRGB distance floor between CVD-simulated lane accents. */
 const CVD_PAIRWISE_MIN_DISTANCE = 40;
 
 /**
