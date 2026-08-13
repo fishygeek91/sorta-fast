@@ -102,6 +102,24 @@ describe("site disclosures CSS", () => {
   });
 });
 
+describe("issue #18 export controls CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("defines PNG and WebM export button selectors", () => {
+    expect(css).toContain("#race-export-png");
+    expect(css).toContain("#race-export-webm");
+  });
+
+  it("styles disabled export buttons", () => {
+    expect(css).toContain("#race-export-png:disabled");
+    expect(css).toContain("#race-export-webm:disabled");
+  });
+
+  it("highlights WebM export while recording", () => {
+    expect(css).toContain('#race-export-webm[data-recording="true"]');
+  });
+});
+
 describe("issue #17 visual tokens", () => {
   const css = readFileSync(STYLE_CSS, "utf8");
 

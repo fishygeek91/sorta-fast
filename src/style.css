@@ -475,6 +475,18 @@ body {
   background: var(--hover);
 }
 
+.race-transport button:disabled,
+.lens-transport button:disabled,
+#race-export-png:disabled,
+#race-export-webm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#race-export-webm[data-recording="true"] {
+  border-color: var(--gold);
+}
+
 .race-banner {
   margin: 0;
   padding: var(--space-4);

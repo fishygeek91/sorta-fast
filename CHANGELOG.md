@@ -9,6 +9,9 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Race PNG photo-finish export: transport PNG button composites lane canvases with counters, banner, seed, and share URL baked into the image; gated on photo-finish freeze (#18).
+- Race WebM/mp4 export via MediaRecorder on a composite canvas, replaying the finished trace at the current speed (no algorithm re-run); Safari/unsupported browsers get mp4 or a status fallback that keeps PNG working. GIF encoder deferred (#18).
+- Headless export tests: `test/export-meta.test.ts`, `test/export-sheet.test.ts`, `test/export-download.test.ts`, `test/export-recorder.test.ts`, `test/export-mount.test.ts` (#18).
 - Chrome token module `src/render/theme.ts` (dark default + light cream palettes, marble/ember/moss accents) with WCAG contrast and deuteranopia helpers; headless tests in `test/theme.test.ts` and `test/theme-contrast.test.ts` (#17).
 - Theme toggle in Race and Lens mode nav (`mountThemeToggle`); renderers apply stored light/dark chrome on boot; Lens canvas `data-persona` syncs marble/ember with Dijkstra/BMSSP (#17).
 - Open Graph and Twitter Card meta in `index.html` plus `public/og-card.png` (1200×630 dark photo-finish poster: three persona lanes with settle-order gradient and gold path; authored illustration resized with `sips`, not a live `?seed=` capture); headless contract tests in `test/og-meta.test.ts`, issue #17 visual-token CSS scans in `test/race-css.test.ts`, and post-build `og-card.png` / `og:image` checks in `test/build-workers.ts` (#17).
