@@ -234,6 +234,38 @@ describe("findPivots abort diamond", () => {
   });
 });
 
+describe("findPivots 2-cycle does not re-queue failed relaxes", () => {
+  const graph = packCsr(
+    2,
+    [
+      { from: 0, to: 1, weight: 1 },
+      { from: 1, to: 0, weight: 1 },
+    ],
+    [0, 1],
+    [0, 0],
+  );
+
+  it("stops growing W when a relax fails the dist gate", () => {
+    const dist = makeDist(2, [0]);
+    const { events, result } = drainFindPivots(graph, Infinity, [0], 3, dist, 0);
+
+    const relaxEvents = events.filter((e) => e.k === "relax");
+    expect(relaxEvents).toHaveLength(2);
+    expect(relaxEvents[0]).toMatchObject({ e: 0, improved: true });
+    expect(relaxEvents[1]).toMatchObject({ e: 1, improved: false });
+
+    const batchStarts = events.filter((e) => e.k === "batch" && e.phase === "start");
+    expect(batchStarts).toHaveLength(3);
+    expect(batchStarts[2]).toMatchObject({ level: 0, size: 0 });
+
+    expect(result.W).toEqual([0, 1]);
+    expect(result.aborted).toBe(false);
+    expect(dist[0]).toBe(0);
+    expect(dist[1]).toBe(1);
+    expect(result.P).toEqual([]);
+  });
+});
+
 describe("findPivots golden non-abort path", () => {
   const graph = packCsr(
     3,

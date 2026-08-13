@@ -139,11 +139,10 @@ export function* findPivots(
         const improved = cand < distTo;
         yield { k: "relax", e, improved, cost: 1 };
 
+        // Algorithm 1: W_i membership is nested inside a successful relax.
         if (cand <= distTo) {
           dist[to] = cand;
-        }
-        if (cand < B) {
-          if (inWi[to] === 0) {
+          if (cand < B && inWi[to] === 0) {
             inWi[to] = 1;
             wi.push(to);
           }

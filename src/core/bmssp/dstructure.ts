@@ -43,6 +43,10 @@ type Locator = {
  *
  * D0 holds batch-prepended pairs; D1 holds inserted pairs in blocks sorted by
  * upper bound. At most one pair per key; locators map keys to block slots.
+ *
+ * Billed comparisons are value/key total-order tests (Insert search, median
+ * split, Pull select, bound). Map lookups and the final Pull key-id sort for
+ * deterministic output are not billed — they are not paper value comparisons.
  */
 export class BlockListD {
   private readonly M: number;
@@ -83,13 +87,19 @@ export class BlockListD {
    * Insert key `a` with value `b` into D1.
    *
    * arXiv 2504.17033 Lemma 3.3 Insert: binary-search D1 by upper bound, append,
-   * split when a block exceeds M.
+   * split when a block exceeds M. Values must be strictly less than B (the
+   * structure's global upper bound); `value >= B` throws rather than clamping
+   * into the last D1 block and violating the block upper-bound invariant.
    *
    * @param key - Vertex / key identifier.
-   * @param value - Distance value to insert.
+   * @param value - Distance value to insert; must be finite and `< B`.
    */
   insert(key: number, value: number): DOpResult {
     this.cmps = 0;
+
+    if (!(Number.isFinite(value) && value < this.B)) {
+      throw new Error(`insert value must be finite and < B, got ${String(value)}`);
+    }
 
     const existing = this.locators.get(key);
     if (existing !== undefined) {
@@ -158,8 +168,11 @@ export class BlockListD {
   /**
    * Pull the M smallest keys from D (or all keys when |D| ≤ M).
    *
-   * arXiv 2504.17033 Lemma 3.3 Pull: collect D0/D1 block prefixes, select M
-   * smallest from the union when |D| > M, delete pulled pairs, compute bound.
+   * arXiv 2504.17033 Lemma 3.3 Pull: collect a prefix of D0 and D1 blocks until
+   * each side has ≥ M pairs (O(M) pairs; each block has size ≤ M), select M
+   * smallest from that union, delete them, and take the bound from leftover
+   * prefix pairs plus the next unconsumed block — not a full |D| scan.
+   * Ties among equal values are broken by key inside the prefix only.
    */
   pull(): DPullResult {
     this.cmps = 0;
@@ -178,10 +191,23 @@ export class BlockListD {
       return { keys, bound: this.B, n: keys.length, cmps: this.cmps };
     }
 
-    // Select from the full set, not a D1 prefix: blocks are unsorted and ordered
-    // only by value upper bounds, so equal-value pairs can put smaller keys in a
-    // later block (Lemma 3.3 Pull still returns the M smallest in pair order).
-    const selected = this.selectMSmallest(this.collectAllPairs(), this.M);
+    // Lemma 3.3: prefix blocks until ≥ M pairs per sequence, then select.
+    const d0Prefix = this.collectPrefix(this.d0, this.M);
+    const d1Prefix = this.collectPrefix(this.d1, this.M);
+    const union = d0Prefix.pairs.concat(d1Prefix.pairs);
+    const selected = this.selectMSmallest(union, this.M);
+    const selectedKeys = new Set<number>();
+    for (const pair of selected) {
+      selectedKeys.add(pair.key);
+    }
+
+    const leftover: DPair[] = [];
+    for (const pair of union) {
+      if (!selectedKeys.has(pair.key)) {
+        leftover.push(pair);
+      }
+    }
+
     const keys = this.sortedKeysFromPairs(selected);
 
     for (const pair of selected) {
@@ -192,8 +218,8 @@ export class BlockListD {
       this.removePairAtLocator(locator);
     }
 
+    const bound = this.boundAfterPrefixPull(leftover, this.d0, d0Prefix.end, this.d1, d1Prefix.end);
     this.cleanupEmptyBlocks();
-    const bound = this.computeMinBound();
 
     return { keys, bound, n: keys.length, cmps: this.cmps };
   }
@@ -374,8 +400,7 @@ export class BlockListD {
     }
 
     if (collapsed.length <= this.M) {
-      const upper = collapsed[0] === undefined ? 0 : collapsed[0].value;
-      return [{ pairs: collapsed.slice(), upperBound: upper }];
+      return [{ pairs: collapsed.slice(), upperBound: Number.NaN }];
     }
 
     const cap = Math.ceil(this.M / 2);
@@ -388,9 +413,7 @@ export class BlockListD {
    */
   private splitIntoBlocksRecursive(pairs: DPair[], cap: number): Block[] {
     if (pairs.length <= cap) {
-      const first = pairs[0];
-      const upper = first === undefined ? 0 : first.value;
-      return [{ pairs, upperBound: upper }];
+      return [{ pairs, upperBound: Number.NaN }];
     }
 
     const { left: leftPairs, right: rightPairs } = this.partitionByMedian(pairs);
@@ -552,39 +575,78 @@ export class BlockListD {
     return pairs;
   }
 
-  private sortedKeysFromPairs(pairs: readonly DPair[]): number[] {
-    const keys = pairs.map((pair) => pair.key);
-    keys.sort((a, b) => a - b);
-    return keys;
+  /**
+   * Whole-block prefix until `maxPairs` pairs or the sequence is exhausted.
+   * Each block has size ≤ M, so the result is O(M) pairs.
+   */
+  private collectPrefix(
+    blocks: readonly Block[],
+    maxPairs: number,
+  ): { pairs: DPair[]; end: number } {
+    const pairs: DPair[] = [];
+    let end = 0;
+    while (pairs.length < maxPairs && end < blocks.length) {
+      const block = blocks[end];
+      if (block === undefined) {
+        throw new Error(`dstruct prefix: missing block at index ${end}`);
+      }
+      for (const pair of block.pairs) {
+        pairs.push(pair);
+      }
+      end += 1;
+    }
+    return { pairs, end };
   }
 
-  private computeMinBound(): number {
+  /**
+   * Bound after a prefix Pull: min leftover in the O(M) prefix, else min of
+   * unconsumed D0/D1 blocks. Unconsumed D0 is not always sorted after mixed
+   * prepend/split, so every remaining block is considered; each block has
+   * size ≤ M and we only walk blocks *after* the prefix.
+   */
+  private boundAfterPrefixPull(
+    leftover: readonly DPair[],
+    d0: readonly Block[],
+    d0End: number,
+    d1: readonly Block[],
+    d1End: number,
+  ): number {
     let minPair: DPair | undefined;
-
-    for (const block of this.d0) {
-      for (const pair of block.pairs) {
-        if (minPair === undefined) {
-          minPair = pair;
-        } else if (this.less(pair, minPair)) {
-          minPair = pair;
-        }
+    for (const pair of leftover) {
+      if (minPair === undefined || this.less(pair, minPair)) {
+        minPair = pair;
       }
     }
-
-    for (const block of this.d1) {
-      for (const pair of block.pairs) {
-        if (minPair === undefined) {
-          minPair = pair;
-        } else if (this.less(pair, minPair)) {
-          minPair = pair;
-        }
-      }
+    for (let i = d0End; i < d0.length; i += 1) {
+      minPair = this.minPairInBlock(d0[i], minPair);
     }
-
+    // D1 blocks are ordered by upper bound (Lemma 3.3), so the min remaining
+    // D1 value is in the first unconsumed block.
+    minPair = this.minPairInBlock(d1[d1End], minPair);
     if (minPair === undefined) {
       return this.B;
     }
     return minPair.value;
+  }
+
+  private minPairInBlock(block: Block | undefined, current: DPair | undefined): DPair | undefined {
+    if (block === undefined) {
+      return current;
+    }
+    let best = current;
+    for (const pair of block.pairs) {
+      if (best === undefined || this.less(pair, best)) {
+        best = pair;
+      }
+    }
+    return best;
+  }
+
+  /** Key-id sort for deterministic Pull output; not a billed value comparison. */
+  private sortedKeysFromPairs(pairs: readonly DPair[]): number[] {
+    const keys = pairs.map((pair) => pair.key);
+    keys.sort((a, b) => a - b);
+    return keys;
   }
 
   private cleanupEmptyBlocks(): void {

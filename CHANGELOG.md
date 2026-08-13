@@ -7,6 +7,12 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ## [Unreleased]
 
+### Fixed
+
+- FindPivots only adds a vertex to the next Bellman-Ford layer when the relax succeeds (`cand ≤ dist` and `cand < B`), matching Algorithm 1 so 2-cycles no longer re-queue stale vertices (#10).
+- D Pull collects an O(M) block prefix and derives the separator bound from leftover/next-block pairs, so billed comparisons match Lemma 3.3 instead of scanning all of D (#9).
+- `bmsspParams` uses log₂ so `k ≥ 2` at Lens-scale n (natural log left `k = 1` below ~3000 vertices) (#9, #10).
+
 ### Added
 
 - FindPivots(B, S): k Bellman-Ford rounds, tight-forest pivots, and pivot/batch/relax traces so the BMSSP lane can flare pivots before the full recursion lands (#10).

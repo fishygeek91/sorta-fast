@@ -20,6 +20,14 @@ describe("BlockListD constructor", () => {
     const d = new BlockListD(4, Number.POSITIVE_INFINITY);
     expect(d.size).toBe(0);
   });
+
+  it("throws on value >= B rather than clamping into the last block", () => {
+    const d = new BlockListD(4, 100);
+    expect(() => d.insert(1, 100)).toThrow(/finite and < B/);
+    expect(() => d.insert(1, 101)).toThrow(/finite and < B/);
+    expect(() => d.insert(1, Number.NaN)).toThrow(/finite and < B/);
+    expect(d.size).toBe(0);
+  });
 });
 
 describe("BlockListD empty pull", () => {
@@ -141,14 +149,20 @@ describe("BlockListD M=1 adversarial", () => {
 });
 
 describe("BlockListD all-equal values", () => {
-  it("does not hang and tie-breaks by key on pull", () => {
+  it("does not hang and returns M keys with bound equal to the tied value", () => {
     const d = new BlockListD(2, 100);
     for (let key = 0; key <= 3; key += 1) {
       d.insert(key, 5);
     }
     const result = d.pull();
-    expect(result.keys).toEqual([0, 1]);
+    expect(result.n).toBe(2);
+    expect(result.keys).toHaveLength(2);
+    for (const key of result.keys) {
+      expect(key).toBeGreaterThanOrEqual(0);
+      expect(key).toBeLessThanOrEqual(3);
+    }
     expect(result.bound).toBe(5);
+    expect(d.size).toBe(2);
   });
 });
 
@@ -223,5 +237,24 @@ describe("BlockListD TraceWriter round-trip", () => {
     expect(costOf(events[0])).toBe(insertRes.cmps * OP_COST.comparison);
     expect(costOf(events[1])).toBe(batchRes.cmps * OP_COST.comparison);
     expect(costOf(events[2])).toBe(pullRes.cmps * OP_COST.comparison);
+  });
+});
+
+describe("BlockListD Pull comparison bound", () => {
+  it("bills O(M) comparisons when pulling M keys from N >> M distinct values", () => {
+    const M = 4;
+    const n = 200;
+    const d = new BlockListD(M, 1_000_000);
+    for (let key = 0; key < n; key += 1) {
+      d.insert(key, key);
+    }
+    expect(d.size).toBe(n);
+
+    const result = d.pull();
+    expect(result.keys).toEqual([0, 1, 2, 3]);
+    expect(result.bound).toBe(4);
+    expect(d.size).toBe(n - M);
+    expect(result.cmps).toBeLessThanOrEqual(32 * M);
+    expect(result.cmps).toBeLessThan(n);
   });
 });

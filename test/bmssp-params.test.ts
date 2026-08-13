@@ -7,9 +7,9 @@ function expectedParams(n: number): { k: number; t: number } {
   if (n < 2) {
     return { k: 1, t: 1 };
   }
-  const ln = Math.log(n);
-  const k = Math.max(1, Math.floor(Math.pow(ln, 1 / 3)));
-  const t = Math.max(1, Math.floor(Math.pow(ln, 2 / 3)));
+  const log2n = Math.log2(n);
+  const k = Math.max(1, Math.floor(Math.pow(log2n, 1 / 3)));
+  const t = Math.max(1, Math.floor(Math.pow(log2n, 2 / 3)));
   return { k, t };
 }
 
@@ -45,8 +45,9 @@ describe("bmsspParams", () => {
     const expected = expectedParams(n);
     expect(bmsspParams(n)).toEqual(expected);
 
-    const ln = Math.log(n);
-    expect(expected.k).toBe(Math.max(1, Math.floor(Math.pow(ln, 1 / 3))));
-    expect(expected.t).toBe(Math.max(1, Math.floor(Math.pow(ln, 2 / 3))));
+    const log2n = Math.log2(n);
+    expect(expected.k).toBe(Math.max(1, Math.floor(Math.pow(log2n, 1 / 3))));
+    expect(expected.t).toBe(Math.max(1, Math.floor(Math.pow(log2n, 2 / 3))));
+    expect(expected.k).toBeGreaterThanOrEqual(2);
   });
 });
