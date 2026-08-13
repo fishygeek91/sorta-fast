@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Production favicon (`public/favicon.svg`) and `<link rel="icon">` in `index.html` so GitHub Pages stops 404ing the default favicon request (#48).
+- Isolated `test:build` CI job runs `vite build` then asserts Dijkstra and BMSSP trace worker chunks (and copied `favicon.svg`) under `dist/` so production Play regressions are caught before deploy (#48).
 - Footer disclosures in Race and Lens: Fairness rules (work-clock op-cost model + link to the `src/core/trace.ts` cost table), What am I looking at? (sorting-barrier story, Perfectionist / Batcher / Forester personas, visual vocabulary), and The papers (STOC 2025, arXiv 2504.17033, arXiv 2602.07868, Quanta). Opening a panel does not pause playback (#16).
 - Headless #16 tests: `test/site-copy.test.ts` syncs UI `FAIRNESS_COSTS` with `OP_COST`; `test/disclosures-mount.test.ts` source-scans Race/Lens wiring and forbids UI `trace.ts` imports; site-disclosure CSS coverage in `test/race-css.test.ts`.
 - Race header gallery: graph kind, S/M/L/XL, seed, dice, and 2-way vs 3-way lane pickers; `replaceState` on change; load seeks optional `t` and stays paused (#15).
@@ -82,6 +84,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Production `vite build` emits Dijkstra and BMSSP worker chunks: Lens and `RaceWorkerPool` construct workers with inline `new Worker(new URL("…", import.meta.url), { type: "module" })` so Play works on GitHub Pages (#48).
 - Photo-finish freeze no longer forward-replays then rewinds frozen lanes on every `syncLanes` call; clamp to `settleWork[finish]` before the seek so later frames no-op (#14).
 - Lens URL writes keep `mode=lens` so refresh stays on Lens after Race became the default mount (#14).
 - Race mode tears down its rAF loop and `RaceWorkerPool` when switching to Lens so detached canvases are not repainted (#14).
