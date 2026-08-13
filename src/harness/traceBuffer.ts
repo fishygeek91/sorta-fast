@@ -19,24 +19,35 @@ export const KEYFRAME_OPS = 250_000;
  * Holds prefix tables (`chunkOfEvent`, `rowOfEvent`, `workAfter`) for O(1)
  * event locate and binary-search seek. {@link state} is the live cursor;
  * {@link seekWork} restores from keyframes when scrubbing backward.
+ * {@link appendChunk} extends the trace incrementally for streaming playback.
  */
 export class TraceBuffer {
   readonly graph: Graph;
-  readonly totalEvents: number;
-  readonly totalWork: number;
+  totalEvents: number;
+  totalWork: number;
   readonly state: LaneState;
 
-  private readonly chunks: readonly TraceChunk[];
-  private readonly chunkOfEvent: Uint32Array;
-  private readonly rowOfEvent: Uint32Array;
-  private readonly workAfter: Uint32Array;
+  private chunks: TraceChunk[];
+  private chunkOfEvent: Uint32Array;
+  private rowOfEvent: Uint32Array;
+  private workAfter: Uint32Array;
   private readonly keyframes: LaneState[];
+  /** Lane state at the end of indexed events; used only for keyframe continuation. */
+  private readonly indexState: LaneState;
+  /** Last keyframe bucket `floor(work / KEYFRAME_OPS)` for append cadence. */
+  private lastKeyframeK: number;
+
+  /** Number of keyframe snapshots (T=0, interval, trailing end). */
+  get keyframeCount(): number {
+    return this.keyframes.length;
+  }
 
   /**
    * Build indices, keyframes, and an empty playback cursor.
    *
    * @param graph - CSR graph for relax target lookup.
    * @param chunks - Completed trace slabs (array copied; column buffers shared).
+   *                 Pass `[]` for an empty trace that can grow via {@link appendChunk}.
    * @throws If `graph.n` is invalid, a row cost is missing, or a kind is unknown.
    */
   constructor(graph: Graph, chunks: readonly TraceChunk[]) {
@@ -67,15 +78,7 @@ export class TraceBuffer {
       }
 
       for (let row = 0; row < chunk.count; row += 1) {
-        const kind = chunk.kind[row];
-        if (kind === undefined) {
-          throw new Error(`missing kind at chunk ${String(chunkIdx)} row ${String(row)}`);
-        }
-        if (!isKnownTraceKind(kind)) {
-          throw new Error(
-            `unknown trace kind ${String(kind)} at chunk ${String(chunkIdx)} row ${String(row)}`,
-          );
-        }
+        this.validateChunkRow(chunk, chunkIdx, row);
 
         const cost = chunk.cost[row];
         if (cost === undefined) {
@@ -91,21 +94,22 @@ export class TraceBuffer {
     }
 
     this.totalWork = cumulativeWork;
-    this.state = new LaneState(graph.n);
+    this.state = new LaneState(graph.n, graph.m);
+    this.indexState = this.state.clone();
 
     this.keyframes = [];
     const t0 = this.state.clone();
     this.keyframes.push(t0);
 
-    let lastKeyframeK = 0;
+    this.lastKeyframeK = 0;
 
     while (this.state.eventIndex < this.totalEvents) {
       this.applyOne();
 
       const k = Math.floor(this.state.work / KEYFRAME_OPS);
-      if (k > lastKeyframeK) {
+      if (k > this.lastKeyframeK) {
         this.keyframes.push(this.state.clone());
-        lastKeyframeK = k;
+        this.lastKeyframeK = k;
       }
     }
 
@@ -117,7 +121,88 @@ export class TraceBuffer {
       this.keyframes.push(this.state.clone());
     }
 
+    this.indexState.copyFrom(this.state);
     this.state.copyFrom(t0);
+  }
+
+  /**
+   * Append a completed trace slab and extend prefix tables and keyframes.
+   *
+   * Live {@link state} is not moved; only {@link indexState} advances for
+   * keyframe continuation.
+   *
+   * @param chunk - New slab with at least one event row.
+   * @throws If `chunk.count` is invalid, a row cost is missing, or a kind is unknown.
+   */
+  appendChunk(chunk: TraceChunk): void {
+    if (!Number.isInteger(chunk.count) || chunk.count < 1) {
+      throw new Error(`chunk.count must be an integer >= 1, got ${String(chunk.count)}`);
+    }
+
+    const chunkIdx = this.chunks.length;
+    for (let row = 0; row < chunk.count; row += 1) {
+      this.validateChunkRow(chunk, chunkIdx, row);
+    }
+
+    this.chunks.push(chunk);
+
+    const oldLen = this.totalEvents;
+    const newLen = oldLen + chunk.count;
+    const newChunkOfEvent = new Uint32Array(newLen);
+    const newRowOfEvent = new Uint32Array(newLen);
+    const newWorkAfter = new Uint32Array(newLen);
+
+    newChunkOfEvent.set(this.chunkOfEvent);
+    newRowOfEvent.set(this.rowOfEvent);
+    newWorkAfter.set(this.workAfter);
+
+    let cumulativeWork = this.totalWork;
+    let eventIndex = oldLen;
+
+    for (let row = 0; row < chunk.count; row += 1) {
+      const cost = chunk.cost[row];
+      if (cost === undefined) {
+        throw new Error(`missing cost at chunk ${String(chunkIdx)} row ${String(row)}`);
+      }
+
+      cumulativeWork += cost;
+      newChunkOfEvent[eventIndex] = chunkIdx;
+      newRowOfEvent[eventIndex] = row;
+      newWorkAfter[eventIndex] = cumulativeWork;
+      eventIndex += 1;
+    }
+
+    this.chunkOfEvent = newChunkOfEvent;
+    this.rowOfEvent = newRowOfEvent;
+    this.workAfter = newWorkAfter;
+    this.totalEvents = newLen;
+    this.totalWork = cumulativeWork;
+
+    while (this.indexState.eventIndex < this.totalEvents) {
+      this.applyOneTo(this.indexState);
+
+      const k = Math.floor(this.indexState.work / KEYFRAME_OPS);
+      if (k > this.lastKeyframeK) {
+        this.keyframes.push(this.indexState.clone());
+        this.lastKeyframeK = k;
+      }
+    }
+
+    const lastKeyframe = this.keyframes[this.keyframes.length - 1];
+    if (lastKeyframe === undefined) {
+      throw new Error("TraceBuffer: missing initial keyframe");
+    }
+    if (lastKeyframe.eventIndex !== this.totalEvents) {
+      const prev = this.keyframes[this.keyframes.length - 2];
+      const isTrailingEndMarker =
+        prev !== undefined &&
+        Math.floor(lastKeyframe.work / KEYFRAME_OPS) === Math.floor(prev.work / KEYFRAME_OPS);
+      if (isTrailingEndMarker) {
+        this.keyframes[this.keyframes.length - 1] = this.indexState.clone();
+      } else {
+        this.keyframes.push(this.indexState.clone());
+      }
+    }
   }
 
   /**
@@ -200,21 +285,32 @@ export class TraceBuffer {
   }
 
   /**
-   * Apply the event at {@link state}.`eventIndex` and advance the cursor.
+   * Apply the event at {@link state}.`eventIndex` and advance the live cursor.
    *
    * @throws On invalid settle/relax payloads or double settle.
    */
   private applyOne(): void {
-    const { chunk, row } = this.locate(this.state.eventIndex);
+    this.applyOneTo(this.state);
+  }
+
+  /**
+   * Apply the event at `target.eventIndex` onto `target` and advance its cursor.
+   *
+   * @param target - Lane state to mutate (live cursor or index-only state).
+   * @throws On invalid settle/relax payloads or double settle.
+   */
+  private applyOneTo(target: LaneState): void {
+    const eventIndex = target.eventIndex;
+    const { chunk, row } = this.locate(eventIndex);
 
     const kind = chunk.kind[row];
     if (kind === undefined) {
-      throw new Error(`missing kind at event ${String(this.state.eventIndex)}`);
+      throw new Error(`missing kind at event ${String(eventIndex)}`);
     }
 
     const cost = chunk.cost[row];
     if (cost === undefined) {
-      throw new Error(`missing cost at event ${String(this.state.eventIndex)}`);
+      throw new Error(`missing cost at event ${String(eventIndex)}`);
     }
 
     switch (kind) {
@@ -222,20 +318,18 @@ export class TraceBuffer {
         const vertex = chunk.vertex[row];
         const order = chunk.aux0[row];
         if (vertex === undefined || order === undefined) {
-          throw new Error(`missing settle fields at event ${String(this.state.eventIndex)}`);
+          throw new Error(`missing settle fields at event ${String(eventIndex)}`);
         }
-        if (vertex < 0 || vertex >= this.state.n) {
-          throw new Error(
-            `settle vertex ${String(vertex)} out of range [0, ${String(this.state.n)})`,
-          );
+        if (vertex < 0 || vertex >= target.n) {
+          throw new Error(`settle vertex ${String(vertex)} out of range [0, ${String(target.n)})`);
         }
-        if (this.state.settleOrder[vertex] === UNSETTLED) {
-          this.state.settleOrder[vertex] = order;
-          this.state.frontier[vertex] = 0;
-          this.state.settledCount += 1;
+        if (target.settleOrder[vertex] === UNSETTLED) {
+          target.settleOrder[vertex] = order;
+          target.frontier[vertex] = 0;
+          target.settledCount += 1;
         } else {
           throw new Error(
-            `double settle on vertex ${String(vertex)} at event ${String(this.state.eventIndex)}`,
+            `double settle on vertex ${String(vertex)} at event ${String(eventIndex)}`,
           );
         }
         break;
@@ -245,28 +339,38 @@ export class TraceBuffer {
         const improved = chunk.aux0[row];
         const edge = chunk.edge[row];
         if (improved === undefined || edge === undefined) {
-          throw new Error(`missing relax fields at event ${String(this.state.eventIndex)}`);
+          throw new Error(`missing relax fields at event ${String(eventIndex)}`);
         }
+        target.relaxations += 1;
         if (improved === 1) {
+          if (!Number.isInteger(edge) || edge < 0 || edge >= target.m) {
+            throw new Error(
+              `relax edge ${String(edge)} out of range [0, ${String(target.m)}) at event ${String(eventIndex)}`,
+            );
+          }
           const to = this.graph.targets[edge];
           if (to === undefined) {
             throw new Error(
-              `missing relax target for edge ${String(edge)} at event ${String(this.state.eventIndex)}`,
+              `missing relax target for edge ${String(edge)} at event ${String(eventIndex)}`,
             );
           }
-          if (to < 0 || to >= this.state.n) {
+          if (to < 0 || to >= target.n) {
             throw new Error(
-              `relax target ${String(to)} out of range [0, ${String(this.state.n)}) at event ${String(this.state.eventIndex)}`,
+              `relax target ${String(to)} out of range [0, ${String(target.n)}) at event ${String(eventIndex)}`,
             );
           }
-          if (this.state.settleOrder[to] === UNSETTLED) {
-            this.state.frontier[to] = 1;
+          if (target.settleOrder[to] === UNSETTLED) {
+            target.frontier[to] = 1;
           }
+          target.lastRelaxWork[edge] = target.work + cost;
         }
         break;
       }
 
       case TRACE_KIND.heap:
+        target.heapOps += 1;
+        break;
+
       case TRACE_KIND.pivot:
       case TRACE_KIND.batch:
       case TRACE_KIND.recurse:
@@ -275,13 +379,36 @@ export class TraceBuffer {
         break;
 
       default:
-        throw new Error(
-          `unknown trace kind ${String(kind)} at event ${String(this.state.eventIndex)}`,
-        );
+        throw new Error(`unknown trace kind ${String(kind)} at event ${String(eventIndex)}`);
     }
 
-    this.state.work += cost;
-    this.state.eventIndex += 1;
+    target.work += cost;
+    target.eventIndex += 1;
+  }
+
+  /**
+   * Validate one trace row before indexing.
+   *
+   * @param chunk - Source slab.
+   * @param chunkIdx - Index in {@link chunks}.
+   * @param row - Row within the slab.
+   * @throws If kind is missing or unknown.
+   */
+  private validateChunkRow(chunk: TraceChunk, chunkIdx: number, row: number): void {
+    const kind = chunk.kind[row];
+    if (kind === undefined) {
+      throw new Error(`missing kind at chunk ${String(chunkIdx)} row ${String(row)}`);
+    }
+    if (!isKnownTraceKind(kind)) {
+      throw new Error(
+        `unknown trace kind ${String(kind)} at chunk ${String(chunkIdx)} row ${String(row)}`,
+      );
+    }
+
+    const cost = chunk.cost[row];
+    if (cost === undefined) {
+      throw new Error(`missing cost at chunk ${String(chunkIdx)} row ${String(row)}`);
+    }
   }
 
   /**

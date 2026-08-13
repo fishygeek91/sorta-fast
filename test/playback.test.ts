@@ -64,3 +64,47 @@ describe("Playback.stepOp", () => {
     expect(stepped.clock.cursor).toBe(5);
   });
 });
+
+describe("Playback streaming append", () => {
+  it("advance clamps at trace end while streaming; grows after appendChunk; pauses when complete", () => {
+    const graph = packCsr(2, [], [0, 1], [0, 0]);
+    const firstEvents: TraceEvent[] = [{ k: "settle", v: 0, order: 0, cost: 1 }];
+    const firstChunks = chunksFromEvents(firstEvents);
+    const firstChunk = firstChunks[0];
+    if (firstChunk === undefined) {
+      throw new Error("expected chunk from settle event");
+    }
+
+    const pb = new Playback(graph, [firstChunk]);
+    expect(pb.totalWork).toBe(1);
+
+    pb.beginStreaming();
+    pb.play();
+    pb.seek(pb.totalWork);
+
+    pb.advance(1);
+    expect(pb.clock.cursor).toBe(pb.totalWork);
+    expect(pb.clock.playing).toBe(true);
+
+    const tailEvents: TraceEvent[] = [{ k: "settle", v: 1, order: 1, cost: 1 }];
+    const tailChunks = chunksFromEvents(tailEvents);
+    const tailChunk = tailChunks[0];
+    if (tailChunk === undefined) {
+      throw new Error("expected chunk from tail settle event");
+    }
+
+    pb.appendChunk(tailChunk);
+    expect(pb.totalWork).toBe(2);
+
+    pb.advance(1);
+    expect(pb.clock.cursor).toBe(2);
+    expect(pb.clock.playing).toBe(true);
+    expect(pb.state.eventIndex).toBe(2);
+    expect(pb.state.settledCount).toBe(2);
+
+    pb.markComplete();
+    pb.advance(1);
+    expect(pb.clock.cursor).toBe(2);
+    expect(pb.clock.playing).toBe(false);
+  });
+});

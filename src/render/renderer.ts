@@ -26,8 +26,17 @@ const EDGE_LINE_WIDTH = 1;
 /** Frontier ring line width in pixels. */
 const FRONTIER_LINE_WIDTH = 1.5;
 
+/** Ghost relaxed-edge stroke color (muted, distinct from static edges). */
+const GHOST_STROKE = "rgba(40, 40, 40, 0.35)";
+
+/** Ghost edge line width in pixels. */
+const GHOST_LINE_WIDTH = 1.5;
+
 /** Full circle arc in radians. */
 const TAU = Math.PI * 2;
+
+/** Ghost trail window in billed ops (scrub-safe; not wall-clock). */
+export const GHOST_WINDOW_OPS = 10_000;
 
 /**
  * Obtain a 2D draw context from `surface`, throwing when unavailable.
@@ -93,6 +102,36 @@ function targetAt(targets: Uint32Array, e: number): number {
 }
 
 /**
+ * Build CSR edge index → source vertex lookup for O(1) ghost endpoint resolution.
+ */
+function buildSrcOfEdge(graph: Graph): Uint32Array {
+  const srcOfEdge = new Uint32Array(graph.m);
+  const n = graph.n;
+  const offsets = graph.offsets;
+  for (let v = 0; v < n; v += 1) {
+    const start = offsetAt(offsets, v);
+    const end = offsetAt(offsets, v + 1);
+    for (let e = start; e < end; e += 1) {
+      srcOfEdge[e] = v;
+    }
+  }
+  return srcOfEdge;
+}
+
+/**
+ * Resolve overlay toggles: omitted argument or missing keys default to enabled.
+ */
+function resolveOverlayFlags(overlays?: { frontier?: boolean; relaxedEdges?: boolean }): {
+  frontier: boolean;
+  relaxedEdges: boolean;
+} {
+  return {
+    frontier: overlays?.frontier !== false,
+    relaxedEdges: overlays?.relaxedEdges !== false,
+  };
+}
+
+/**
  * Layered Canvas2D renderer for one race lane.
  */
 export class Renderer {
@@ -104,6 +143,10 @@ export class Renderer {
   private readonly overlayLayer: CanvasSurface;
   private lastSettle: Int32Array;
   private lastFrontier: Uint8Array;
+  private srcOfEdge: Uint32Array;
+  private lastGhost: Uint8Array;
+  private lastFrontierOverlay: boolean;
+  private lastRelaxedEdgesOverlay: boolean;
   private readonly dirty: DirtyRect;
   /** True until the first composite or after {@link setGraph}; forces a full three-layer blit. */
   private needsFullComposite: boolean;
@@ -120,6 +163,10 @@ export class Renderer {
     this.lastSettle = new Int32Array(opts.graph.n);
     this.lastSettle.fill(UNSETTLED);
     this.lastFrontier = new Uint8Array(opts.graph.n);
+    this.srcOfEdge = buildSrcOfEdge(opts.graph);
+    this.lastGhost = new Uint8Array(opts.graph.m);
+    this.lastFrontierOverlay = true;
+    this.lastRelaxedEdgesOverlay = true;
     this.needsFullComposite = true;
 
     const width = opts.target.width;
@@ -143,6 +190,8 @@ export class Renderer {
     this.lastSettle = new Int32Array(graph.n);
     this.lastSettle.fill(UNSETTLED);
     this.lastFrontier = new Uint8Array(graph.n);
+    this.srcOfEdge = buildSrcOfEdge(graph);
+    this.lastGhost = new Uint8Array(graph.m);
     this.needsFullComposite = true;
     resetDirty(this.dirty);
     markFull(this.dirty, this.target.width, this.target.height);
@@ -155,21 +204,39 @@ export class Renderer {
    * - new settles: fill circles with {@link cssColorForSettleOrder}, `includeNode` dirty
    * - any unsettle: clear fill layer, redraw ALL settled nodes, `markFull`
    *
-   * Frontier overlay: clear overlay, draw rings for `frontier[v] === 1`.
-   * Dirty frontier changes (vs {@link lastFrontier}) expand the dirty rect before overlay paint.
+   * Overlay pass: clear overlay, optionally draw frontier rings and relaxed-edge ghost trails.
+   * Dirty frontier and ghost changes expand the dirty rect before overlay paint.
    * Composite onto target: full blit on first frame, {@link setGraph}, unsettle, or hit cap;
    * otherwise blit only the dirty rect (edges + fill + overlay).
+   *
+   * @param overlays - Optional toggles; omitted keys default to enabled (frontier on, ghosts on).
    */
-  draw(state: LaneState): void {
+  draw(state: LaneState, overlays?: { frontier?: boolean; relaxedEdges?: boolean }): void {
     if (state.n !== this.graph.n) {
       throw new Error(
         `lane vertex count ${String(state.n)} does not match graph n ${String(this.graph.n)}`,
       );
     }
+    if (state.m !== this.graph.m) {
+      throw new Error(
+        `lane edge count ${String(state.m)} does not match graph m ${String(this.graph.m)}`,
+      );
+    }
 
     const n = state.n;
+    const m = state.m;
     const width = this.target.width;
     const height = this.target.height;
+    const { frontier: frontierEnabled, relaxedEdges: relaxedEdgesEnabled } =
+      resolveOverlayFlags(overlays);
+
+    if (
+      frontierEnabled !== this.lastFrontierOverlay ||
+      relaxedEdgesEnabled !== this.lastRelaxedEdgesOverlay
+    ) {
+      markFull(this.dirty, width, height);
+      this.needsFullComposite = true;
+    }
 
     let hadUnsettle = false;
     for (let v = 0; v < n; v += 1) {
@@ -222,7 +289,23 @@ export class Renderer {
       }
     }
 
-    this.drawFrontierOverlay(state);
+    if (relaxedEdgesEnabled) {
+      const targets = this.graph.targets;
+      for (let e = 0; e < m; e += 1) {
+        const shouldDraw = this.shouldDrawGhost(e, state);
+        const wasDrawn = this.lastGhost[e] === 1;
+        if (shouldDraw !== wasDrawn) {
+          const src = this.srcOfEdge[e];
+          if (src === undefined) {
+            throw new Error(`srcOfEdge[${String(e)}] is missing`);
+          }
+          this.includeVertexDirty(src);
+          this.includeVertexDirty(targetAt(targets, e));
+        }
+      }
+    }
+
+    this.drawOverlay(state, frontierEnabled, relaxedEdgesEnabled);
 
     this.compositeToTarget();
 
@@ -238,6 +321,14 @@ export class Renderer {
       }
       this.lastFrontier[v] = curFrontier;
     }
+
+    for (let e = 0; e < m; e += 1) {
+      const drawn = relaxedEdgesEnabled && this.shouldDrawGhost(e, state) ? 1 : 0;
+      this.lastGhost[e] = drawn;
+    }
+
+    this.lastFrontierOverlay = frontierEnabled;
+    this.lastRelaxedEdgesOverlay = relaxedEdgesEnabled;
 
     resetDirty(this.dirty);
   }
@@ -317,9 +408,28 @@ export class Renderer {
   }
 
   /**
-   * Redraw the frontier ring overlay for the current lane state.
+   * Whether edge `e` should show a relaxed-edge ghost trail at the current work cursor.
    */
-  private drawFrontierOverlay(state: LaneState): void {
+  private shouldDrawGhost(e: number, state: LaneState): boolean {
+    const lastWork = state.lastRelaxWork[e];
+    if (lastWork === undefined) {
+      throw new Error(`lastRelaxWork[${String(e)}] is missing`);
+    }
+    if (lastWork === UNSETTLED) {
+      return false;
+    }
+    const age = state.work - lastWork;
+    return age >= 0 && age < GHOST_WINDOW_OPS;
+  }
+
+  /**
+   * Redraw the overlay layer: optional frontier rings and relaxed-edge ghost trails.
+   */
+  private drawOverlay(
+    state: LaneState,
+    frontierEnabled: boolean,
+    relaxedEdgesEnabled: boolean,
+  ): void {
     const ctx = requireContext(this.overlayLayer, "overlayLayer");
     const graph = this.graph;
     const camera = this.camera;
@@ -327,26 +437,63 @@ export class Renderer {
     const height = this.overlayLayer.height;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.strokeStyle = FRONTIER_STROKE;
-    ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
-    const n = state.n;
-    const frontier = state.frontier;
+    if (frontierEnabled) {
+      ctx.strokeStyle = FRONTIER_STROKE;
+      ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
-    for (let v = 0; v < n; v += 1) {
-      const onFrontier = frontier[v];
-      if (onFrontier === undefined) {
-        throw new Error(`frontier[${String(v)}] is missing`);
+      const n = state.n;
+      const frontier = state.frontier;
+
+      for (let v = 0; v < n; v += 1) {
+        const onFrontier = frontier[v];
+        if (onFrontier === undefined) {
+          throw new Error(`frontier[${String(v)}] is missing`);
+        }
+        if (onFrontier !== 1) {
+          continue;
+        }
+
+        const cx = projectX(camera, vertexX(graph, v));
+        const cy = projectY(camera, vertexY(graph, v));
+        ctx.beginPath();
+        ctx.arc(cx, cy, camera.radius, 0, TAU);
+        ctx.stroke();
       }
-      if (onFrontier !== 1) {
-        continue;
-      }
+    }
 
-      const cx = projectX(camera, vertexX(graph, v));
-      const cy = projectY(camera, vertexY(graph, v));
+    if (relaxedEdgesEnabled) {
+      const m = state.m;
+      const targets = graph.targets;
+      const srcOfEdge = this.srcOfEdge;
+
+      ctx.strokeStyle = GHOST_STROKE;
+      ctx.lineWidth = GHOST_LINE_WIDTH;
       ctx.beginPath();
-      ctx.arc(cx, cy, camera.radius, 0, TAU);
-      ctx.stroke();
+
+      let drewGhost = false;
+      for (let e = 0; e < m; e += 1) {
+        if (!this.shouldDrawGhost(e, state)) {
+          continue;
+        }
+
+        const src = srcOfEdge[e];
+        if (src === undefined) {
+          throw new Error(`srcOfEdge[${String(e)}] is missing`);
+        }
+        const tgt = targetAt(targets, e);
+        const x0 = projectX(camera, vertexX(graph, src));
+        const y0 = projectY(camera, vertexY(graph, src));
+        const x1 = projectX(camera, vertexX(graph, tgt));
+        const y1 = projectY(camera, vertexY(graph, tgt));
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        drewGhost = true;
+      }
+
+      if (drewGhost) {
+        ctx.stroke();
+      }
     }
   }
 

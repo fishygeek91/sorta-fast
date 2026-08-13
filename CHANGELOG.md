@@ -9,8 +9,17 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
-- `bench/replay-5k.ts` and `test/replay-perf.test.ts`: 5k maze Dijkstra replay timings (forward seek, backward scrub, speed-8 frame, settled draw) with warmup and best-of-3 CI budgets (#6, #7).
-- Temporary single-canvas playback demo in `src/main.ts`: 5k maze Dijkstra trace, transport controls, and scrubber until Lens UI lands (#6, #7); Lens replaces it in #8.
+- Lens mode UI (canvas, live comparison/heap/relax counters, timeline, overlay toggles, worker streaming, shareable `?g=&n=&seed=`) (#8).
+- `TraceBuffer.appendChunk` and `Playback.beginStreaming` / `appendChunk` / `markComplete` so playback can start before the worker finishes (#8).
+- Vitest coverage for `runDijkstraTraceJob` streaming, determinism, validation, and end-of-trace work totals; `src/ui` import guard in render-imports when UI modules exist (#8).
+- Lens URL codec `?g=&n=&seed=` with maze/5000/1729 defaults (#8).
+- Worker job streams Dijkstra chunks via drainCompleted (#8).
+- Vitest fake-canvas coverage for renderer overlay toggles (`frontier`, `relaxedEdges`) and ghost window cutoff on the overlay layer (#8).
+- Renderer overlay flags (`frontier`, `relaxedEdges`) and billed-op ghost trails on recently relaxed CSR edges via `GHOST_WINDOW_OPS` (#8).
+- Vitest coverage for `TraceWriter.drainCompleted()` partial-slab, full-slab rotation, and idempotent second drain (#8).
+- `TraceBuffer.applyOne` keeps `relaxations`, `heapOps`, and per-edge `lastRelaxWork` in sync with the playback cursor so scrub-safe keyframes snapshot Lens counters and ghost trails (#8).
+- `LaneState` tracks per-edge `lastRelaxWork` ghost data plus `relaxations` and `heapOps` counters for Lens mode overlay playback (#8).
+- `TraceWriter.drainCompleted()` returns rotated full slabs without flushing the in-progress partial slab, so Lens mode can stream completed chunks while appends continue (#8).
 - Vitest coverage for render palette LUT, dirty-rect union/cap, renderer layering, and forbidden render imports (#6).
 - `Playback` in `src/harness/playback.ts`: headless facade wiring `WorkClock` to `TraceBuffer` for seek, frame advance, per-event, and per-op stepping with end-of-trace clamp and pause (#7).
 - `TraceBuffer` in `src/harness/traceBuffer.ts`: column-native SoA chunk apply onto `LaneState`, prefix `workAfter` tables, and keyframe snapshots every 250k billed ops for scrub-safe backward seek (#7).
@@ -32,7 +41,10 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
-- Demo scrubber keeps tracking playback after a drag by gating on pointer-down instead of `activeElement` focus (#6).
+- `TraceBuffer.appendChunk` replaces the trailing end keyframe instead of accumulating one per slab (#8).
+- Lens applies the current speed select when the worker graph arrives, so a mid-generation speed change is not ignored (#8).
+- Lens rAF paints only while playing so a paused 5k-node graph does not redraw every frame (#8).
+- Dijkstra trace worker copies CSR/layout typed arrays before `postMessage` transfer so `onGraph` no longer detaches buffers Dijkstra still reads (#8).
 - `Playback.stepOp` advances the work-clock cursor so multi-cost heap events can be stepped through (#7).
 - CI 1M-event budget uses 200ms headroom and sequential Vitest files so GitHub-hosted runners can stay green (main was red after #3; Deploy is gated on that check) (#35).
 - Pages contract tests no longer run `vite.build()` inside Vitest, so they do not contend with the 1M-event budget on CI (#4).
@@ -40,6 +52,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Removed the temporary #6/#7 main-thread Dijkstra scaffold in `src/main.ts` (#8).
 - Renderer composites only the dirty rect after the first full frame so Canvas2D blit cost matches settle/frontier diffs (#6).
 - `decodeAt` rejects detached chunk buffers instead of reporting an unknown kind (#3).
 - Design doc §4.2 notes TraceWriter rotates SoA slabs rather than wrapping a true ring (#3).

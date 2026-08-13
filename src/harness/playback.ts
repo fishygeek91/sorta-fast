@@ -16,22 +16,58 @@ import { WorkClock } from "./workClock.ts";
  * Single-lane race playback: clock cursor drives buffer seeks.
  *
  * All mutation methods return the live {@link TraceBuffer.state} so callers
- * can paint without an extra lookup.
+ * can paint without an extra lookup. Call {@link beginStreaming} before
+ * {@link appendChunk} so playback can continue past the current trace end.
  */
 export class Playback {
   readonly clock: WorkClock;
   readonly buffer: TraceBuffer;
+  /** When false, {@link advance} stays playing at the trace end until {@link markComplete}. */
+  private complete = true;
 
   /**
    * Build a paused playback at T = 0 over one lane's trace chunks.
    *
    * @param graph - CSR graph for relax target lookup in the buffer.
-   * @param chunks - Completed trace slabs for this lane.
+   * @param chunks - Completed trace slabs for this lane (may be `[]` for streaming).
    * @throws If graph or chunk validation fails in {@link TraceBuffer}.
    */
   constructor(graph: Graph, chunks: readonly TraceChunk[]) {
     this.clock = new WorkClock();
     this.buffer = new TraceBuffer(graph, chunks);
+  }
+
+  /**
+   * Mark the trace as still growing so {@link advance} does not pause at the end.
+   *
+   * Call before appending chunks from a worker while playback is running.
+   */
+  beginStreaming(): void {
+    this.complete = false;
+  }
+
+  /**
+   * Mark the trace as fully received.
+   *
+   * If the clock cursor is already at or past {@link totalWork}, pauses playback.
+   */
+  markComplete(): void {
+    this.complete = true;
+    if (this.clock.cursor >= this.totalWork) {
+      this.pause();
+    }
+  }
+
+  /**
+   * Append a completed trace slab without moving the live playback cursor.
+   *
+   * @param chunk - New slab from the worker stream.
+   * @returns Live lane state (unchanged cursor; totals and keyframes grow).
+   * @throws If chunk validation fails in {@link TraceBuffer.appendChunk}.
+   */
+  appendChunk(chunk: TraceChunk): LaneState {
+    this.buffer.appendChunk(chunk);
+    return this.buffer.state;
   }
 
   /** Begin advancing the work clock on each {@link advance} call. */
@@ -81,7 +117,8 @@ export class Playback {
   /**
    * Advance the work clock by `dtSeconds`, sync the buffer, and clamp at end.
    *
-   * When the cursor moves past {@link totalWork}, seeks to the end and pauses.
+   * When the cursor moves past {@link totalWork}, seeks to the end and pauses
+   * only if the trace is {@link markComplete complete}.
    *
    * @param dtSeconds - Elapsed seconds since the last frame; must be finite and >= 0.
    * @returns Live lane state after the advance.
@@ -92,7 +129,9 @@ export class Playback {
 
     if (this.clock.cursor > this.totalWork) {
       this.seek(this.totalWork);
-      this.pause();
+      if (this.complete) {
+        this.pause();
+      }
     } else {
       this.buffer.seekWork(this.clock.cursor);
     }
