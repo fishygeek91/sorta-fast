@@ -11,7 +11,7 @@ const RENDER_DIR = join(TEST_DIR, "../src/render");
 const UI_DIR = join(TEST_DIR, "../src/ui");
 
 const FORBIDDEN_IMPORT =
-  /(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+["'][^"']*(?:dijkstra|bellmanFord|trace)(?:\.ts)?["']/;
+  /(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+["'][^"']*(?:dijkstra|bellmanFord|trace|bmssp)(?:\.ts)?["']/;
 
 /**
  * Assert every `.ts` file in `dir` avoids algorithm and trace module imports.
@@ -26,7 +26,7 @@ function assertNoForbiddenImports(dir: string, label: string): void {
     const source = readFileSync(join(dir, file), "utf8");
     expect(
       source,
-      `${label}/${file} must not import dijkstra, bellmanFord, or trace.ts`,
+      `${label}/${file} must not import dijkstra, bellmanFord, bmssp, or trace.ts`,
     ).not.toMatch(FORBIDDEN_IMPORT);
   }
 }
