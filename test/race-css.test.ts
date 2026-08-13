@@ -148,3 +148,36 @@ describe("issue #17 visual tokens", () => {
     expect(css).toContain('.lens-canvas[data-persona="marble"]');
   });
 });
+
+describe("story mode CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("defines story root and caption classes", () => {
+    expect(css).toContain(".story-root");
+    expect(css).toContain(".story-caption");
+  });
+
+  it("defines story skip and nav classes", () => {
+    expect(css).toContain(".story-skip");
+    expect(css).toContain(".story-nav");
+  });
+
+  it("sets 44px min-height on story skip control", () => {
+    expect(css).toMatch(/\.story-skip\s*\{[\s\S]*?min-height:\s*44px/);
+  });
+
+  it("sets 44px min-height on story nav buttons", () => {
+    expect(css).toMatch(/\.story-nav button\s*\{[\s\S]*?min-height:\s*44px/);
+  });
+
+  it("defines comparisons callout hook", () => {
+    expect(css).toContain('[data-callout="comparisons"]');
+  });
+
+  it("stacks story lanes vertically below 720px", () => {
+    const mobileBlock = css.match(/@media\s*\(max-width:\s*720px\)\s*\{([\s\S]*?)\n\}/);
+    expect(mobileBlock).not.toBeNull();
+    const block = mobileBlock?.[1] ?? "";
+    expect(block).toContain(".story-lanes");
+  });
+});
