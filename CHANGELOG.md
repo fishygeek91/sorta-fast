@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- `close-pr` skill: after an explicit merge or close, switch back to `main` and pull.
 - `resolveRaceFinishVertex` and `isBfsReachable` so Race can warn on `?target=` equal to the source, out of range, or unreachable instead of silently substituting (#14).
 - `mountRace` UI (#14): multi-lane canvases, shared transport/scrubber, per-lane counters and progress, photo-finish banner, and `RaceWorkerPool` wiring; default app entry is Race mode with Lens via `?mode=lens`.
 - Headless race UI acceptance tests in `test/race-ui-ac.test.ts`: lanesFromSearch, live counters, 3-lane stub, photo-finish banner/rewind, and Dijkstra OOO=0 (#14).

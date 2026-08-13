@@ -10,7 +10,7 @@ alwaysApply: true
 - One issue per branch/PR. Branch: `issue-<n>-<slug>`. Never commit to `main` directly. PR title: `[M#] #<issue>: <title>`. Body: `Closes #N` + how each acceptance-criteria checkbox is met + deviations + test/perf evidence.
 - Every AC checkbox needs a test where testable. Never quietly drop scope — flag impossibilities in the PR description.
 - Keep PRs under ~600 changed lines (excluding lockfiles/fixtures) — split otherwise. Incidental refactors go in separate PRs.
-- CI (typecheck + vitest + lint) must be green locally before opening the PR. **Do not merge unless the human explicitly asked** (see `no-self-merge.mdc`). Claude reviews as the human on another platform.
+- CI (typecheck + vitest + lint) must be green locally before opening the PR. **Do not merge unless the human explicitly asked** (see `no-self-merge.mdc`). Claude reviews as the human on another platform. After an explicit merge: checkout `main` and pull.
 - Discovered work (bugs, follow-ups, ambiguities) becomes a new GitHub issue — never scope creep in the current PR.
 - **CI red on `main` is stop-the-line:** file a bug issue and fix it before any task work.
 - New runtime dependencies require written justification in the PR (static-page bundle budget).

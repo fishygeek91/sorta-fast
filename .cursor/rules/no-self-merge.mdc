@@ -8,4 +8,5 @@ alwaysApply: true
 - After opening a PR: comment that it is ready for review, then **stop**. Do not merge as part of opening the PR.
 - Claude reviews PRs as the human on another platform. GitHub will often show that review as the PR author — that is expected, not a merge blocker. Do not wait for a different GitHub account to APPROVE.
 - Never run `gh pr merge` unless the human explicitly asked to merge (or close/merge) in this conversation.
+- After an explicit merge (or close): always switch back to `main` and pull. See `.cursor/skills/close-pr/SKILL.md`.
 - Respond to REQUEST CHANGES by pushing fixes to the same branch and commenting; do not open a new PR.
