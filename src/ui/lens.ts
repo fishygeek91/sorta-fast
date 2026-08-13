@@ -13,18 +13,13 @@ import {
   parseWorkerToMain,
   type TraceRunRequest,
 } from "../workers/protocol.ts";
+import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
-import {
-  parseLensUrl,
-  serializeLensUrl,
-  type BmsspUrlMode,
-  type LensAlgo,
-  type LensUrlState,
-} from "./urlState.ts";
+import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
 /** Visible canvas edge length in CSS pixels. */
 const CANVAS_SIZE = 720;
@@ -933,13 +928,6 @@ export function mountLens(): void {
  */
 function isLensAlgo(value: string): value is LensAlgo {
   return value === "dijkstra" || value === "bmssp";
-}
-
-/**
- * @param value - Candidate BMSSP mode from a select option.
- */
-function isBmsspUrlMode(value: string): value is BmsspUrlMode {
-  return value === "demo" || value === "paper";
 }
 
 /**

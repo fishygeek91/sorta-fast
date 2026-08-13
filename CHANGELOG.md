@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Shared `src/ui/bmsspUrl.ts` helpers for Race/Lens `bmssp`/`bk`/`bt` parse so the two codecs stay in sync (#52).
 - Race and Lens gallery control Demo (browser-scale) vs Paper (asymptotic) writes `bmssp=` and restarts the BMSSP worker; `Playback` takes optional `findPivotsK` so Lens narration matches paper/override k (#52).
 - `resolveBmsspRunParams` harness helper so Race/Lens can resolve k/t without importing `src/core/bmssp/` (#52).
 - Headless proof that the default race (sparse / 25k / seed 4, demo k/t) has BMSSP billed work below Dijkstra (`test/bmssp-demo-win.test.ts`) (#52).
@@ -39,6 +40,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Pre-#52 share URLs without `bmssp=` now replay under demo k/t (`k = max(4, paper k)`); append `&bmssp=paper` to reproduce the old paper-asymptotic run (#52).
 - BMSSP workers and `RaceSpec` accept optional `mode` (`demo`|`paper`); omitted k/t now resolve through demo `bmsspParams`, not the paper formula (#52).
 - Fairness panel `params` paragraph discloses BMSSP paper k/t vs demo defaults (`k = max(4, paper k)`, paper t), FindPivots abort at k=2, sweep evidence at `bench/bmssp-kt-sweep.md`, and `bmssp=paper` URL override (#52).
 - `docs/design.md` §2.2 and §8: demo uses swept BMSSP k/t because asymptotic k is degenerate at browser scale; paper formula remains selectable; risk mitigation cites FindPivots abort and Fairness disclosure (#52).

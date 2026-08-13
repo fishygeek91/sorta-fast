@@ -7,12 +7,17 @@
  */
 
 import { GRAPH_KINDS, type GraphKind } from "../core/graph.ts";
+import {
+  isBmsspUrlMode,
+  parseBmsspMode,
+  parseOptionalBlockParam,
+  type BmsspUrlMode,
+} from "./bmsspUrl.ts";
+
+export type { BmsspUrlMode };
 
 /** Lens algorithm lane selected via the URL (`algo` query param). */
 export type LensAlgo = "dijkstra" | "bmssp";
-
-/** BMSSP parameter mode encoded in the `bmssp` query param (issue #52). */
-export type BmsspUrlMode = "demo" | "paper";
 
 /** Graph gallery fields encoded in the Lens URL. */
 export type LensUrlState = {
@@ -118,32 +123,6 @@ function isLensAlgo(value: string): value is LensAlgo {
 }
 
 /**
- * @param raw - `bmssp` query value, or null when absent.
- * @returns `paper` only when `raw` is exactly `paper`; otherwise `demo`.
- */
-function parseBmsspMode(raw: string | null): BmsspUrlMode {
-  if (raw === "paper") {
-    return "paper";
-  }
-  return "demo";
-}
-
-/**
- * @param raw - `bk` or `bt` query value, or null when absent.
- * @returns A positive integer block parameter, or `null` when unset/invalid.
- */
-function parseOptionalBlockParam(raw: string | null): number | null {
-  if (raw === null || raw === "") {
-    return null;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
-    return null;
-  }
-  return parsed;
-}
-
-/**
  * @param raw - `algo` query value, or null when absent.
  * @returns A valid lens algorithm, defaulting to BMSSP on invalid input.
  */
@@ -195,7 +174,7 @@ function assertValidLensUrlState(state: LensUrlState): void {
   if (!isLensAlgo(state.algo)) {
     throw new Error(`Invalid lens algo: ${state.algo}`);
   }
-  if (state.bmssp !== "demo" && state.bmssp !== "paper") {
+  if (!isBmsspUrlMode(state.bmssp)) {
     throw new Error(`Invalid bmssp mode: ${state.bmssp}`);
   }
   if (state.bk !== null) {

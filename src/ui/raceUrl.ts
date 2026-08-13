@@ -9,15 +9,20 @@
  */
 
 import { GRAPH_KINDS, type GraphKind } from "../core/graph.ts";
+import {
+  isBmsspUrlMode,
+  parseBmsspMode,
+  parseOptionalBlockParam,
+  type BmsspUrlMode,
+} from "./bmsspUrl.ts";
+
+export type { BmsspUrlMode };
 
 /** View mode encoded in the `mode` query param. */
 export type RaceMode = "race" | "lens";
 
 /** Canonical race-algorithm slug allowed in the `race=` param (after filtering). */
 export type RaceAlgoSlug = "dijkstra" | "bmssp";
-
-/** BMSSP parameter mode encoded in the `bmssp` query param (issue #52). */
-export type BmsspUrlMode = "demo" | "paper";
 
 /** Graph gallery and race fields encoded in the race URL. */
 export type RaceUrlState = {
@@ -162,32 +167,6 @@ function parseTarget(raw: string | null): number | null {
 }
 
 /**
- * @param raw - `bmssp` query value, or null when absent.
- * @returns `paper` only when `raw` is exactly `paper`; otherwise `demo`.
- */
-function parseBmsspMode(raw: string | null): BmsspUrlMode {
-  if (raw === "paper") {
-    return "paper";
-  }
-  return "demo";
-}
-
-/**
- * @param raw - `bk` or `bt` query value, or null when absent.
- * @returns A positive integer block parameter, or `null` when unset/invalid.
- */
-function parseOptionalBlockParam(raw: string | null): number | null {
-  if (raw === null || raw === "") {
-    return null;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
-    return null;
-  }
-  return parsed;
-}
-
-/**
  * @param raw - `t` query value, or null when absent.
  * @returns A non-negative finite integer work-clock position; `0` when unset/invalid.
  */
@@ -296,7 +275,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
   if (!Number.isFinite(state.t) || !Number.isInteger(state.t) || state.t < 0) {
     throw new Error(`t must be a non-negative integer, got ${String(state.t)}`);
   }
-  if (state.bmssp !== "demo" && state.bmssp !== "paper") {
+  if (!isBmsspUrlMode(state.bmssp)) {
     throw new Error(`Invalid bmssp mode: ${state.bmssp}`);
   }
   if (state.bk !== null) {

@@ -9,6 +9,7 @@ import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
+import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import {
   captureCanvasPng,
@@ -33,13 +34,7 @@ import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
-import {
-  parseRaceUrl,
-  serializeRaceUrl,
-  type BmsspUrlMode,
-  type RaceAlgoSlug,
-  type RaceUrlState,
-} from "./raceUrl.ts";
+import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 
@@ -1338,11 +1333,4 @@ function isRaceLanesKey(value: string): value is RaceLanesKey {
     }
   }
   return false;
-}
-
-/**
- * @param value - Candidate BMSSP mode from a select option.
- */
-function isBmsspUrlMode(value: string): value is BmsspUrlMode {
-  return value === "demo" || value === "paper";
 }
