@@ -50,7 +50,10 @@ export const GHOST_WINDOW_OPS = 10_000;
 /** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
 
-/** Optional overlay toggles for frontier, ghosts, and BMSSP narration FX. */
+/** Fixed gold stroke for photo-finish shortest-path highlight (issue #14). */
+export const PHOTO_FINISH_GOLD = "rgb(212, 168, 55)";
+
+/** Optional overlay toggles for frontier, ghosts, BMSSP narration FX, and photo-finish. */
 export type OverlayFlags = {
   frontier?: boolean;
   relaxedEdges?: boolean;
@@ -58,9 +61,15 @@ export type OverlayFlags = {
   pivotFlares?: boolean;
   batchBlooms?: boolean;
   dstructStrip?: boolean;
+  /** Source vertex ring; defaults to 0. Always drawn when in range. */
+  source?: number;
+  /** Finish vertex ring; omitted = no finish mark. Drawn when an integer in range. */
+  finish?: number;
+  /** Gold pred-walk path on the fx layer when true and finish is in range with path length >= 2. */
+  photoFinish?: boolean;
 };
 
-/** Resolved overlay toggles — omitted keys default to enabled. */
+/** Resolved overlay toggles — omitted keys default to enabled; photo-finish marks resolved separately. */
 type ResolvedOverlayFlags = {
   frontier: boolean;
   relaxedEdges: boolean;
@@ -68,6 +77,9 @@ type ResolvedOverlayFlags = {
   pivotFlares: boolean;
   batchBlooms: boolean;
   dstructStrip: boolean;
+  source: number;
+  finish: number | undefined;
+  photoFinish: boolean;
 };
 
 /** BMSSP ember accent (lane persona). */
@@ -93,6 +105,18 @@ const DSTRUCT_STRIP_HEIGHT = 16;
 
 /** Stone fill for alternating D-block segments. */
 const STONE_FILL = "rgb(180, 176, 168)";
+
+/** Source vertex outer ring stroke (stone/white). */
+const SOURCE_MARK_STROKE = "rgb(255, 255, 255)";
+
+/** Finish vertex ring stroke (darker accent). */
+const FINISH_MARK_STROKE = "rgb(60, 56, 48)";
+
+/** Source/finish mark ring line width in pixels. */
+const MARK_LINE_WIDTH = 2;
+
+/** Photo-finish gold path line width in pixels. */
+const PHOTO_FINISH_LINE_WIDTH = 3;
 
 /**
  * Obtain a 2D draw context from `surface`, throwing when unavailable.
@@ -185,7 +209,55 @@ function resolveOverlayFlags(overlays?: OverlayFlags): ResolvedOverlayFlags {
     pivotFlares: overlays?.pivotFlares !== false,
     batchBlooms: overlays?.batchBlooms !== false,
     dstructStrip: overlays?.dstructStrip !== false,
+    source: overlays?.source ?? 0,
+    finish: overlays?.finish,
+    photoFinish: overlays?.photoFinish === true,
   };
+}
+
+/**
+ * True when `v` is a valid vertex index for the graph with `n` vertices.
+ */
+function isVertexInRange(v: number, n: number): boolean {
+  return Number.isInteger(v) && v >= 0 && v < n;
+}
+
+/**
+ * Walk `pred` from `finish` toward `source`, collecting vertices until
+ * {@link UNSETTLED}, a cycle, or `n` steps. Returns null when the path has fewer than two vertices.
+ */
+function buildPhotoFinishPath(state: LaneState, finish: number, source: number): number[] | null {
+  const n = state.n;
+  const pred = state.pred;
+  const path: number[] = [];
+  const visited = new Uint8Array(n);
+  let v = finish;
+  let steps = 0;
+
+  while (steps < n) {
+    path.push(v);
+    if (v === source) {
+      break;
+    }
+    const parent = pred[v];
+    if (parent === undefined) {
+      throw new Error(`pred[${String(v)}] is missing`);
+    }
+    if (parent === UNSETTLED) {
+      break;
+    }
+    if (visited[v] === 1) {
+      break;
+    }
+    visited[v] = 1;
+    v = parent;
+    steps += 1;
+  }
+
+  if (path.length < 2) {
+    return null;
+  }
+  return path;
 }
 
 /**
@@ -222,6 +294,9 @@ export class Renderer {
   private lastPivotFlaresOverlay: boolean;
   private lastBatchBloomsOverlay: boolean;
   private lastDstructStripOverlay: boolean;
+  private lastSource: number;
+  private lastFinish: number | undefined;
+  private lastPhotoFinish: boolean;
   private lastRecursionDepth: number;
   private lastBloomActive: number;
   private lastDBlockCount: number;
@@ -249,6 +324,9 @@ export class Renderer {
     this.lastPivotFlaresOverlay = true;
     this.lastBatchBloomsOverlay = true;
     this.lastDstructStripOverlay = true;
+    this.lastSource = 0;
+    this.lastFinish = undefined;
+    this.lastPhotoFinish = false;
     this.lastRecursionDepth = 0;
     this.lastBloomActive = 0;
     this.lastDBlockCount = 0;
@@ -325,7 +403,10 @@ export class Renderer {
       flags.recursionTint !== this.lastRecursionTintOverlay ||
       flags.pivotFlares !== this.lastPivotFlaresOverlay ||
       flags.batchBlooms !== this.lastBatchBloomsOverlay ||
-      flags.dstructStrip !== this.lastDstructStripOverlay
+      flags.dstructStrip !== this.lastDstructStripOverlay ||
+      flags.source !== this.lastSource ||
+      flags.finish !== this.lastFinish ||
+      flags.photoFinish !== this.lastPhotoFinish
     ) {
       markFull(this.dirty, width, height);
       this.needsFullComposite = true;
@@ -418,6 +499,8 @@ export class Renderer {
       this.includeRectDirty(0, height - DSTRUCT_STRIP_HEIGHT, width - 1, height - 1);
     }
 
+    this.includePhotoFinishDirty(state, flags);
+
     this.drawOverlay(state, flags);
     this.drawFx(state, flags);
 
@@ -447,6 +530,9 @@ export class Renderer {
     this.lastPivotFlaresOverlay = flags.pivotFlares;
     this.lastBatchBloomsOverlay = flags.batchBlooms;
     this.lastDstructStripOverlay = flags.dstructStrip;
+    this.lastSource = flags.source;
+    this.lastFinish = flags.finish;
+    this.lastPhotoFinish = flags.photoFinish;
     this.lastRecursionDepth = state.recursionDepth;
     this.lastBloomActive = state.bloomActive;
     this.lastDBlockCount = state.dBlockCount;
@@ -606,6 +692,47 @@ export class Renderer {
   }
 
   /**
+   * Expand the dirty rect for source/finish marks and the photo-finish gold path.
+   */
+  private includePhotoFinishDirty(state: LaneState, flags: ResolvedOverlayFlags): void {
+    const n = state.n;
+
+    if (flags.source !== this.lastSource) {
+      if (isVertexInRange(this.lastSource, n)) {
+        this.includeVertexDirty(this.lastSource);
+      }
+      if (isVertexInRange(flags.source, n)) {
+        this.includeVertexDirty(flags.source);
+      }
+    }
+
+    if (flags.finish !== this.lastFinish) {
+      if (this.lastFinish !== undefined && isVertexInRange(this.lastFinish, n)) {
+        this.includeVertexDirty(this.lastFinish);
+      }
+      if (flags.finish !== undefined && isVertexInRange(flags.finish, n)) {
+        this.includeVertexDirty(flags.finish);
+      }
+    }
+
+    if (
+      flags.photoFinish &&
+      flags.finish !== undefined &&
+      isVertexInRange(flags.finish, n) &&
+      (flags.photoFinish !== this.lastPhotoFinish ||
+        flags.finish !== this.lastFinish ||
+        flags.source !== this.lastSource)
+    ) {
+      const path = buildPhotoFinishPath(state, flags.finish, flags.source);
+      if (path !== null) {
+        for (const v of path) {
+          this.includeVertexDirty(v);
+        }
+      }
+    }
+  }
+
+  /**
    * Whether vertex `v` should show a pivot flare ring at the current work cursor.
    */
   private shouldDrawPivotFlare(v: number, state: LaneState): boolean {
@@ -731,6 +858,42 @@ export class Renderer {
         ctx.stroke();
       }
     }
+
+    this.drawSourceFinishMarks(ctx, state, flags);
+  }
+
+  /**
+   * Draw source and finish vertex rings on the overlay layer.
+   */
+  private drawSourceFinishMarks(
+    ctx: DrawContext,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): void {
+    const graph = this.graph;
+    const camera = this.camera;
+    const n = state.n;
+    const radius = camera.radius;
+
+    if (isVertexInRange(flags.source, n)) {
+      const cx = projectX(camera, vertexX(graph, flags.source));
+      const cy = projectY(camera, vertexY(graph, flags.source));
+      ctx.strokeStyle = SOURCE_MARK_STROKE;
+      ctx.lineWidth = MARK_LINE_WIDTH;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.stroke();
+    }
+
+    if (flags.finish !== undefined && isVertexInRange(flags.finish, n)) {
+      const cx = projectX(camera, vertexX(graph, flags.finish));
+      const cy = projectY(camera, vertexY(graph, flags.finish));
+      ctx.strokeStyle = FINISH_MARK_STROKE;
+      ctx.lineWidth = MARK_LINE_WIDTH;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.stroke();
+    }
   }
 
   /**
@@ -792,6 +955,52 @@ export class Renderer {
         x = nextX;
       }
     }
+
+    this.drawPhotoFinishPath(ctx, state, flags);
+  }
+
+  /**
+   * Stroke the gold shortest-path polyline on the fx layer when photo-finish is active.
+   */
+  private drawPhotoFinishPath(
+    ctx: DrawContext,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): void {
+    if (!flags.photoFinish) {
+      return;
+    }
+    if (flags.finish === undefined || !isVertexInRange(flags.finish, state.n)) {
+      return;
+    }
+
+    const path = buildPhotoFinishPath(state, flags.finish, flags.source);
+    if (path === null) {
+      return;
+    }
+
+    const graph = this.graph;
+    const camera = this.camera;
+
+    ctx.strokeStyle = PHOTO_FINISH_GOLD;
+    ctx.lineWidth = PHOTO_FINISH_LINE_WIDTH;
+    ctx.beginPath();
+
+    for (let i = 0; i < path.length; i += 1) {
+      const v = path[i];
+      if (v === undefined) {
+        throw new Error(`photo-finish path[${String(i)}] is missing`);
+      }
+      const x = projectX(camera, vertexX(graph, v));
+      const y = projectY(camera, vertexY(graph, v));
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+
+    ctx.stroke();
   }
 
   /**

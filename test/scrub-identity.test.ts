@@ -13,6 +13,8 @@ function compareLane(a: LaneState, b: LaneState): void {
   expect(a.n).toBe(b.n);
   expect(a.m).toBe(b.m);
   expect(a.settledCount).toBe(b.settledCount);
+  expect(a.outOfOrderSettles).toBe(b.outOfOrderSettles);
+  expect(a.maxSettledDist).toBe(b.maxSettledDist);
   expect(a.eventIndex).toBe(b.eventIndex);
   expect(a.work).toBe(b.work);
   expect(a.relaxations).toBe(b.relaxations);
@@ -39,6 +41,18 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aOrder = a.settleOrder[v];
     const bOrder = b.settleOrder[v];
     expect(aOrder).toBe(bOrder);
+
+    const aPred = a.pred[v];
+    const bPred = b.pred[v];
+    expect(aPred).toBe(bPred);
+
+    const aDist = a.dist[v];
+    const bDist = b.dist[v];
+    expect(aDist).toBe(bDist);
+
+    const aSettleWork = a.settleWork[v];
+    const bSettleWork = b.settleWork[v];
+    expect(aSettleWork).toBe(bSettleWork);
 
     const aFrontier = a.frontier[v];
     const bFrontier = b.frontier[v];

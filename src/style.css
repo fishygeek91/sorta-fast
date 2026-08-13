@@ -38,6 +38,13 @@ body {
   text-align: center;
 }
 
+.lens-mode-nav {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
 .lens-title {
   margin: 0;
   font-size: 1.5rem;
@@ -220,4 +227,154 @@ body {
   margin: 0;
   font-size: 0.9rem;
   color: rgb(120, 40, 40);
+}
+
+/* --- Race mode (issue #14) --- */
+
+.race-root {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: min(1200px, 100%);
+  flex: 1;
+  gap: 1rem;
+}
+
+.race-lanes {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+.race-lanes[data-lanes="2"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.race-lanes[data-lanes="3"] {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 720px) {
+  .race-lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.race-lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(180, 176, 168);
+  border-radius: 4px;
+  background: rgb(255, 252, 247);
+}
+
+.race-lane[data-persona="marble"] {
+  box-shadow: inset 0 3px 0 rgb(180, 176, 168);
+}
+
+.race-lane[data-persona="ember"] {
+  box-shadow: inset 0 3px 0 rgba(180, 70, 40, 0.55);
+}
+
+.race-lane[data-persona="moss"] {
+  box-shadow: inset 0 3px 0 rgba(60, 110, 70, 0.55);
+}
+
+.race-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border: 1px solid rgb(180, 176, 168);
+  border-radius: 4px;
+  background: rgb(246, 244, 239);
+}
+
+.race-counters {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-counter-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.race-progress {
+  width: 100%;
+  height: 0.35rem;
+  border: none;
+  border-radius: 2px;
+  background: rgb(235, 230, 220);
+  overflow: hidden;
+  accent-color: rgb(80, 72, 60);
+}
+
+.race-progress::-webkit-progress-bar {
+  background: rgb(235, 230, 220);
+  border-radius: 2px;
+}
+
+.race-progress::-webkit-progress-value {
+  background: rgb(80, 72, 60);
+  border-radius: 2px;
+}
+
+.race-progress::-moz-progress-bar {
+  background: rgb(80, 72, 60);
+  border-radius: 2px;
+}
+
+.race-transport {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.race-transport button,
+.race-transport select {
+  font: inherit;
+}
+
+.race-transport button,
+.race-transport select {
+  font-size: 0.9rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgb(180, 176, 168);
+  border-radius: 4px;
+  background: rgb(255, 252, 247);
+  color: inherit;
+}
+
+.race-transport button {
+  cursor: pointer;
+}
+
+.race-transport button:hover,
+.race-transport select:hover {
+  background: rgb(255, 248, 236);
+}
+
+.race-banner {
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgb(180, 176, 168);
+  border-radius: 4px;
+  background: rgb(255, 248, 236);
+}
+
+.race-banner[hidden] {
+  display: none;
 }

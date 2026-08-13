@@ -1,4 +1,4 @@
 import "./style.css";
-import { mountLens } from "./ui/lens.ts";
+import { mountRace } from "./ui/race.ts";
 
-mountLens();
+mountRace();

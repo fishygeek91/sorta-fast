@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { bmsspParams } from "../src/core/bmssp/params.ts";
-import { packCsr } from "../src/core/graph.ts";
+import { generateGraph, packCsr } from "../src/core/graph.ts";
 import { type TraceChunk, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import { D_BLOCK_CAP, LaneState, UNSETTLED } from "../src/harness/laneState.ts";
 import { KEYFRAME_OPS, TraceBuffer } from "../src/harness/traceBuffer.ts";
+import { drainRun } from "./dijkstra-helpers.ts";
 
 /** Assert two lane snapshots are identical (scrub-safe fields + live counters). */
 function compareLane(a: LaneState, b: LaneState): void {
   expect(a.n).toBe(b.n);
   expect(a.m).toBe(b.m);
   expect(a.settledCount).toBe(b.settledCount);
+  expect(a.outOfOrderSettles).toBe(b.outOfOrderSettles);
+  expect(a.maxSettledDist).toBe(b.maxSettledDist);
   expect(a.eventIndex).toBe(b.eventIndex);
   expect(a.work).toBe(b.work);
   expect(a.relaxations).toBe(b.relaxations);
@@ -37,6 +40,18 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aOrder = a.settleOrder[v];
     const bOrder = b.settleOrder[v];
     expect(aOrder).toBe(bOrder);
+
+    const aPred = a.pred[v];
+    const bPred = b.pred[v];
+    expect(aPred).toBe(bPred);
+
+    const aDist = a.dist[v];
+    const bDist = b.dist[v];
+    expect(aDist).toBe(bDist);
+
+    const aSettleWork = a.settleWork[v];
+    const bSettleWork = b.settleWork[v];
+    expect(aSettleWork).toBe(bSettleWork);
 
     const aFrontier = a.frontier[v];
     const bFrontier = b.frontier[v];
@@ -535,7 +550,7 @@ describe("BMSSP overlay state", () => {
       { k: "recurse", dir: "out", level: 0, bound: 50 },
     ]);
     const buf = new TraceBuffer(graph, chunks);
-    const fresh = new LaneState(graph.n, graph.m);
+    const fresh = new TraceBuffer(graph, chunks).state;
 
     buf.seekWork(buf.totalWork);
     expect(buf.state.recursionDepth).toBe(0);
@@ -579,5 +594,49 @@ describe("BMSSP overlay state", () => {
     buf.seekWork(midT);
 
     compareLane(buf.state, forward.state);
+  });
+});
+
+describe("TraceBuffer photo-finish path reconstruction", () => {
+  it("chain 0→1→2: pred/dist/settleWork after full seek", () => {
+    const w01 = 3;
+    const w12 = 5;
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: w01 },
+        { from: 1, to: 2, weight: w12 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+      { k: "relax", e: 1, improved: true, cost: 1 },
+      { k: "settle", v: 2, order: 2, cost: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks, 0);
+    buf.seekWork(buf.totalWork);
+
+    expect(buf.state.pred[1]).toBe(0);
+    expect(buf.state.pred[2]).toBe(1);
+    expect(buf.state.dist[0]).toBe(0);
+    expect(buf.state.dist[1]).toBe(w01);
+    expect(buf.state.dist[2]).toBe(w01 + w12);
+    expect(buf.state.settleWork[0]).not.toBe(UNSETTLED);
+    expect(buf.state.settleWork[1]).not.toBe(UNSETTLED);
+    expect(buf.state.settleWork[2]).not.toBe(UNSETTLED);
+  });
+
+  it("Dijkstra maze trace has zero out-of-order settles", () => {
+    const graph = generateGraph("maze", 40, 1);
+    const source = 0;
+    const { events } = drainRun(graph, source);
+    const chunks = chunksFromEvents(events);
+    const buf = new TraceBuffer(graph, chunks, source);
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.outOfOrderSettles).toBe(0);
   });
 });

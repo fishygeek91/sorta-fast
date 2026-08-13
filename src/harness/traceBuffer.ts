@@ -27,6 +27,8 @@ export const KEYFRAME_OPS = 250_000;
  * event locate and binary-search seek. {@link state} is the live cursor;
  * {@link seekWork} restores from keyframes when scrubbing backward.
  * {@link appendChunk} extends the trace incrementally for streaming playback.
+ * Reconstructs shortest-path tree fields (`pred`, `dist`, `settleWork`) and
+ * out-of-order settle counts for photo-finish playback (#14).
  */
 export class TraceBuffer {
   readonly graph: Graph;
@@ -38,6 +40,9 @@ export class TraceBuffer {
   private chunkOfEvent: Uint32Array;
   private rowOfEvent: Uint32Array;
   private workAfter: Uint32Array;
+  private readonly source: number;
+  /** CSR edge index → tail vertex for relax pred/dist reconstruction. */
+  private readonly edgeSources: Uint32Array;
   private readonly keyframes: LaneState[];
   /** Lane state at the end of indexed events; used only for keyframe continuation. */
   private readonly indexState: LaneState;
@@ -55,14 +60,25 @@ export class TraceBuffer {
    * @param graph - CSR graph for relax target lookup.
    * @param chunks - Completed trace slabs (array copied; column buffers shared).
    *                 Pass `[]` for an empty trace that can grow via {@link appendChunk}.
-   * @throws If `graph.n` is invalid, a row cost is missing, or a kind is unknown.
+   * @param source - SSSP source vertex; `dist[source]` is 0 at playback start (default 0).
+   * @throws If `graph.n` is invalid, `source` is out of range, a row cost is missing,
+   *         or a kind is unknown.
    */
-  constructor(graph: Graph, chunks: readonly TraceChunk[]) {
+  constructor(graph: Graph, chunks: readonly TraceChunk[], source: number = 0) {
     if (!Number.isInteger(graph.n) || graph.n < 0) {
       throw new Error(`graph.n must be an integer >= 0, got ${String(graph.n)}`);
     }
+    if (graph.n > 0) {
+      if (!Number.isInteger(source) || source < 0 || source >= graph.n) {
+        throw new Error(
+          `source must be an integer in [0, ${String(graph.n)}), got ${String(source)}`,
+        );
+      }
+    }
 
     this.graph = graph;
+    this.source = source;
+    this.edgeSources = buildEdgeSources(graph);
     this.chunks = chunks.slice();
 
     let totalEvents = 0;
@@ -102,6 +118,9 @@ export class TraceBuffer {
 
     this.totalWork = cumulativeWork;
     this.state = new LaneState(graph.n, graph.m);
+    if (graph.n > 0) {
+      this.state.dist[this.source] = 0;
+    }
     this.indexState = this.state.clone();
 
     this.keyframes = [];
@@ -350,6 +369,14 @@ export class TraceBuffer {
           target.settleOrder[vertex] = order;
           target.frontier[vertex] = 0;
           target.settledCount += 1;
+          target.settleWork[vertex] = target.work + cost;
+          const dv = target.dist[vertex];
+          if (dv < target.maxSettledDist) {
+            target.outOfOrderSettles += 1;
+          }
+          if (dv > target.maxSettledDist) {
+            target.maxSettledDist = dv;
+          }
         } else {
           throw new Error(
             `double settle on vertex ${String(vertex)} at event ${String(eventIndex)}`,
@@ -382,6 +409,21 @@ export class TraceBuffer {
               `relax target ${String(to)} out of range [0, ${String(target.n)}) at event ${String(eventIndex)}`,
             );
           }
+          const from = this.edgeSources[edge];
+          if (from === undefined) {
+            throw new Error(
+              `missing relax source for edge ${String(edge)} at event ${String(eventIndex)}`,
+            );
+          }
+          const weight = this.graph.weights[edge];
+          if (weight === undefined || !Number.isFinite(weight)) {
+            throw new Error(
+              `missing or non-finite relax weight for edge ${String(edge)} at event ${String(eventIndex)}`,
+            );
+          }
+          const fromDist = target.dist[from];
+          target.pred[to] = from;
+          target.dist[to] = fromDist + weight;
           if (target.settleOrder[to] === UNSETTLED) {
             target.frontier[to] = 1;
           }
@@ -672,6 +714,37 @@ export class TraceBuffer {
     }
     return best;
   }
+}
+
+/**
+ * Read CSR `offsets[i]`, throwing when the slot is missing.
+ */
+function offsetAt(offsets: Uint32Array, i: number): number {
+  const value = offsets[i];
+  if (value === undefined) {
+    throw new Error(`offsets[${String(i)}] is missing`);
+  }
+  return value;
+}
+
+/**
+ * Build CSR edge index → source vertex lookup for relax pred/dist reconstruction.
+ *
+ * @param graph - CSR graph whose `offsets` define out-edge ranges.
+ * @returns `edgeSources[e]` = tail vertex of edge `e`.
+ */
+function buildEdgeSources(graph: Graph): Uint32Array {
+  const edgeSources = new Uint32Array(graph.m);
+  const n = graph.n;
+  const offsets = graph.offsets;
+  for (let v = 0; v < n; v += 1) {
+    const start = offsetAt(offsets, v);
+    const end = offsetAt(offsets, v + 1);
+    for (let e = start; e < end; e += 1) {
+      edgeSources[e] = v;
+    }
+  }
+  return edgeSources;
 }
 
 /**

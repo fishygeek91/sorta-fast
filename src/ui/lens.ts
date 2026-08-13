@@ -12,6 +12,7 @@ import {
   type TraceRunRequest,
 } from "../workers/protocol.ts";
 import { formatBmsspNarration } from "./narration.ts";
+import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
 /** Visible canvas edge length in CSS pixels. */
@@ -29,6 +30,16 @@ const LENS_SIZE_KEYS = ["S", "M", "L"] as const;
 type LensSizeKey = (typeof LENS_SIZE_KEYS)[number];
 
 /**
+ * Lens location query string: canonical lens fields plus `mode=lens`.
+ *
+ * Race is the default app mount; without `mode=lens` a refresh would load Race
+ * even while Lens UI is active (#14).
+ */
+function lensLocationQuery(state: LensUrlState): string {
+  return `${serializeLensUrl(state)}&mode=lens`;
+}
+
+/**
  * Mount Lens mode into `#app`: worker-streamed single-lane playback and renderer.
  *
  * Parses and canonicalizes `?g=&n=&seed=&algo=` on boot. Algorithm and graph
@@ -44,7 +55,7 @@ export function mountLens(): void {
   }
 
   let lensState: LensUrlState = parseLensUrl(window.location.search);
-  history.replaceState(null, "", serializeLensUrl(lensState) + window.location.hash);
+  history.replaceState(null, "", lensLocationQuery(lensState) + window.location.hash);
 
   root.replaceChildren();
 
@@ -59,7 +70,29 @@ export function mountLens(): void {
   subtitle.className = "lens-subtitle";
   subtitle.textContent = "Lens";
 
-  header.append(title, subtitle);
+  const modeNav = document.createElement("div");
+  modeNav.className = "lens-mode-nav";
+
+  const raceModeBtn = document.createElement("button");
+  raceModeBtn.type = "button";
+  raceModeBtn.textContent = "Race";
+  raceModeBtn.addEventListener("click", () => {
+    const raceState = parseRaceUrl(window.location.search);
+    history.replaceState(
+      null,
+      "",
+      serializeRaceUrl({ ...raceState, mode: "race" }) + window.location.hash,
+    );
+    window.location.reload();
+  });
+
+  const lensModeBtn = document.createElement("button");
+  lensModeBtn.type = "button";
+  lensModeBtn.textContent = "Lens";
+  lensModeBtn.disabled = true;
+
+  modeNav.append(raceModeBtn, lensModeBtn);
+  header.append(title, subtitle, modeNav);
 
   const canvas = document.createElement("canvas");
   canvas.className = "lens-canvas";
@@ -651,7 +684,7 @@ export function mountLens(): void {
    */
   function applyLensState(next: LensUrlState): void {
     lensState = next;
-    history.replaceState(null, "", serializeLensUrl(lensState) + window.location.hash);
+    history.replaceState(null, "", lensLocationQuery(lensState) + window.location.hash);
     syncGraphControls();
     syncAlgoUi();
     startRun();
