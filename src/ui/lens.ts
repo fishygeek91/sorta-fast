@@ -472,7 +472,13 @@ export function mountLens(): void {
           const graph = graphFromMessage(message);
           playback = new Playback(graph, []);
           playback.beginStreaming();
-          playback.setSpeed(speed);
+
+          const graphSpeed = Number(speedSelect.value);
+          if (!Number.isFinite(graphSpeed)) {
+            showStatus(`invalid speed select value: ${speedSelect.value}`);
+          } else {
+            playback.setSpeed(graphSpeed);
+          }
 
           if (renderer === null) {
             renderer = new Renderer({

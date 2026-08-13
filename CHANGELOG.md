@@ -41,6 +41,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- `TraceBuffer.appendChunk` replaces the trailing end keyframe instead of accumulating one per slab (#8).
+- Lens applies the current speed select when the worker graph arrives, so a mid-generation speed change is not ignored (#8).
 - Lens rAF paints only while playing so a paused 5k-node graph does not redraw every frame (#8).
 - Dijkstra trace worker copies CSR/layout typed arrays before `postMessage` transfer so `onGraph` no longer detaches buffers Dijkstra still reads (#8).
 - `Playback.stepOp` advances the work-clock cursor so multi-cost heap events can be stepped through (#7).

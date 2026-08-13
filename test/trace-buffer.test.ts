@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { packCsr } from "../src/core/graph.ts";
-import { type TraceEvent, TraceWriter } from "../src/core/trace.ts";
+import { type TraceChunk, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import { type LaneState, UNSETTLED } from "../src/harness/laneState.ts";
 import { KEYFRAME_OPS, TraceBuffer } from "../src/harness/traceBuffer.ts";
 
@@ -30,6 +30,23 @@ function compareLane(a: LaneState, b: LaneState): void {
     const bRelaxWork = b.lastRelaxWork[e];
     expect(aRelaxWork).toBe(bRelaxWork);
   }
+}
+
+/** Read keyframe table length for appendChunk cadence tests. */
+function keyframeCount(buf: TraceBuffer): number {
+  return buf.keyframeCount;
+}
+
+/** Build a single-event trace slab. */
+function singleEventChunk(event: TraceEvent): TraceChunk {
+  const writer = new TraceWriter();
+  writer.append(event);
+  const chunks = writer.takeChunks();
+  const chunk = chunks[0];
+  if (chunk === undefined) {
+    throw new Error("expected at least one chunk from single event");
+  }
+  return chunk;
 }
 
 /** Encode events into trace chunks via TraceWriter. */
@@ -180,6 +197,29 @@ describe("TraceBuffer appendChunk streaming", () => {
     expect(buf.state.eventIndex).toBe(0);
     expect(buf.state.work).toBe(0);
     expect(buf.state.settledCount).toBe(0);
+  });
+
+  it("small appendChunk slabs replace trailing end keyframe instead of accumulating", () => {
+    const graph = packCsr(1, [], [0], [0]);
+    const events: TraceEvent[] = [
+      { k: "heap", op: "push", cmps: 1 },
+      { k: "heap", op: "push", cmps: 1 },
+      { k: "heap", op: "push", cmps: 1 },
+      { k: "heap", op: "push", cmps: 1 },
+    ];
+
+    const incremental = new TraceBuffer(graph, []);
+    for (const event of events) {
+      incremental.appendChunk(singleEventChunk(event));
+    }
+
+    expect(incremental.totalWork).toBeLessThan(KEYFRAME_OPS);
+    expect(keyframeCount(incremental)).toBe(2);
+
+    const oneShot = new TraceBuffer(graph, chunksFromEvents(events));
+    incremental.seekWork(incremental.totalWork);
+    oneShot.seekWork(oneShot.totalWork);
+    compareLane(incremental.state, oneShot.state);
   });
 
   it("incremental append matches one-shot buffer at end seek", () => {

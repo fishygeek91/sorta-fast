@@ -37,6 +37,11 @@ export class TraceBuffer {
   /** Last keyframe bucket `floor(work / KEYFRAME_OPS)` for append cadence. */
   private lastKeyframeK: number;
 
+  /** Number of keyframe snapshots (T=0, interval, trailing end). */
+  get keyframeCount(): number {
+    return this.keyframes.length;
+  }
+
   /**
    * Build indices, keyframes, and an empty playback cursor.
    *
@@ -188,7 +193,15 @@ export class TraceBuffer {
       throw new Error("TraceBuffer: missing initial keyframe");
     }
     if (lastKeyframe.eventIndex !== this.totalEvents) {
-      this.keyframes.push(this.indexState.clone());
+      const prev = this.keyframes[this.keyframes.length - 2];
+      const isTrailingEndMarker =
+        prev !== undefined &&
+        Math.floor(lastKeyframe.work / KEYFRAME_OPS) === Math.floor(prev.work / KEYFRAME_OPS);
+      if (isTrailingEndMarker) {
+        this.keyframes[this.keyframes.length - 1] = this.indexState.clone();
+      } else {
+        this.keyframes.push(this.indexState.clone());
+      }
     }
   }
 
