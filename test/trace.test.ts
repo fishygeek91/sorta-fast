@@ -301,6 +301,18 @@ function totalCount(chunks: TraceChunk[]): number {
   return chunks.reduce((sum, chunk) => sum + chunk.count, 0);
 }
 
+/** Assert every SoA column length matches {@link TraceChunk.count}. */
+function expectChunkColumnsRightSized(chunk: TraceChunk): void {
+  expect(chunk.kind.length).toBe(chunk.count);
+  expect(chunk.vertex.length).toBe(chunk.count);
+  expect(chunk.edge.length).toBe(chunk.count);
+  expect(chunk.aux0.length).toBe(chunk.count);
+  expect(chunk.aux1.length).toBe(chunk.count);
+  expect(chunk.aux2.length).toBe(chunk.count);
+  expect(chunk.auxF.length).toBe(chunk.count);
+  expect(chunk.cost.length).toBe(chunk.count);
+}
+
 describe("TraceWriter", () => {
   it("defaults chunk capacity to DEFAULT_CHUNK_CAPACITY", () => {
     const writer = new TraceWriter();
@@ -315,7 +327,42 @@ describe("TraceWriter", () => {
       throw new Error("missing chunk");
     }
     expect(chunk.count).toBe(3);
-    expect(chunk.kind.length).toBe(DEFAULT_CHUNK_CAPACITY);
+    expectChunkColumnsRightSized(chunk);
+  });
+
+  it("partial flush right-sizes column arrays to count", () => {
+    const capacity = 8;
+    const writer = new TraceWriter(capacity);
+    for (let i = 0; i < 3; i += 1) {
+      writer.append({ k: "pivot", v: i, level: i });
+    }
+    const chunk = writer.takeChunks()[0];
+    if (chunk === undefined) {
+      throw new Error("missing partial chunk");
+    }
+    expect(chunk.count).toBe(3);
+    expectChunkColumnsRightSized(chunk);
+  });
+
+  it("full slab freeze keeps zero-copy capacity-length columns", () => {
+    const capacity = 4;
+    const writer = new TraceWriter(capacity);
+    for (let i = 0; i < capacity; i += 1) {
+      writer.append({ k: "heap", op: "push", cmps: i });
+    }
+    const chunk = writer.takeChunks()[0];
+    if (chunk === undefined) {
+      throw new Error("missing full chunk");
+    }
+    expect(chunk.count).toBe(capacity);
+    expect(chunk.kind.length).toBe(capacity);
+    expect(chunk.vertex.length).toBe(capacity);
+    expect(chunk.edge.length).toBe(capacity);
+    expect(chunk.aux0.length).toBe(capacity);
+    expect(chunk.aux1.length).toBe(capacity);
+    expect(chunk.aux2.length).toBe(capacity);
+    expect(chunk.auxF.length).toBe(capacity);
+    expect(chunk.cost.length).toBe(capacity);
   });
 
   it("rotates full slabs and keeps remainder when capacity is 3", () => {

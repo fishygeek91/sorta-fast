@@ -660,11 +660,8 @@ export function transferables(chunk: TraceChunk): ArrayBuffer[] {
  * a filled slab is rotated out so its buffers can be transferred).
  *
  * Each slab owns arrays of length `capacity`; {@link TraceChunk.count} tracks
- * filled rows. Full slabs are rotated onto a completed list.
- *
- * TODO(#13): `flush()` of a partial slab still transfers the full-capacity
- * backing buffers (~2.3 MB at the default 65536 rows). Right-size the final
- * flush (copy into exact-length arrays) or accept the overhead in the worker.
+ * filled rows. Full slabs are rotated onto a completed list. A partial flush
+ * copies columns to exact length so transferables are not full-capacity buffers.
  */
 export class TraceWriter {
   private readonly capacity: number;
@@ -736,20 +733,37 @@ export class TraceWriter {
   }
 
   /**
-   * Snapshot the current slab at `count` filled rows. Column arrays are
-   * transferred by reference; the caller must not write them after freeze.
+   * Snapshot the current slab at `count` filled rows.
+   *
+   * Full slabs (`count === capacity`) return column arrays by reference for
+   * zero-copy transfer. Partial slabs copy each column with `.slice(0, count)`
+   * so backing buffers match the filled row count.
    */
   private freezeSlab(count: number): TraceChunk {
+    if (count === this.capacity) {
+      return {
+        count,
+        kind: this.slab.kind,
+        vertex: this.slab.vertex,
+        edge: this.slab.edge,
+        aux0: this.slab.aux0,
+        aux1: this.slab.aux1,
+        aux2: this.slab.aux2,
+        auxF: this.slab.auxF,
+        cost: this.slab.cost,
+      };
+    }
+
     return {
       count,
-      kind: this.slab.kind,
-      vertex: this.slab.vertex,
-      edge: this.slab.edge,
-      aux0: this.slab.aux0,
-      aux1: this.slab.aux1,
-      aux2: this.slab.aux2,
-      auxF: this.slab.auxF,
-      cost: this.slab.cost,
+      kind: this.slab.kind.slice(0, count),
+      vertex: this.slab.vertex.slice(0, count),
+      edge: this.slab.edge.slice(0, count),
+      aux0: this.slab.aux0.slice(0, count),
+      aux1: this.slab.aux1.slice(0, count),
+      aux2: this.slab.aux2.slice(0, count),
+      auxF: this.slab.auxF.slice(0, count),
+      cost: this.slab.cost.slice(0, count),
     };
   }
 }
