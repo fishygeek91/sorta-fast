@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- `resolveRaceFinishVertex` and `isBfsReachable` so Race can warn on `?target=` equal to the source, out of range, or unreachable instead of silently substituting (#14).
 - `mountRace` UI (#14): multi-lane canvases, shared transport/scrubber, per-lane counters and progress, photo-finish banner, and `RaceWorkerPool` wiring; default app entry is Race mode with Lens via `?mode=lens`.
 - Headless race UI acceptance tests in `test/race-ui-ac.test.ts`: lanesFromSearch, live counters, 3-lane stub, photo-finish banner/rewind, and Dijkstra OOO=0 (#14).
 - RaceScheduler photo-finish cap (#14): `setFinishVertex` freezes each lane at `settleWork[finish]` once that settle is known; `lanePhotoFrozen` / `allPhotoFrozen` for UI; auto-pause when every lane is photo-frozen.
@@ -69,6 +70,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Photo-finish freeze no longer forward-replays then rewinds frozen lanes on every `syncLanes` call; clamp to `settleWork[finish]` before the seek so later frames no-op (#14).
 - Lens URL writes keep `mode=lens` so refresh stays on Lens after Race became the default mount (#14).
 - Race mode tears down its rAF loop and `RaceWorkerPool` when switching to Lens so detached canvases are not repainted (#14).
 - Lens BMSSP narration no longer stays on stale FindPivots text through D insert/pull: `batchRound` clears on `dstruct`; `lastPullN` resets on `recurse.in` (#12).
@@ -84,6 +86,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- `RaceScheduler` takes an explicit `source` (default 0) and passes it into each `TraceBuffer` (#14).
 - Default mount is Race mode; Lens is available via `?mode=lens` or the header mode button (#14).
 - `TraceWriter.freezeSlab` copies partial-flush columns to `count` length so worker transferables are not full 64k-row slabs (~2.3 MB); full slabs stay zero-copy (#13).
 - Removed the temporary #6/#7 main-thread Dijkstra scaffold in `src/main.ts` (#8).

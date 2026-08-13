@@ -23,6 +23,8 @@ import { WorkClock } from "./workClock.ts";
 export class RaceScheduler {
   readonly clock: WorkClock;
   readonly graph: Graph;
+  /** SSSP source vertex shared by all lane trace buffers. */
+  readonly source: number;
 
   private readonly buffers: TraceBuffer[];
   private readonly laneCompleteFlags: boolean[];
@@ -35,21 +37,30 @@ export class RaceScheduler {
    *
    * @param graph - CSR graph shared by all lanes.
    * @param laneCount - Number of race lanes; must be 2 or 3.
-   * @throws If `laneCount` is not 2 or 3, or graph validation fails.
+   * @param source - SSSP source vertex for every lane buffer (default 0).
+   * @throws If `laneCount` is not 2 or 3, `source` is out of range, or graph validation fails.
    */
-  constructor(graph: Graph, laneCount: number) {
+  constructor(graph: Graph, laneCount: number, source: number = 0) {
     if (!Number.isInteger(laneCount) || (laneCount !== 2 && laneCount !== 3)) {
       throw new Error(`laneCount must be 2 or 3, got ${String(laneCount)}`);
     }
 
+    const n = graph.n;
+    if (n > 0) {
+      if (!Number.isInteger(source) || source < 0 || source >= n) {
+        throw new Error(`source must be an integer in [0, ${String(n)}), got ${String(source)}`);
+      }
+    }
+
     this.graph = graph;
+    this.source = source;
     this._laneCount = laneCount;
     this.clock = new WorkClock();
     this.buffers = [];
     this.laneCompleteFlags = [];
 
     for (let lane = 0; lane < laneCount; lane += 1) {
-      this.buffers.push(new TraceBuffer(graph, []));
+      this.buffers.push(new TraceBuffer(graph, [], source));
       this.laneCompleteFlags.push(false);
     }
   }
@@ -357,8 +368,14 @@ export class RaceScheduler {
   }
 
   /**
-   * Seek every lane to `min(appliedCursor, lane.totalWork)`, then cap at
-   * `settleWork[finishVertex]` when the finish settle is known (#14).
+   * Seek every lane to the photo-finish-capped applied cursor (#14).
+   *
+   * When the finish settle is already known, clamp `target` to
+   * `settleWork[finishVertex]` before the forward seek so frozen lanes avoid
+   * replaying past the settle every frame. When the cursor first crosses the
+   * settle this frame, a second seek recaps at `settleWork[finishVertex]`;
+   * later syncs hit {@link TraceBuffer.seekWork}'s early return when
+   * `desiredEventIndex === state.eventIndex`.
    *
    * Pauses playback when all lanes are photo-frozen (same rule as end-of-trace).
    */
@@ -366,12 +383,18 @@ export class RaceScheduler {
     const appliedT = this.appliedCursor;
     const finish = this._finishVertex;
     for (const buffer of this.buffers) {
-      const cap = Math.min(appliedT, buffer.totalWork);
-      buffer.seekWork(cap);
+      let target = Math.min(appliedT, buffer.totalWork);
+      if (finish !== null) {
+        const swBefore = buffer.state.settleWork[finish];
+        if (swBefore !== UNSETTLED) {
+          target = Math.min(target, swBefore);
+        }
+      }
+      buffer.seekWork(target);
       if (finish !== null) {
         const sw = buffer.state.settleWork[finish];
-        if (sw !== UNSETTLED) {
-          buffer.seekWork(Math.min(appliedT, buffer.totalWork, sw));
+        if (sw !== UNSETTLED && buffer.state.work > sw) {
+          buffer.seekWork(sw);
         }
       }
     }

@@ -31,6 +31,15 @@ describe("RaceScheduler constructor", () => {
     expect(() => new RaceScheduler(graph, 1)).toThrow(/laneCount must be 2 or 3/);
     expect(() => new RaceScheduler(graph, 4)).toThrow(/laneCount must be 2 or 3/);
   });
+
+  it("accepts explicit source 0 and rejects out-of-range source", () => {
+    const graph = packCsr(3, [], [0, 1, 2], [0, 0, 0]);
+    const race = new RaceScheduler(graph, 2, 0);
+    expect(race.source).toBe(0);
+    expect(() => new RaceScheduler(graph, 2, -1)).toThrow(/source must be an integer/);
+    expect(() => new RaceScheduler(graph, 2, 3)).toThrow(/source must be an integer/);
+    expect(() => new RaceScheduler(graph, 2, 1.5)).toThrow(/source must be an integer/);
+  });
 });
 
 describe("RaceScheduler shared seek", () => {
@@ -356,6 +365,56 @@ describe("RaceScheduler photo-finish freeze", () => {
     expect(() => race.setFinishVertex(-1)).toThrow(/finish vertex must be an integer/);
     expect(() => race.setFinishVertex(2)).toThrow(/finish vertex must be an integer/);
     expect(() => race.setFinishVertex(1.5)).toThrow(/finish vertex must be an integer/);
+  });
+
+  it("frozen lane eventIndex is stable across two syncs past freeze", () => {
+    const graph = packCsr(3, [], [0, 1, 2], [0, 0, 0]);
+
+    const lane0Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+      { k: "settle", v: 2, order: 2, cost: 1 },
+      { k: "heap", op: "push", cmps: 5 },
+      { k: "heap", op: "push", cmps: 3 },
+    ];
+    const lane1Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "heap", op: "push", cmps: 4 },
+      { k: "heap", op: "push", cmps: 5 },
+    ];
+
+    const race = new RaceScheduler(graph, 2);
+    for (const chunk of chunksFromEvents(lane0Events)) {
+      race.appendChunk(0, chunk);
+    }
+    for (const chunk of chunksFromEvents(lane1Events)) {
+      race.appendChunk(1, chunk);
+    }
+
+    expect(race.laneTotalWork(0)).toBe(11);
+    expect(race.laneTotalWork(1)).toBe(12);
+
+    race.markLaneComplete(0);
+    race.setFinishVertex(1);
+
+    race.seek(5);
+    const frozenEventIndex = race.laneState(0).eventIndex;
+    const frozenWork = race.laneState(0).work;
+    const lane1EventIndexAfterFirst = race.laneState(1).eventIndex;
+
+    expect(race.laneState(0).settleWork[1]).toBe(2);
+    expect(frozenWork).toBe(2);
+    expect(race.lanePhotoFrozen(0)).toBe(true);
+    expect(race.lanePhotoFrozen(1)).toBe(false);
+
+    race.seek(8);
+
+    expect(race.laneState(0).eventIndex).toBe(frozenEventIndex);
+    expect(race.laneState(0).work).toBe(frozenWork);
+    expect(race.laneState(1).eventIndex).toBeGreaterThan(lane1EventIndexAfterFirst);
+    expect(race.lanePhotoFrozen(0)).toBe(true);
+    expect(race.lanePhotoFrozen(1)).toBe(false);
   });
 });
 

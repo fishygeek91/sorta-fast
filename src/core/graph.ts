@@ -638,6 +638,72 @@ function randomWeight(rng: Mulberry32): number {
 }
 
 /**
+ * BFS reachability mask on CSR out-edges from `source`.
+ *
+ * @param graph - CSR graph.
+ * @param source - Start vertex; must be an integer in `[0, graph.n)`.
+ * @param context - Prefix for internal error messages (caller name).
+ * @returns `visited[v] === 1` when `v` is reachable from `source`.
+ * @throws When `source` is out of range or CSR indices are inconsistent.
+ */
+function bfsVisited(graph: Graph, source: number, context: string): Uint8Array {
+  if (!Number.isInteger(source) || source < 0 || source >= graph.n) {
+    throw new Error(`source must be an integer in [0, ${graph.n}), got ${String(source)}`);
+  }
+
+  const visited = new Uint8Array(graph.n);
+  const queue: number[] = [source];
+  visited[source] = 1;
+  let head = 0;
+
+  while (head < queue.length) {
+    const v = queue[head];
+    head += 1;
+    if (v === undefined) {
+      throw new Error(`${context}: BFS queue was sparse`);
+    }
+    const start = graph.offsets[v];
+    const end = graph.offsets[v + 1];
+    if (start === undefined || end === undefined) {
+      throw new Error(`${context}: missing offsets for vertex ${v}`);
+    }
+    for (let e = start; e < end; e += 1) {
+      const u = graph.targets[e];
+      if (u === undefined) {
+        throw new Error(`${context}: missing target at edge ${e}`);
+      }
+      if (visited[u] === 0) {
+        visited[u] = 1;
+        queue.push(u);
+      }
+    }
+  }
+
+  return visited;
+}
+
+/**
+ * Whether `vertex` is BFS-reachable from `source` on CSR out-edges.
+ *
+ * @param graph - CSR graph.
+ * @param source - Start vertex; must be an integer in `[0, graph.n)`.
+ * @param vertex - Vertex to test; must be an integer in `[0, graph.n)`.
+ * @returns `true` when `vertex === source` or visited during BFS from `source`.
+ * @throws When `source` or `vertex` is out of range.
+ */
+export function isBfsReachable(graph: Graph, source: number, vertex: number): boolean {
+  if (!Number.isInteger(vertex) || vertex < 0 || vertex >= graph.n) {
+    throw new Error(`vertex must be an integer in [0, ${graph.n}), got ${String(vertex)}`);
+  }
+  if (vertex === source) {
+    return true;
+  }
+
+  const visited = bfsVisited(graph, source, "isBfsReachable");
+  return visited[vertex] === 1;
+}
+
+/**
  * Pick the race photo-finish vertex for a directed graph.
  *
  * Runs BFS from `source` on the CSR out-edges, then chooses the reachable
@@ -661,33 +727,7 @@ export function pickFinishVertex(graph: Graph, source: number): number {
     throw new Error(`non-finite coordinates at source vertex ${source}`);
   }
 
-  const visited = new Uint8Array(graph.n);
-  const queue: number[] = [source];
-  visited[source] = 1;
-  let head = 0;
-
-  while (head < queue.length) {
-    const v = queue[head];
-    head += 1;
-    if (v === undefined) {
-      throw new Error("pickFinishVertex: BFS queue was sparse");
-    }
-    const start = graph.offsets[v];
-    const end = graph.offsets[v + 1];
-    if (start === undefined || end === undefined) {
-      throw new Error(`pickFinishVertex: missing offsets for vertex ${v}`);
-    }
-    for (let e = start; e < end; e += 1) {
-      const u = graph.targets[e];
-      if (u === undefined) {
-        throw new Error(`pickFinishVertex: missing target at edge ${e}`);
-      }
-      if (visited[u] === 0) {
-        visited[u] = 1;
-        queue.push(u);
-      }
-    }
-  }
+  const visited = bfsVisited(graph, source, "pickFinishVertex");
 
   let bestVertex = -1;
   let bestDistSq = -1;

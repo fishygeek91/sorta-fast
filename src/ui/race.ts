@@ -2,13 +2,13 @@
  * Race mode UI: multi-lane playback with worker-streamed traces (issue #14).
  */
 
-import { pickFinishVertex, type Graph } from "../core/graph.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
+import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceUrlState } from "./raceUrl.ts";
 
@@ -319,26 +319,6 @@ export function mountRace(): void {
   }
 
   /**
-   * Resolve finish vertex from URL target or graph layout.
-   *
-   * @param graph - Streamed CSR graph for the race.
-   */
-  function resolveFinishVertex(graph: Graph): number | null {
-    const target = raceState.target;
-    if (target !== null && target !== 0 && target < graph.n) {
-      return target;
-    }
-
-    try {
-      return pickFinishVertex(graph, SOURCE_VERTEX);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      showStatus(detail);
-      return null;
-    }
-  }
-
-  /**
    * Terminate any in-flight workers and post a fresh multi-lane trace run.
    */
   function startRun(): void {
@@ -378,16 +358,21 @@ export function mountRace(): void {
 
     pool.start(spec, {
       onGraph: (graph) => {
-        race = new RaceScheduler(graph, configs.length);
+        race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX);
         race.setSpeed(speed);
 
-        const finish = resolveFinishVertex(graph);
-        if (finish === null) {
+        const resolution = resolveRaceFinishVertex(graph, SOURCE_VERTEX, raceState.target);
+        if (resolution.status !== null) {
+          showStatus(resolution.status);
+        } else {
+          clearStatus();
+        }
+        if (resolution.finish === null) {
           return;
         }
 
-        finishVertex = finish;
-        race.setFinishVertex(finish);
+        finishVertex = resolution.finish;
+        race.setFinishVertex(resolution.finish);
 
         for (let lane = 0; lane < configs.length; lane += 1) {
           const ui = laneUis[lane];
@@ -401,7 +386,6 @@ export function mountRace(): void {
           });
         }
 
-        clearStatus();
         drawFrame();
       },
       onChunk: (lane, chunk) => {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { generateGraph, packCsr, pickFinishVertex, type CsrEdge } from "../src/core/graph.ts";
+import {
+  generateGraph,
+  isBfsReachable,
+  packCsr,
+  pickFinishVertex,
+  type CsrEdge,
+} from "../src/core/graph.ts";
 
 describe("pickFinishVertex", () => {
   it("picks the farthest reachable vertex on a 3-node line", () => {
@@ -57,5 +63,26 @@ describe("pickFinishVertex", () => {
 
     expect(() => pickFinishVertex(graph, -1)).toThrow(/source must be an integer/);
     expect(() => pickFinishVertex(graph, 2)).toThrow(/source must be an integer/);
+  });
+});
+
+describe("isBfsReachable", () => {
+  const edges: CsrEdge[] = [
+    { from: 0, to: 1, weight: 1 },
+    { from: 1, to: 2, weight: 1 },
+  ];
+  const graph = packCsr(3, edges, [0, 1, 3], [0, 0, 0]);
+
+  it("returns true for the source vertex", () => {
+    expect(isBfsReachable(graph, 0, 0)).toBe(true);
+  });
+
+  it("returns true for a reachable vertex", () => {
+    expect(isBfsReachable(graph, 0, 2)).toBe(true);
+  });
+
+  it("returns false for an unreachable vertex", () => {
+    const unreachable = packCsr(3, [{ from: 0, to: 1, weight: 1 }], [0, 1, 2], [0, 0, 0]);
+    expect(isBfsReachable(unreachable, 0, 2)).toBe(false);
   });
 });
