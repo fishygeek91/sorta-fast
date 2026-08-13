@@ -35,9 +35,10 @@ export const DSTRUCT_OP = { insert: 0, batchPrepend: 1, pull: 2 } as const;
  * costs may be defined — encode() and costOf() read this table; emitters
  * must not hardcode a cost.
  *
- * Headline work-clock metric (later UI "comparisons") = sum of per-event
+ * Headline work-clock metric (UI "comparisons") = sum of per-event
  * costs. Secondary Fairness-panel numbers are kind counts from tally(),
- * not extra fees. "Vertices settled out of order" is derived later (#7/#16).
+ * not extra fees. "Vertices settled out of order" is computed in the
+ * harness and documented in the Fairness panel (#16).
  *
  * - comparison: unit for heap/dstruct `cmps` (cost = cmps * comparison).
  * - relax: one billed op for the d[u]+w < d[v] test (union `cost: 1`).

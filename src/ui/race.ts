@@ -1,5 +1,5 @@
 /**
- * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15).
+ * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
@@ -7,6 +7,7 @@ import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
+import { mountDisclosures } from "./disclosures.ts";
 import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
@@ -277,6 +278,7 @@ export function mountRace(): void {
 
   transport.append(transportButtons, speedLabel, scrubLabel, bannerEl, statusEl);
   raceRoot.append(lanesEl, transport);
+  mountDisclosures(raceRoot);
   root.append(header, raceRoot);
 
   const pool = new RaceWorkerPool();

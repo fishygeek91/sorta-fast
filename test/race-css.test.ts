@@ -63,3 +63,41 @@ describe("race mode CSS", () => {
     expect(css).toMatch(/#race-dice-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/);
   });
 });
+
+describe("site disclosures CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  /**
+   * Slice of the stylesheet from the first 720px media query onward.
+   *
+   * Avoids brace-matching that depends on indented inner `}` closings.
+   *
+   * @param stylesheet - Full `style.css` source.
+   * @returns Text from `@media (max-width: 720px)` to the end of the file.
+   */
+  function cssFromMedia720(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(index);
+  }
+
+  it("defines site disclosure container and panel classes", () => {
+    expect(css).toContain(".site-disclosures");
+    expect(css).toContain(".site-disclosure");
+    expect(css).toContain(".site-disclosure-body");
+  });
+
+  it("matches lens control width when footer is direct child of #app", () => {
+    expect(css).toContain("#app > .site-disclosures");
+    expect(css).toMatch(
+      /#app\s*>\s*\.site-disclosures\s*\{[\s\S]*?width:\s*min\(720px,\s*calc\(100vw\s*-\s*2rem\)\)/,
+    );
+  });
+
+  it("stacks disclosures vertically below 720px", () => {
+    const afterMedia = cssFromMedia720(css);
+    expect(afterMedia).toContain(".site-disclosures");
+    expect(afterMedia).toMatch(/\.site-disclosures\s*\{[\s\S]*?flex-direction:\s*column/);
+  });
+});
