@@ -32,6 +32,8 @@ import {
 import { sheetSize, type ExportSheetSpec } from "./exportSheet.ts";
 import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
+import { mountStory } from "./story.ts";
+import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
@@ -84,9 +86,10 @@ type LaneUi = {
 /**
  * Mount Race mode into `#app`: multi-lane worker-streamed playback and renderers.
  *
- * Parses and canonicalizes race URL params on boot. When `mode=lens`, delegates
- * to {@link mountLens}. Transport, scrubber, photo-finish banner, and per-lane
- * counters mirror issue #14.
+ * Parses and canonicalizes race URL params on boot. When `mode=story`, delegates
+ * to {@link mountStory} (peek via {@link isStorySearch}; {@link RaceUrlState.mode}
+ * stays `race` | `lens`). When `mode=lens`, delegates to {@link mountLens}. Transport,
+ * scrubber, photo-finish banner, and per-lane counters mirror issue #14.
  *
  * @throws If `#app` is missing from `index.html`.
  */
@@ -94,6 +97,11 @@ export function mountRace(): void {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (root === null) {
     throw new Error("Missing #app root element in index.html");
+  }
+
+  if (isStorySearch(window.location.search)) {
+    mountStory();
+    return;
   }
 
   let raceState: RaceUrlState = parseRaceUrl(window.location.search);
@@ -137,7 +145,17 @@ export function mountRace(): void {
     mountLens();
   });
 
-  modeNav.append(raceModeBtn, lensModeBtn);
+  const storyModeBtn = document.createElement("button");
+  storyModeBtn.type = "button";
+  storyModeBtn.textContent = "Story";
+  storyModeBtn.id = "race-story-button";
+  storyModeBtn.addEventListener("click", () => {
+    history.replaceState(null, "", serializeStoryUrl(DEFAULT_STORY_URL) + window.location.hash);
+    teardown();
+    mountStory();
+  });
+
+  modeNav.append(raceModeBtn, lensModeBtn, storyModeBtn);
 
   const graphControls = document.createElement("div");
   graphControls.className = "lens-graph-controls race-gallery";

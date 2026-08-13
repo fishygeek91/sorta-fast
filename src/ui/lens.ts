@@ -17,6 +17,7 @@ import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
+import { DEFAULT_STORY_URL, serializeStoryUrl } from "./storyUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
@@ -100,7 +101,16 @@ export function mountLens(): void {
   lensModeBtn.textContent = "Lens";
   lensModeBtn.disabled = true;
 
-  modeNav.append(raceModeBtn, lensModeBtn);
+  const storyModeBtn = document.createElement("button");
+  storyModeBtn.type = "button";
+  storyModeBtn.textContent = "Story";
+  storyModeBtn.id = "lens-story-button";
+  storyModeBtn.addEventListener("click", () => {
+    history.replaceState(null, "", serializeStoryUrl(DEFAULT_STORY_URL) + window.location.hash);
+    window.location.reload();
+  });
+
+  modeNav.append(raceModeBtn, lensModeBtn, storyModeBtn);
 
   const canvas = document.createElement("canvas");
   canvas.className = "lens-canvas";

@@ -15,6 +15,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 - Worker generate-progress messages + Race/Lens generating bar; chunk paints coalesced to rAF (#20).
 - XL labeled "XL (stress)" in pickers (#20).
 - Headless tests: generators, picker scans, protocol progress, aggregated renderer, `test/render-perf-xl.test.ts` (33.3ms XL draw), `test/race-xl-stall.test.ts` (50ms append+draw stall) (#20).
+- Story mode: click/scroll-driven four-step tour (Dijkstra wavefront → sorting-cost callout → BMSSP pivots/batches → side-by-side race) on the seeded city/500/1729 gallery graph with live `RaceScheduler` playback; skippable to Race free play, with the `forest` step reserved for #27 (#19).
 - Shared `src/ui/bmsspUrl.ts` helpers for Race/Lens `bmssp`/`bk`/`bt` parse so the two codecs stay in sync (#52).
 - Race and Lens gallery control Demo (browser-scale) vs Paper (asymptotic) writes `bmssp=` and restarts the BMSSP worker; `Playback` takes optional `findPivotsK` so Lens narration matches paper/override k (#52).
 - `resolveBmsspRunParams` harness helper so Race/Lens can resolve k/t without importing `src/core/bmssp/` (#52).
