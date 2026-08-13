@@ -9,6 +9,15 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- `mountRace` UI (#14): multi-lane canvases, shared transport/scrubber, per-lane counters and progress, photo-finish banner, and `RaceWorkerPool` wiring; default app entry is Race mode with Lens via `?mode=lens`.
+- Headless race UI acceptance tests in `test/race-ui-ac.test.ts`: lanesFromSearch, live counters, 3-lane stub, photo-finish banner/rewind, and Dijkstra OOO=0 (#14).
+- RaceScheduler photo-finish cap (#14): `setFinishVertex` freezes each lane at `settleWork[finish]` once that settle is known; `lanePhotoFrozen` / `allPhotoFrozen` for UI; auto-pause when every lane is photo-frozen.
+- Renderer gold path + source/finish marks (#14): `PHOTO_FINISH_GOLD` pred-walk stroke on the fx layer when `photoFinish` is true; source/finish vertex rings on the overlay via `OverlayFlags.source`, `finish`, and `photoFinish`.
+- Pure photo-finish helpers in `src/ui/photoFinish.ts`: lane freeze check, gold-path walk, race banner formatting with per-lane op totals, and lane counter snapshot (#14).
+- TraceBuffer reconstructs `pred`/`dist`/`settleWork` and out-of-order settles for photo-finish playback (#14).
+- Race mode CSS layout (#14): `.race-root` column stack, 2/3-lane `.race-lanes` grid with mobile single-column stack at 720px, per-lane canvas/counters/progress panels, shared `.race-transport`, photo-finish `.race-banner`, and tabular counter numerals.
+- `pickFinishVertex` for race photo-finish: BFS-reachable farthest layout vertex from source, tie-break by lowest id (#14).
+- Race URL codec and lane config helpers: `parseRaceUrl` / `serializeRaceUrl` for `?g=&n=&seed=&mode=&target=&lane3=` (Lens-style fallbacks) and `lanesFromSearch` for 2- or 3-lane layouts when `lane3=dijkstra` (#14).
 - Multi-lane race harness (#13): `RaceScheduler` shares one `WorkClock` across 2–3 `TraceBuffer`s with stream-while-generating (`streamCap` / `appliedCursor`), unequal-finish freeze wiring (`laneFinished`), and bidirectional seek/step. `RaceWorkerPool` spawns one existing Vite worker per lane from the same graphSpec+seed and routes chunks by lane index. `runTraceJob` dispatches Dijkstra/BMSSP jobs for headless tests. Worker parsers (`parseWorkerToMain`, `graphFromTraceMessage`, `isTraceChunk`) live in `protocol.ts` so Lens and the pool share them.
 - 3-lane × 25k stall budget test (`test/race-scheduler-perf.test.ts`): maze `SIZE_PRESETS.L` Dijkstra trace reused on three lanes; 124998 events; worst `appendChunk` 7.07ms, speed-8 `advance(1/60)` 0.34ms, seek-back 0.04ms vs 50ms (#13).
 - `test/replay-perf.test.ts` BMSSP M-size draw budget: maze `SIZE_PRESETS.M` via `runBmsspTraceJob`, fully settled `TraceBuffer`, stub-canvas `Renderer` with all overlay toggles on, best-of-3 vs `DRAW_BUDGET_MS` (50ms) plus optional speed-8 frame timing (#12).
@@ -60,6 +69,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Lens URL writes keep `mode=lens` so refresh stays on Lens after Race became the default mount (#14).
+- Race mode tears down its rAF loop and `RaceWorkerPool` when switching to Lens so detached canvases are not repainted (#14).
 - Lens BMSSP narration no longer stays on stale FindPivots text through D insert/pull: `batchRound` clears on `dstruct`; `lastPullN` resets on `recurse.in` (#12).
 - `TraceBuffer` throws on `recurse.out` past depth 0 instead of silently clamping (#12).
 - `TraceBuffer.appendChunk` replaces the trailing end keyframe instead of accumulating one per slab (#8).
@@ -73,6 +84,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Default mount is Race mode; Lens is available via `?mode=lens` or the header mode button (#14).
 - `TraceWriter.freezeSlab` copies partial-flush columns to `count` length so worker transferables are not full 64k-row slabs (~2.3 MB); full slabs stay zero-copy (#13).
 - Removed the temporary #6/#7 main-thread Dijkstra scaffold in `src/main.ts` (#8).
 - Renderer composites only the dirty rect after the first full frame so Canvas2D blit cost matches settle/frontier diffs (#6).

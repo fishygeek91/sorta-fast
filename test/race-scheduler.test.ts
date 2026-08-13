@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { packCsr } from "../src/core/graph.ts";
 import { type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import { BASE_OPS_PER_SECOND } from "../src/harness/workClock.ts";
+import { UNSETTLED } from "../src/harness/laneState.ts";
 import { RaceScheduler } from "../src/harness/raceScheduler.ts";
 import { TraceBuffer } from "../src/harness/traceBuffer.ts";
 
@@ -234,6 +235,127 @@ describe("RaceScheduler.stepOp", () => {
     race.stepOp();
     expect(race.appliedCursor).toBe(5);
     expect(race.laneState(0).work).toBe(5);
+  });
+});
+
+describe("RaceScheduler photo-finish freeze", () => {
+  it("caps lane work at settleWork[finish] when finish vertex is set", () => {
+    const graph = packCsr(3, [], [0, 1, 2], [0, 0, 0]);
+
+    const lane0Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+      { k: "settle", v: 2, order: 2, cost: 1 },
+    ];
+    const lane1Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+
+    const race = new RaceScheduler(graph, 2);
+    for (const chunk of chunksFromEvents(lane0Events)) {
+      race.appendChunk(0, chunk);
+    }
+    for (const chunk of chunksFromEvents(lane1Events)) {
+      race.appendChunk(1, chunk);
+    }
+
+    race.setFinishVertex(1);
+    race.markLaneComplete(0);
+    race.markLaneComplete(1);
+
+    race.seek(10);
+
+    const lane0 = race.laneState(0);
+    const lane1 = race.laneState(1);
+    expect(lane0.settleWork[1]).toBe(2);
+    expect(lane1.settleWork[1]).toBe(2);
+    expect(lane0.work).toBe(lane0.settleWork[1]);
+    expect(lane1.work).toBe(lane1.settleWork[1]);
+    expect(lane0.work).toBe(2);
+    expect(lane0.work).not.toBe(race.laneTotalWork(0));
+    expect(race.lanePhotoFrozen(0)).toBe(true);
+    expect(race.lanePhotoFrozen(1)).toBe(true);
+    expect(race.allPhotoFrozen()).toBe(true);
+  });
+
+  it("unfreezes finish vertex when scrubbing back before the settle", () => {
+    const graph = packCsr(3, [], [0, 1, 2], [0, 0, 0]);
+
+    const lane0Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+      { k: "settle", v: 2, order: 2, cost: 1 },
+    ];
+    const lane1Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+
+    const race = new RaceScheduler(graph, 2);
+    for (const chunk of chunksFromEvents(lane0Events)) {
+      race.appendChunk(0, chunk);
+    }
+    for (const chunk of chunksFromEvents(lane1Events)) {
+      race.appendChunk(1, chunk);
+    }
+
+    race.setFinishVertex(1);
+    race.markLaneComplete(0);
+    race.markLaneComplete(1);
+    race.seek(10);
+    expect(race.allPhotoFrozen()).toBe(true);
+
+    race.seek(0);
+    expect(race.laneState(0).settleOrder[1]).toBe(UNSETTLED);
+    expect(race.laneState(1).settleOrder[1]).toBe(UNSETTLED);
+    expect(race.lanePhotoFrozen(0)).toBe(false);
+    expect(race.lanePhotoFrozen(1)).toBe(false);
+    expect(race.allPhotoFrozen()).toBe(false);
+  });
+
+  it("applies full traces when finish vertex is unset", () => {
+    const graph = packCsr(2, [], [0, 1], [0, 0]);
+
+    const lane0Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+    const lane1Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+      { k: "heap", op: "push", cmps: 1 },
+    ];
+
+    const race = new RaceScheduler(graph, 2);
+    for (const chunk of chunksFromEvents(lane0Events)) {
+      race.appendChunk(0, chunk);
+    }
+    for (const chunk of chunksFromEvents(lane1Events)) {
+      race.appendChunk(1, chunk);
+    }
+
+    race.markLaneComplete(0);
+    race.markLaneComplete(1);
+    expect(race.finishVertex).toBeNull();
+
+    race.seek(10);
+    expect(race.clock.cursor).toBe(5);
+    expect(race.appliedCursor).toBe(5);
+    expect(race.laneState(0).work).toBe(2);
+    expect(race.laneState(1).work).toBe(5);
+    expect(race.laneFinished(0)).toBe(true);
+    expect(race.laneFinished(1)).toBe(true);
+    expect(race.allPhotoFrozen()).toBe(false);
+  });
+
+  it("rejects out-of-range finish vertex", () => {
+    const graph = packCsr(2, [], [0, 1], [0, 0]);
+    const race = new RaceScheduler(graph, 2);
+    expect(() => race.setFinishVertex(-1)).toThrow(/finish vertex must be an integer/);
+    expect(() => race.setFinishVertex(2)).toThrow(/finish vertex must be an integer/);
+    expect(() => race.setFinishVertex(1.5)).toThrow(/finish vertex must be an integer/);
   });
 });
 

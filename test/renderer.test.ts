@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { packCsr, type Graph } from "../src/core/graph.ts";
 import { LaneState } from "../src/harness/laneState.ts";
-import { GHOST_WINDOW_OPS, Renderer } from "../src/render/renderer.ts";
+import { GHOST_WINDOW_OPS, PHOTO_FINISH_GOLD, Renderer } from "../src/render/renderer.ts";
 import {
   createFakeSurface,
   getFakeContext,
@@ -117,6 +117,16 @@ function dstructStripFillRects(fx: FakeCanvasSurface): DrawCall[] {
   );
 }
 
+function fxGoldStrokeCalls(fx: FakeCanvasSurface): DrawCall[] {
+  return fxCalls(fx).filter(
+    (call) => call.op === "stroke" && call.strokeStyle === PHOTO_FINISH_GOLD,
+  );
+}
+
+function overlayStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayCalls(overlay).filter((call) => call.op === "stroke");
+}
+
 describe("Renderer", () => {
   it("draws settled and frontier state without throwing", () => {
     const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0.2, 0.8], [0.5, 0.5]);
@@ -198,7 +208,7 @@ describe("Renderer", () => {
 
     renderer.draw(state, { frontier: false });
 
-    expect(overlayArcCount(overlay)).toBe(0);
+    expect(overlayArcCount(overlay)).toBe(1);
   });
 
   it("draws relaxed-edge ghosts on the overlay by default", () => {
@@ -293,7 +303,7 @@ describe("Renderer", () => {
 
     renderer.draw(state, { frontier: false, pivotFlares: false });
 
-    expect(overlayArcCount(overlay)).toBe(0);
+    expect(overlayArcCount(overlay)).toBe(1);
   });
 
   it("draws batch bloom fill on the fx layer by default", () => {
@@ -354,5 +364,79 @@ describe("Renderer", () => {
     renderer.draw(state, { dstructStrip: false });
 
     expect(dstructStripFillRects(fx)).toHaveLength(0);
+  });
+
+  it("draws photo-finish gold path on the fx layer when photoFinish is true", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.pred[1] = 0;
+    state.settleOrder[0] = 0;
+    state.settleOrder[1] = 1;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      recursionTint: false,
+      pivotFlares: false,
+      batchBlooms: false,
+      dstructStrip: false,
+      photoFinish: true,
+      finish: 1,
+    });
+
+    expect(fxGoldStrokeCalls(fx).length).toBeGreaterThan(0);
+  });
+
+  it("skips photo-finish gold path on the fx layer when photoFinish is false", () => {
+    const graph = tinyGraph();
+    const { renderer, fx } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.pred[1] = 0;
+    state.settleOrder[0] = 0;
+    state.settleOrder[1] = 1;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      recursionTint: false,
+      pivotFlares: false,
+      batchBlooms: false,
+      dstructStrip: false,
+      photoFinish: false,
+      finish: 1,
+    });
+
+    expect(fxGoldStrokeCalls(fx)).toHaveLength(0);
+  });
+
+  it("draws source and finish vertex rings on the overlay layer", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      pivotFlares: false,
+      source: 0,
+    });
+
+    const baseArcs = overlayArcCount(overlay);
+    const baseStrokes = overlayStrokeCalls(overlay).length;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      pivotFlares: false,
+      source: 0,
+      finish: 1,
+    });
+
+    expect(overlayArcCount(overlay)).toBeGreaterThan(baseArcs);
+    expect(overlayStrokeCalls(overlay).length).toBeGreaterThan(baseStrokes);
   });
 });

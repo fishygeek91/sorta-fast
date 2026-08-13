@@ -9,7 +9,7 @@
 
 import { type Graph } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
-import { LaneState } from "./laneState.ts";
+import { LaneState, UNSETTLED } from "./laneState.ts";
 import { TraceBuffer } from "./traceBuffer.ts";
 import { WorkClock } from "./workClock.ts";
 
@@ -27,6 +27,8 @@ export class RaceScheduler {
   private readonly buffers: TraceBuffer[];
   private readonly laneCompleteFlags: boolean[];
   private readonly _laneCount: number;
+  /** Photo-finish target vertex, or `null` until {@link setFinishVertex}. */
+  private _finishVertex: number | null = null;
 
   /**
    * Build a paused scheduler at T = 0 with empty trace buffers per lane.
@@ -300,13 +302,92 @@ export class RaceScheduler {
   }
 
   /**
-   * Seek every lane to `min(appliedCursor, lane.totalWork)`.
+   * Photo-finish target vertex, or `null` until {@link setFinishVertex}.
+   */
+  get finishVertex(): number | null {
+    return this._finishVertex;
+  }
+
+  /**
+   * Set the shared finish vertex for photo-finish freeze (#14).
+   *
+   * Resyncs all lanes so the current cursor re-caps at each lane's
+   * `settleWork[finishVertex]` when that settle is already known.
+   *
+   * @param v - Vertex index in `[0, graph.n)`.
+   * @throws If `v` is not an integer in range.
+   */
+  setFinishVertex(v: number): void {
+    this.validateFinishVertex(v);
+    this._finishVertex = v;
+    this.syncLanes();
+  }
+
+  /**
+   * Whether lane `lane` has settled {@link finishVertex} at the current capped seek.
+   *
+   * False when no finish vertex is set or the finish has not been reached yet
+   * (e.g. after scrubbing before the settle event).
+   *
+   * @param lane - Lane index in `[0, laneCount)`.
+   * @throws If `lane` is out of range.
+   */
+  lanePhotoFrozen(lane: number): boolean {
+    const finish = this._finishVertex;
+    if (finish === null) {
+      return false;
+    }
+    const state = this.laneState(lane);
+    return state.settleOrder[finish] !== UNSETTLED;
+  }
+
+  /**
+   * Whether a finish vertex is set and every lane has photo-frozen at it.
+   */
+  allPhotoFrozen(): boolean {
+    if (this._finishVertex === null) {
+      return false;
+    }
+    for (let lane = 0; lane < this._laneCount; lane += 1) {
+      if (!this.lanePhotoFrozen(lane)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Seek every lane to `min(appliedCursor, lane.totalWork)`, then cap at
+   * `settleWork[finishVertex]` when the finish settle is known (#14).
+   *
+   * Pauses playback when all lanes are photo-frozen (same rule as end-of-trace).
    */
   private syncLanes(): void {
     const appliedT = this.appliedCursor;
+    const finish = this._finishVertex;
     for (const buffer of this.buffers) {
-      const target = Math.min(appliedT, buffer.totalWork);
-      buffer.seekWork(target);
+      const cap = Math.min(appliedT, buffer.totalWork);
+      buffer.seekWork(cap);
+      if (finish !== null) {
+        const sw = buffer.state.settleWork[finish];
+        if (sw !== UNSETTLED) {
+          buffer.seekWork(Math.min(appliedT, buffer.totalWork, sw));
+        }
+      }
+    }
+    if (this.allPhotoFrozen() && this.clock.playing) {
+      this.pause();
+    }
+  }
+
+  /**
+   * @param v - Finish vertex index in `[0, graph.n)`.
+   * @throws If `v` is not an integer in range.
+   */
+  private validateFinishVertex(v: number): void {
+    const n = this.graph.n;
+    if (!Number.isInteger(v) || v < 0 || v >= n) {
+      throw new Error(`finish vertex must be an integer in [0, ${String(n)}), got ${String(v)}`);
     }
   }
 

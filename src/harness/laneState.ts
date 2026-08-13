@@ -20,9 +20,11 @@ export const D_BLOCK_CAP = 64;
  * `settleOrder[v]` is {@link UNSETTLED} until vertex `v` settles, then its
  * 0-based settle index. `frontier[v]` is 1 when `v` is improved but not yet
  * settled. `lastRelaxWork[e]` is {@link UNSETTLED} until edge `e` improves,
- * then the billed work after that relax event. Scalars track how far playback
- * has advanced through the trace. BMSSP fields hold visual/narration state for
- * recurse depth, FindPivots batches, bloom regions, and schematic D blocks.
+ * then the billed work after that relax event. `pred[v]` and `dist[v]` mirror
+ * shortest-path tree state from relax events; `settleWork[v]` records billed
+ * work after the settle on `v`. Scalars track playback progress and out-of-order
+ * settle detection via `maxSettledDist`. BMSSP fields hold visual/narration state
+ * for recurse depth, FindPivots batches, bloom regions, and schematic D blocks.
  */
 export class LaneState {
   readonly n: number;
@@ -30,6 +32,21 @@ export class LaneState {
   readonly m: number;
   /** Per-vertex settle index, or {@link UNSETTLED} if not yet settled. */
   readonly settleOrder: Int32Array;
+  /**
+   * Predecessor vertex on the shortest-path tree, or {@link UNSETTLED} until an
+   * improving relax assigns one. The source stays {@link UNSETTLED}.
+   */
+  readonly pred: Int32Array;
+  /**
+   * Tentative shortest-path distance; `Infinity` until known. TraceBuffer sets
+   * `dist[source]` on playback start; constructor/reset do not know the source.
+   */
+  readonly dist: Float64Array;
+  /**
+   * Billed work after the settle event on vertex `v`, or {@link UNSETTLED} until
+   * `v` settles.
+   */
+  readonly settleWork: Int32Array;
   /** 1 if vertex is on the open frontier (improved, not settled); else 0. */
   readonly frontier: Uint8Array;
   /**
@@ -39,6 +56,16 @@ export class LaneState {
   readonly lastRelaxWork: Int32Array;
   /** Count of vertices with a settled order assigned. */
   settledCount: number;
+  /**
+   * Settles where `dist[v] < maxSettledDist` at settle time (out-of-order vs
+   * Dijkstra order). Incremented by TraceBuffer on each such settle.
+   */
+  outOfOrderSettles: number;
+  /**
+   * Maximum `dist[v]` among settled vertices so far; `-Infinity` when none
+   * settled. Lets TraceBuffer detect out-of-order settles without scanning.
+   */
+  maxSettledDist: number;
   /** Next trace event index to apply (0..totalEvents). */
   eventIndex: number;
   /** Billed ops applied so far (sum of chunk costs). */
@@ -113,12 +140,17 @@ export class LaneState {
     this.n = n;
     this.m = m;
     this.settleOrder = new Int32Array(n);
+    this.pred = new Int32Array(n);
+    this.dist = new Float64Array(n);
+    this.settleWork = new Int32Array(n);
     this.frontier = new Uint8Array(n);
     this.lastRelaxWork = new Int32Array(m);
     this.pivotFlareWork = new Int32Array(n);
     this.bloomVertex = new Uint8Array(n);
     this.dBlockSizes = new Int32Array(D_BLOCK_CAP);
     this.settledCount = 0;
+    this.outOfOrderSettles = 0;
+    this.maxSettledDist = -Infinity;
     this.eventIndex = 0;
     this.work = 0;
     this.relaxations = 0;
@@ -147,12 +179,17 @@ export class LaneState {
    */
   reset(): void {
     this.settleOrder.fill(UNSETTLED);
+    this.pred.fill(UNSETTLED);
+    this.dist.fill(Infinity);
+    this.settleWork.fill(UNSETTLED);
     this.frontier.fill(0);
     this.lastRelaxWork.fill(UNSETTLED);
     this.pivotFlareWork.fill(UNSETTLED);
     this.bloomVertex.fill(0);
     this.dBlockSizes.fill(0);
     this.settledCount = 0;
+    this.outOfOrderSettles = 0;
+    this.maxSettledDist = -Infinity;
     this.eventIndex = 0;
     this.work = 0;
     this.relaxations = 0;
@@ -204,12 +241,17 @@ export class LaneState {
       );
     }
     this.settleOrder.set(other.settleOrder);
+    this.pred.set(other.pred);
+    this.dist.set(other.dist);
+    this.settleWork.set(other.settleWork);
     this.frontier.set(other.frontier);
     this.lastRelaxWork.set(other.lastRelaxWork);
     this.pivotFlareWork.set(other.pivotFlareWork);
     this.bloomVertex.set(other.bloomVertex);
     this.dBlockSizes.set(other.dBlockSizes);
     this.settledCount = other.settledCount;
+    this.outOfOrderSettles = other.outOfOrderSettles;
+    this.maxSettledDist = other.maxSettledDist;
     this.eventIndex = other.eventIndex;
     this.work = other.work;
     this.relaxations = other.relaxations;

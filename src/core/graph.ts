@@ -636,3 +636,85 @@ function randomIndex(rng: Mulberry32, n: number): number {
 function randomWeight(rng: Mulberry32): number {
   return WEIGHT_LO + rng.next() * WEIGHT_SPAN;
 }
+
+/**
+ * Pick the race photo-finish vertex for a directed graph.
+ *
+ * Runs BFS from `source` on the CSR out-edges, then chooses the reachable
+ * vertex (other than `source`) whose layout is farthest from the source in
+ * squared Euclidean distance. Ties break toward the lowest vertex id.
+ *
+ * @param graph - CSR graph with layout coordinates.
+ * @param source - Start vertex; must be an integer in `[0, graph.n)`.
+ * @returns The finish vertex id.
+ * @throws When `source` is out of range, coordinates are missing or
+ *   non-finite, or no vertex other than `source` is BFS-reachable.
+ */
+export function pickFinishVertex(graph: Graph, source: number): number {
+  if (!Number.isInteger(source) || source < 0 || source >= graph.n) {
+    throw new Error(`source must be an integer in [0, ${graph.n}), got ${String(source)}`);
+  }
+
+  const sx = graph.x[source];
+  const sy = graph.y[source];
+  if (sx === undefined || sy === undefined || !Number.isFinite(sx) || !Number.isFinite(sy)) {
+    throw new Error(`non-finite coordinates at source vertex ${source}`);
+  }
+
+  const visited = new Uint8Array(graph.n);
+  const queue: number[] = [source];
+  visited[source] = 1;
+  let head = 0;
+
+  while (head < queue.length) {
+    const v = queue[head];
+    head += 1;
+    if (v === undefined) {
+      throw new Error("pickFinishVertex: BFS queue was sparse");
+    }
+    const start = graph.offsets[v];
+    const end = graph.offsets[v + 1];
+    if (start === undefined || end === undefined) {
+      throw new Error(`pickFinishVertex: missing offsets for vertex ${v}`);
+    }
+    for (let e = start; e < end; e += 1) {
+      const u = graph.targets[e];
+      if (u === undefined) {
+        throw new Error(`pickFinishVertex: missing target at edge ${e}`);
+      }
+      if (visited[u] === 0) {
+        visited[u] = 1;
+        queue.push(u);
+      }
+    }
+  }
+
+  let bestVertex = -1;
+  let bestDistSq = -1;
+
+  for (let v = 0; v < graph.n; v += 1) {
+    if (v === source || visited[v] === 0) {
+      continue;
+    }
+    const xv = graph.x[v];
+    const yv = graph.y[v];
+    if (xv === undefined || yv === undefined || !Number.isFinite(xv) || !Number.isFinite(yv)) {
+      throw new Error(`non-finite coordinates at vertex ${v}`);
+    }
+    const dx = xv - sx;
+    const dy = yv - sy;
+    const distSq = dx * dx + dy * dy;
+    if (distSq > bestDistSq || (distSq === bestDistSq && v < bestVertex)) {
+      bestDistSq = distSq;
+      bestVertex = v;
+    }
+  }
+
+  if (bestVertex < 0) {
+    throw new Error(
+      `no finish vertex: only source ${source} is reachable in a graph with n=${graph.n}`,
+    );
+  }
+
+  return bestVertex;
+}
