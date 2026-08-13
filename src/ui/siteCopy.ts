@@ -47,6 +47,8 @@ export type FairnessCopy = {
   secondary: string;
   /** Wall-clock honesty caveat. */
   honesty: string;
+  /** BMSSP k/t honesty: paper formula vs browser-scale demo defaults. */
+  params: string;
   /** Lead-in before linking {@link COST_TABLE_SOURCE_URL}. */
   sourceLead: string;
 };
@@ -77,6 +79,8 @@ export const FAIRNESS_COPY: FairnessCopy = {
     "Secondary counters are kind counts, not extra fees: heap ops, D-structure ops, relaxations, and vertices settled out of order (always 0 for Dijkstra — that invariant is the whole point of the classic rule).",
   honesty:
     "At browser scale (thousands to tens of thousands of nodes), Dijkstra with a binary heap often wins wall-clock time — asymptotics need enormous n and constants are real. We show you where Dijkstra still wins; the work clock is what makes the race fair and legible.",
+  params:
+    "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). Select bmssp=paper in the URL to race with the paper formula.",
   sourceLead: "The authoritative cost table lives in the core trace module:",
 };
 

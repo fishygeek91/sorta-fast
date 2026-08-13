@@ -14,5 +14,5 @@ We publicly claim the first implementation of the Feb 2026 algorithm. The test s
 3. **Golden traces**: small hand-verified graphs frozen as fixtures — catches trace-instrumentation regressions, not just distance bugs.
 4. **Trace audit**: replay the trace and re-derive distances from events alone; must equal the algorithm's own output.
 5. Cite paper sections/lemmas in comments next to the code that implements them (e.g. `// arXiv 2504.17033 Lemma 3.3`).
-6. Parameters: BMSSP k = ⌊log^{1/3} n⌋, t = ⌊log^{2/3} n⌋. Guard degenerate small-n cases explicitly and test them.
+6. Parameters: paper formula lives in `paperBmsspParams`; demo default is swept (`demoBmsspParams` / `bmsspParams`); both are tested; degenerate small-n still guarded.
 7. M6/DMSY: `docs/paper-notes.md` (issue #22) is the implementation spec. If you hit an ambiguity not covered there, add it to the ambiguity log with a section cite in the same PR — do not decide silently.

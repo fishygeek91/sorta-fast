@@ -30,11 +30,14 @@ export class Playback {
    *
    * @param graph - CSR graph for relax target lookup in the buffer.
    * @param chunks - Completed trace slabs for this lane (may be `[]` for streaming).
+   * @param findPivotsK - Optional FindPivots k forwarded to {@link TraceBuffer}
+   *   (default `bmsspParams(n).k`). Needed so paper/override races narrate the
+   *   k that the worker actually ran.
    * @throws If graph or chunk validation fails in {@link TraceBuffer}.
    */
-  constructor(graph: Graph, chunks: readonly TraceChunk[]) {
+  constructor(graph: Graph, chunks: readonly TraceChunk[], findPivotsK?: number) {
     this.clock = new WorkClock();
-    this.buffer = new TraceBuffer(graph, chunks);
+    this.buffer = new TraceBuffer(graph, chunks, 0, findPivotsK);
   }
 
   /**

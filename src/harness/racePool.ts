@@ -5,6 +5,7 @@
  * the default `Worker` constructor, no `Math.random()`, no `Date.now()`.
  */
 
+import { type BmsspParamMode } from "../core/bmssp/params.ts";
 import { GRAPH_KINDS, type Graph, type GraphKind } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
 import {
@@ -20,6 +21,12 @@ export type RaceSpec = {
   n: number;
   seed: number;
   source: number;
+  /** BMSSP only: `"demo"` or `"paper"`; omitted → demo {@link bmsspParams}(n). Dijkstra ignores. */
+  mode?: BmsspParamMode;
+  /** BMSSP only: optional level parameter k; omitted → mode default. Dijkstra ignores. */
+  k?: number;
+  /** BMSSP only: optional block parameter t; omitted → mode default. Dijkstra ignores. */
+  t?: number;
   /** Lane algorithms in race order; length 2 or 3. */
   lanes: readonly TraceAlgo[];
 };
@@ -104,6 +111,15 @@ export class RaceWorkerPool {
         seed: spec.seed,
         source: spec.source,
       };
+      if (spec.mode !== undefined) {
+        runMessage.mode = spec.mode;
+      }
+      if (spec.k !== undefined) {
+        runMessage.k = spec.k;
+      }
+      if (spec.t !== undefined) {
+        runMessage.t = spec.t;
+      }
       worker.postMessage(runMessage);
       nextWorkers.push(worker);
     }
@@ -205,6 +221,22 @@ function validateRaceSpec(spec: RaceSpec): void {
 
   if (!Number.isInteger(spec.source) || spec.source < 0 || spec.source >= spec.n) {
     throw new Error(`source must be an integer in [0, n), got ${String(spec.source)}`);
+  }
+
+  if (spec.mode !== undefined && spec.mode !== "demo" && spec.mode !== "paper") {
+    throw new Error(`mode must be "demo" or "paper", got ${String(spec.mode)}`);
+  }
+
+  if (spec.k !== undefined) {
+    if (!Number.isInteger(spec.k) || spec.k < 1) {
+      throw new Error(`k must be an integer >= 1, got ${String(spec.k)}`);
+    }
+  }
+
+  if (spec.t !== undefined) {
+    if (!Number.isInteger(spec.t) || spec.t < 1) {
+      throw new Error(`t must be an integer >= 1, got ${String(spec.t)}`);
+    }
   }
 }
 

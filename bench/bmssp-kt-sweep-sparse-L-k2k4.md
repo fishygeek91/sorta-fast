@@ -1,0 +1,30 @@
+# BMSSP k/t sweep (issue #52)
+
+Work = comparison-addition billed work from `scanCosts` on drained traces.
+Ratio = BMSSP work / Dijkstra work on the same seeded graph (source vertex 0).
+
+**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because
+Bowyer–Watson Delaunay generation is O(n²) (issue #32).
+
+| kind   |     n | seed |   k |   t | tVariant |   L | dijkstraWork | bmsspWork |  ratio |
+| ------ | ----: | ---: | --: | --: | -------- | --: | -----------: | --------: | -----: |
+| sparse | 25000 |    0 |   2 |   5 | paper    |   3 |       511273 |    518389 | 1.0139 |
+| sparse | 25000 |    0 |   4 |   5 | paper    |   3 |       511273 |    504852 | 0.9874 |
+| sparse | 25000 |    1 |   2 |   5 | paper    |   3 |       517412 |    528459 | 1.0214 |
+| sparse | 25000 |    1 |   4 |   5 | paper    |   3 |       517412 |    506841 | 0.9796 |
+| sparse | 25000 |    2 |   2 |   5 | paper    |   3 |       521388 |    542278 | 1.0401 |
+| sparse | 25000 |    2 |   4 |   5 | paper    |   3 |       521388 |    520858 | 0.9990 |
+| sparse | 25000 |    3 |   2 |   5 | paper    |   3 |       515380 |    524268 | 1.0172 |
+| sparse | 25000 |    3 |   4 |   5 | paper    |   3 |       515380 |    504826 | 0.9795 |
+| sparse | 25000 |    4 |   2 |   5 | paper    |   3 |       519411 |    527714 | 1.0160 |
+| sparse | 25000 |    4 |   4 |   5 | paper    |   3 |       519411 |    495618 | 0.9542 |
+| sparse | 25000 |    5 |   2 |   5 | paper    |   3 |       512045 |    521608 | 1.0187 |
+| sparse | 25000 |    5 |   4 |   5 | paper    |   3 |       512045 |    503380 | 0.9831 |
+| sparse | 25000 |    6 |   2 |   5 | paper    |   3 |       522686 |    526046 | 1.0064 |
+| sparse | 25000 |    6 |   4 |   5 | paper    |   3 |       522686 |    515698 | 0.9866 |
+| sparse | 25000 |    7 |   2 |   5 | paper    |   3 |       519739 |    542044 | 1.0429 |
+| sparse | 25000 |    7 |   4 |   5 | paper    |   3 |       519739 |    504138 | 0.9700 |
+| sparse | 25000 |    8 |   2 |   5 | paper    |   3 |       517269 |    519821 | 1.0049 |
+| sparse | 25000 |    8 |   4 |   5 | paper    |   3 |       517269 |    507524 | 0.9812 |
+| sparse | 25000 |    9 |   2 |   5 | paper    |   3 |       518889 |    527020 | 1.0157 |
+| sparse | 25000 |    9 |   4 |   5 | paper    |   3 |       518889 |    514881 | 0.9923 |

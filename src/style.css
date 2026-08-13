@@ -197,6 +197,8 @@ body {
 #race-kind-select,
 #race-size-select,
 #race-lanes-select,
+#race-bmssp-select,
+#lens-bmssp-select,
 #race-dice-button,
 #lens-dice-button {
   font: inherit;
@@ -210,6 +212,8 @@ body {
 #race-kind-select,
 #race-size-select,
 #race-lanes-select,
+#race-bmssp-select,
+#lens-bmssp-select,
 #race-dice-button,
 #lens-dice-button {
   font-size: var(--text-ui);
@@ -232,6 +236,8 @@ body {
 #race-kind-select:hover,
 #race-size-select:hover,
 #race-lanes-select:hover,
+#race-bmssp-select:hover,
+#lens-bmssp-select:hover,
 #race-dice-button:hover,
 #lens-dice-button:hover {
   background: var(--hover);

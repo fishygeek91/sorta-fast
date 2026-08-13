@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { paperBmsspParams } from "../src/core/bmssp/params.ts";
 import { type Graph } from "../src/core/graph.ts";
 import { type TraceChunk, tally } from "../src/core/trace.ts";
 import { Playback } from "../src/harness/playback.ts";
@@ -164,5 +165,24 @@ describe("runBmsspTraceJob validation", () => {
         { onGraph: () => {}, onChunk: () => {} },
       ),
     ).toThrow(/source must be an integer in \[0, n\)/);
+  });
+});
+
+describe("runBmsspTraceJob k/t overrides", () => {
+  it("different k on the same graph changes billed work", () => {
+    const paperT = paperBmsspParams(40).t;
+    const lowK = runJob({ ...SMALL_MAZE_SPEC, k: 2, t: paperT });
+    const highK = runJob({ ...SMALL_MAZE_SPEC, k: 8, t: paperT });
+
+    const lowWork = sumChunkTallies(lowK.chunks).work;
+    const highWork = sumChunkTallies(highK.chunks).work;
+    expect(lowWork).not.toBe(highWork);
+  });
+
+  it("paper mode bills different work than demo defaults on the same maze", () => {
+    const demo = runJob(SMALL_MAZE_SPEC);
+    const paper = runJob({ ...SMALL_MAZE_SPEC, mode: "paper" });
+
+    expect(sumChunkTallies(demo.chunks).work).not.toBe(sumChunkTallies(paper.chunks).work);
   });
 });

@@ -15,11 +15,11 @@ self.onmessage = (event: MessageEvent<TraceRunRequest>): void => {
     return;
   }
 
-  const { kind, n, seed, source } = request;
+  const { kind, n, seed, source, mode, k, t } = request;
 
   try {
     runBmsspTraceJob(
-      { kind, n, seed, source },
+      { kind, n, seed, source, mode, k, t },
       {
         onGraph(graph) {
           const offsets = graph.offsets.slice();

@@ -9,6 +9,19 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Shared `src/ui/bmsspUrl.ts` helpers for Race/Lens `bmssp`/`bk`/`bt` parse so the two codecs stay in sync (#52).
+- Race and Lens gallery control Demo (browser-scale) vs Paper (asymptotic) writes `bmssp=` and restarts the BMSSP worker; `Playback` takes optional `findPivotsK` so Lens narration matches paper/override k (#52).
+- `resolveBmsspRunParams` harness helper so Race/Lens can resolve k/t without importing `src/core/bmssp/` (#52).
+- Headless proof that the default race (sparse / 25k / seed 4, demo k/t) has BMSSP billed work below Dijkstra (`test/bmssp-demo-win.test.ts`) (#52).
+- Race and Lens URL codecs encode BMSSP mode (`bmssp=demo|paper`) and optional block overrides (`bk`, `bt`); work-clock scrub stays on `t` (#52).
+- Default race/lens gallery URL preset is sparse / 25k / seed 4 (sweep-winning config) (#52).
+- Optional BMSSP `k`/`t` on `BmsspTraceSpec`, `TraceJobSpec`, `TraceRunRequest`, and `RaceSpec`; workers and `RaceWorkerPool` forward overrides into `bmsspParams(n, { k, t })` (#52).
+- `TraceBuffer` / `RaceScheduler` accept optional `findPivotsK` so Lens narration uses the race's k instead of always recomputing `bmsspParams(n).k` (#52).
+- Headless BMSSP k/t sweep bench (`bench/bmssp-kt-sweep.ts`, `npm run bench:bmssp-kt`) comparing billed work vs Dijkstra across graph kinds, sizes, seeds, k values, and t variants; smoke via `--quick` (#52).
+- Committed BMSSP k/t sweep results table and write-up in `bench/bmssp-kt-sweep.md` with raw TSV artifacts; sparse L k=4 + paper t wins every seed 0–9 (#52).
+- Headless tests for k/t sweep config, `resolveT`, skip rules, and one `sweepCell` row (`test/bmssp-kt-sweep.test.ts`) (#52).
+- BMSSP `run` and `drainBmsspRun` accept optional `BmsspParams` overrides; omitted params keep `bmsspParams(n)` defaults (#52).
+- BMSSP `paperBmsspParams` preserves arXiv 2504.17033 §3.1 k/t; `bmsspParams` accepts optional overrides; `bmsspRecursionDepth` exposes Algorithm 3’s L (#52).
 - Race PNG photo-finish export: transport PNG button composites lane canvases with counters, banner, seed, and share URL baked into the image; gated on photo-finish freeze (#18).
 - Race WebM/mp4 export via MediaRecorder on a composite canvas, replaying the finished trace at the current speed (no algorithm re-run); Safari/unsupported browsers get mp4 or a status fallback that keeps PNG working. GIF encoder deferred (#18).
 - Headless export tests: `test/export-meta.test.ts`, `test/export-sheet.test.ts`, `test/export-download.test.ts`, `test/export-recorder.test.ts`, `test/export-mount.test.ts` (#18).
@@ -27,6 +40,11 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Pre-#52 share URLs without `bmssp=` now replay under demo k/t (`k = max(4, paper k)`); append `&bmssp=paper` to reproduce the old paper-asymptotic run (#52).
+- BMSSP workers and `RaceSpec` accept optional `mode` (`demo`|`paper`); omitted k/t now resolve through demo `bmsspParams`, not the paper formula (#52).
+- Fairness panel `params` paragraph discloses BMSSP paper k/t vs demo defaults (`k = max(4, paper k)`, paper t), FindPivots abort at k=2, sweep evidence at `bench/bmssp-kt-sweep.md`, and `bmssp=paper` URL override (#52).
+- `docs/design.md` §2.2 and §8: demo uses swept BMSSP k/t because asymptotic k is degenerate at browser scale; paper formula remains selectable; risk mitigation cites FindPivots abort and Fairness disclosure (#52).
+- `bmsspParams` defaults to demo mode (`demoBmsspParams`: `k = max(4, paper.k)`, paper `t`); paper §3.1 via `paperBmsspParams` or `mode: "paper"` (#52).
 - Canvas renderer chrome follows theme tokens via `setChrome` (dark default paper/edges/frontier/ghost); photo-finish gold stays the shared bright stroke (#17).
 - Dark-first design tokens in `src/style.css`: CSS custom properties for paper/ink/panel/hairline/persona accents, `[data-theme="light"]` overrides, ember/moss `#app` glows (cream radials in light), grouped tabular numerals, theme-toggle and explainer swatch hooks, and `index.html` `data-theme="dark"` plus `theme-color` / `color-scheme` for first paint (#17).
 - Fairness intro describes lanes advancing to the shared clock tick; explainer names four of the five 2025 authors for the Feb 2026 record (#16).

@@ -21,6 +21,7 @@ function joinFairnessCopy(): string {
     FAIRNESS_COPY.headline,
     FAIRNESS_COPY.secondary,
     FAIRNESS_COPY.honesty,
+    FAIRNESS_COPY.params,
     FAIRNESS_COPY.sourceLead,
   ].join("\n");
 }
@@ -61,6 +62,23 @@ describe("siteCopy", () => {
       expect(includesIgnoreCase(prose, "out of order")).toBe(true);
       expect(includesIgnoreCase(prose, "Dijkstra")).toBe(true);
       expect(prose.includes("0") || includesIgnoreCase(prose, "zero")).toBe(true);
+    });
+
+    it("params paragraph discloses paper formula, demo k, and asymptotic k threshold", () => {
+      const prose = joinFairnessCopy();
+
+      expect(includesIgnoreCase(prose, "paper")).toBe(true);
+      expect(
+        includesIgnoreCase(prose, "demo") ||
+          includesIgnoreCase(prose, "browser scale") ||
+          includesIgnoreCase(prose, "browser-scale"),
+      ).toBe(true);
+      expect(
+        prose.includes("2²⁷") ||
+          prose.includes("2^27") ||
+          prose.includes("134") ||
+          includesIgnoreCase(prose, "asymptotic"),
+      ).toBe(true);
     });
   });
 

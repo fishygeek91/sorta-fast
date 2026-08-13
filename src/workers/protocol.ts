@@ -5,6 +5,7 @@
  * defaults to `"dijkstra"` for backward compatibility on the Dijkstra worker.
  */
 
+import { type BmsspParamMode } from "../core/bmssp/params.ts";
 import { type Graph, type GraphKind } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
 
@@ -20,6 +21,12 @@ export type TraceRunRequest = {
   n: number;
   seed: number;
   source: number;
+  /** BMSSP only: `"demo"` or `"paper"`; omitted → demo {@link bmsspParams}(n). Dijkstra ignores. */
+  mode?: BmsspParamMode;
+  /** BMSSP only: optional level parameter k; omitted → mode default. Dijkstra ignores. */
+  k?: number;
+  /** BMSSP only: optional block parameter t; omitted → mode default. Dijkstra ignores. */
+  t?: number;
 };
 
 /** Worker → main: CSR graph layout and topology for the requested run. */

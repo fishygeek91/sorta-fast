@@ -26,9 +26,79 @@ describe("parseRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 48210,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     };
     const query = serializeRaceUrl(state);
     expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("round-trips bmssp paper mode with bk and bt block params", () => {
+    const state: RaceUrlState = {
+      g: "sparse",
+      n: 25000,
+      seed: 4,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "paper",
+      bk: 8,
+      bt: 3,
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).toContain("bmssp=paper");
+    expect(query).toContain("bk=8");
+    expect(query).toContain("bt=3");
+    expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("omits bmssp when demo and omits bk/bt when null", () => {
+    const state: RaceUrlState = {
+      g: "sparse",
+      n: 25000,
+      seed: 4,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).not.toContain("bmssp=");
+    expect(query).not.toContain("bk=");
+    expect(query).not.toContain("bt=");
+    expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("parses t as work-clock scrub, not BMSSP block t", () => {
+    expect(parseRaceUrl("?t=48210")).toEqual({ ...DEFAULT_RACE_URL, t: 48210 });
+    expect(parseRaceUrl("?bk=8&bt=3&t=100")).toEqual({
+      ...DEFAULT_RACE_URL,
+      bk: 8,
+      bt: 3,
+      t: 100,
+    });
+  });
+
+  it("nulls invalid bk and bt block params", () => {
+    expect(parseRaceUrl("?bk=0")).toEqual({ ...DEFAULT_RACE_URL, bk: null });
+    expect(parseRaceUrl("?bt=0")).toEqual({ ...DEFAULT_RACE_URL, bt: null });
+    expect(parseRaceUrl("?bk=1.5")).toEqual({ ...DEFAULT_RACE_URL, bk: null });
+    expect(parseRaceUrl("?bt=abc")).toEqual({ ...DEFAULT_RACE_URL, bt: null });
+  });
+
+  it("defaults bmssp to demo when missing, empty, or invalid", () => {
+    expect(parseRaceUrl("?bmssp=demo")).toEqual({ ...DEFAULT_RACE_URL, bmssp: "demo" });
+    expect(parseRaceUrl("?bmssp=")).toEqual(DEFAULT_RACE_URL);
+    expect(parseRaceUrl("?bmssp=invalid")).toEqual(DEFAULT_RACE_URL);
+  });
+
+  it("parses bmssp=paper", () => {
+    expect(parseRaceUrl("?bmssp=paper")).toEqual({ ...DEFAULT_RACE_URL, bmssp: "paper" });
   });
 
   it("omits t from serialize when zero and parses missing t as zero", () => {
@@ -40,6 +110,9 @@ describe("parseRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     };
     const query = serializeRaceUrl(state);
     expect(query).not.toContain("t=");
@@ -68,6 +141,9 @@ describe("parseRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     });
     expect(parseRaceUrl("?mode=race")).toEqual({
       ...DEFAULT_RACE_URL,
@@ -122,6 +198,9 @@ describe("parseRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     });
   });
 
@@ -168,6 +247,9 @@ describe("parseRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     };
     expect(parseRaceUrl(serializeRaceUrl(state))).toEqual(state);
   });
@@ -181,6 +263,9 @@ describe("parseRaceUrl", () => {
       target: 42,
       race: ["dijkstra", "bmssp"],
       t: 100,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     };
     const query = serializeRaceUrl(state);
     expect(query).toContain("target=42");
@@ -198,6 +283,9 @@ describe("serializeRaceUrl", () => {
       target: null,
       race: ["dijkstra", "bmssp"],
       t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
     });
     expect(query.startsWith("?")).toBe(true);
     expect(query).toContain("g=sparse");
@@ -218,6 +306,9 @@ describe("serializeRaceUrl", () => {
         target: null,
         race: ["dijkstra", "bmssp"],
         t: 0,
+        bmssp: "demo",
+        bk: null,
+        bt: null,
       }),
     ).toThrow(/n must be an integer/);
     expect(() =>
@@ -229,6 +320,9 @@ describe("serializeRaceUrl", () => {
         target: null,
         race: ["dijkstra", "bmssp"],
         t: 0,
+        bmssp: "demo",
+        bk: null,
+        bt: null,
       }),
     ).toThrow(/seed must be a finite integer/);
     expect(() =>
@@ -240,6 +334,9 @@ describe("serializeRaceUrl", () => {
         target: -1,
         race: ["dijkstra", "bmssp"],
         t: 0,
+        bmssp: "demo",
+        bk: null,
+        bt: null,
       }),
     ).toThrow(/target must be a non-negative integer/);
     expect(() =>
@@ -251,6 +348,9 @@ describe("serializeRaceUrl", () => {
         target: null,
         race: ["dijkstra", "bmssp"],
         t: -1,
+        bmssp: "demo",
+        bk: null,
+        bt: null,
       }),
     ).toThrow(/t must be a non-negative integer/);
     expect(() =>
@@ -262,6 +362,9 @@ describe("serializeRaceUrl", () => {
         target: null,
         race: ["dijkstra"],
         t: 0,
+        bmssp: "demo",
+        bk: null,
+        bt: null,
       }),
     ).toThrow(/race must have length 2 or 3/);
   });

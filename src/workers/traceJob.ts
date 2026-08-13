@@ -4,10 +4,11 @@
  * Node-safe — no Worker, DOM, Math.random, or Date.now.
  */
 
+import { type BmsspParamMode } from "../core/bmssp/params.ts";
+import { type GraphKind } from "../core/graph.ts";
 import { runBmsspTraceJob } from "./bmsspTraceJob.ts";
 import { runDijkstraTraceJob, type JobSink } from "./dijkstraTraceJob.ts";
 import { type TraceAlgo } from "./protocol.ts";
-import { type GraphKind } from "../core/graph.ts";
 
 /** Parameters shared by Dijkstra and BMSSP trace runs. */
 export type TraceJobSpec = {
@@ -15,6 +16,12 @@ export type TraceJobSpec = {
   n: number;
   seed: number;
   source: number;
+  /** BMSSP only: `"demo"` or `"paper"`; omitted → demo. Dijkstra ignores. */
+  mode?: BmsspParamMode;
+  /** BMSSP only: optional level parameter k; Dijkstra ignores. */
+  k?: number;
+  /** BMSSP only: optional block parameter t; Dijkstra ignores. */
+  t?: number;
   /** Optional TraceWriter slab capacity (tests may use a small value). */
   chunkCapacity?: number;
 };
@@ -25,7 +32,7 @@ export type { JobSink };
  * Run a trace job for the requested algorithm.
  *
  * @param algo - `"dijkstra"` or `"bmssp"`.
- * @param spec - Graph kind, size, seed, source, and optional writer capacity.
+ * @param spec - Graph kind, size, seed, source, optional BMSSP k/t, and optional writer capacity.
  * @param sink - Receives the CSR graph once, then each trace chunk in order.
  * @throws When `algo` is not a supported {@link TraceAlgo}.
  */

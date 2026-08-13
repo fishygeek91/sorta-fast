@@ -17,9 +17,9 @@ describe("issue #18 export meta", () => {
       };
       const url = shareUrlFromLocation(DEFAULT_RACE_URL, location);
       expect(url).toBe(location.origin + location.pathname + serializeRaceUrl(DEFAULT_RACE_URL));
-      expect(url).toContain("g=maze");
-      expect(url).toContain("n=5000");
-      expect(url).toContain("seed=1729");
+      expect(url).toContain("g=sparse");
+      expect(url).toContain("n=25000");
+      expect(url).toContain("seed=4");
       expect(url).toContain("mode=race");
       const params = new URLSearchParams(url.split("?")[1] ?? "");
       expect(params.get("race")).toBe("dijkstra,bmssp");
@@ -71,9 +71,9 @@ describe("issue #18 export meta", () => {
   describe("exportCaption", () => {
     it("returns seed line and url line", () => {
       const shareUrl =
-        "https://fishygeek91.github.io/sorta-fast/?g=maze&n=5000&seed=1729&mode=race&race=dijkstra,bmssp";
+        "https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp";
       const caption = exportCaption(DEFAULT_RACE_URL, shareUrl);
-      expect(caption.seedLine).toBe("seed=1729");
+      expect(caption.seedLine).toBe("seed=4");
       expect(caption.urlLine).toBe(shareUrl);
     });
   });

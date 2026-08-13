@@ -203,8 +203,15 @@ describe("RaceScheduler real trace jobs — stream-while-generating interleaved 
       } else {
         race.seek(race.clock.cursor);
         expect(race.appliedCursor).toBeGreaterThanOrEqual(prevApplied);
-        expect(race.laneState(0).work).toBe(Math.min(race.appliedCursor, race.laneTotalWork(0)));
-        expect(race.laneState(1).work).toBe(Math.min(race.appliedCursor, race.laneTotalWork(1)));
+
+        // seekWork lands on event boundaries; demo k/t traces include multi-op
+        // heap events, so lane.work may trail appliedCursor by a few ops.
+        const ref0 = new TraceBuffer(dijkstra.graph, dijkstra.chunks.slice(0, i + 1));
+        const ref1 = new TraceBuffer(bmssp.graph, bmssp.chunks.slice(0, i + 1));
+        ref0.seekWork(Math.min(race.appliedCursor, ref0.totalWork));
+        ref1.seekWork(Math.min(race.appliedCursor, ref1.totalWork));
+        expect(race.laneState(0).work).toBe(ref0.state.work);
+        expect(race.laneState(1).work).toBe(ref1.state.work);
       }
     }
 

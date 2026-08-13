@@ -1,8 +1,9 @@
 /**
- * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12, #16).
+ * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12, #16, #52).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
+import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer, type OverlayFlags } from "../render/renderer.ts";
@@ -12,6 +13,7 @@ import {
   parseWorkerToMain,
   type TraceRunRequest,
 } from "../workers/protocol.ts";
+import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
@@ -365,6 +367,22 @@ export function mountLens(): void {
   }
   algoLabel.append(algoSelect);
 
+  const bmsspLabel = document.createElement("label");
+  bmsspLabel.className = "lens-graph-field";
+  bmsspLabel.textContent = "BMSSP ";
+
+  const bmsspSelect = document.createElement("select");
+  bmsspSelect.id = "lens-bmssp-select";
+  bmsspSelect.setAttribute("aria-label", "BMSSP parameter mode");
+  const demoOption = document.createElement("option");
+  demoOption.value = "demo";
+  demoOption.textContent = "Demo (browser-scale)";
+  const paperOption = document.createElement("option");
+  paperOption.value = "paper";
+  paperOption.textContent = "Paper (asymptotic)";
+  bmsspSelect.append(demoOption, paperOption);
+  bmsspLabel.append(bmsspSelect);
+
   const kindLabel = document.createElement("label");
   kindLabel.className = "lens-graph-field";
   kindLabel.textContent = "Graph ";
@@ -410,7 +428,7 @@ export function mountLens(): void {
 
   seedLabel.append(seedInput);
 
-  graphControls.append(algoLabel, kindLabel, sizeLabel, seedLabel, diceButton);
+  graphControls.append(algoLabel, bmsspLabel, kindLabel, sizeLabel, seedLabel, diceButton);
 
   const statusEl = document.createElement("p");
   statusEl.className = "lens-status";
@@ -474,6 +492,7 @@ export function mountLens(): void {
    */
   function syncGraphControls(): void {
     algoSelect.value = lensState.algo;
+    bmsspSelect.value = lensState.bmssp;
     kindSelect.value = lensState.g;
     sizeSelect.value = sizeKeyForN(lensState.n);
     seedInput.value = String(lensState.seed);
@@ -642,7 +661,13 @@ export function mountLens(): void {
       switch (message.type) {
         case "graph": {
           const graph = graphFromTraceMessage(message);
-          playback = new Playback(graph, []);
+          const params = resolveBmsspRunParams(
+            lensState.n,
+            lensState.bmssp,
+            lensState.bk,
+            lensState.bt,
+          );
+          playback = new Playback(graph, [], params.k);
           playback.beginStreaming();
 
           const graphSpeed = Number(speedSelect.value);
@@ -708,7 +733,14 @@ export function mountLens(): void {
       n: lensState.n,
       seed: lensState.seed,
       source: SOURCE_VERTEX,
+      mode: lensState.bmssp,
     };
+    if (lensState.bk !== null) {
+      runMessage.k = lensState.bk;
+    }
+    if (lensState.bt !== null) {
+      runMessage.t = lensState.bt;
+    }
     nextWorker.postMessage(runMessage);
   }
 
@@ -821,6 +853,16 @@ export function mountLens(): void {
       return;
     }
     applyLensState({ ...lensState, algo: raw });
+  });
+
+  bmsspSelect.addEventListener("change", () => {
+    const raw = bmsspSelect.value;
+    if (!isBmsspUrlMode(raw)) {
+      showStatus(`invalid bmssp mode: ${raw}`);
+      syncGraphControls();
+      return;
+    }
+    applyLensState({ ...lensState, bmssp: raw });
   });
 
   kindSelect.addEventListener("change", () => {
