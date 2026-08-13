@@ -6,7 +6,7 @@
  * or trace imports.
  */
 
-import { type Graph } from "../core/graph.ts";
+import { SIZE_PRESETS, type Graph } from "../core/graph.ts";
 import { LaneState, UNSETTLED } from "../harness/laneState.ts";
 import { fitCamera, projectX, projectY, type Camera } from "./camera.ts";
 import {
@@ -17,11 +17,17 @@ import {
   resetDirty,
   type DirtyRect,
 } from "./dirtyRect.ts";
-import { cssColorForSettleOrder } from "./palette.ts";
+import { cssColorForSettleOrder, rgbForSettleOrder } from "./palette.ts";
 import { type CanvasSurface, type DrawContext, type SurfaceFactory } from "./surface.ts";
 import { EMBER_RGB, PHOTO_FINISH_GOLD, THEMES, type ThemeTokens } from "./theme.ts";
 
 export { EMBER_RGB, PHOTO_FINISH_GOLD };
+
+/** Vertex count at which the aggregated ImageData fill path activates (issue #20). */
+export const AGGREGATED_RENDER_MIN_N = SIZE_PRESETS.L;
+
+/** Aggregated node footprint in pixels (2×2 squares). */
+export const AGGREGATED_NODE_PX = 2;
 
 /** Edge line width in pixels. */
 const EDGE_LINE_WIDTH = 1;
@@ -160,6 +166,22 @@ function targetAt(targets: Uint32Array, e: number): number {
 /**
  * Build CSR edge index → source vertex lookup for O(1) ghost endpoint resolution.
  */
+/**
+ * True when CSR contains a directed arc `from -> to`.
+ */
+function hasArc(graph: Graph, from: number, to: number): boolean {
+  const offsets = graph.offsets;
+  const targets = graph.targets;
+  const start = offsetAt(offsets, from);
+  const end = offsetAt(offsets, from + 1);
+  for (let e = start; e < end; e += 1) {
+    if (targetAt(targets, e) === to) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function buildSrcOfEdge(graph: Graph): Uint32Array {
   const srcOfEdge = new Uint32Array(graph.m);
   const n = graph.n;
@@ -295,6 +317,8 @@ export class Renderer {
   private sourceMarkStroke: string;
   /** Finish vertex ring stroke. */
   private finishMarkStroke: string;
+  /** CPU settle-fill bitmap when {@link usesAggregated}; null below threshold. */
+  private fillPixels: ImageData | null;
 
   /**
    * @param opts.target - On-screen canvas surface.
@@ -342,7 +366,9 @@ export class Renderer {
     this.stoneFill = dark.stoneFill;
     this.sourceMarkStroke = dark.sourceMark;
     this.finishMarkStroke = dark.finishMark;
+    this.fillPixels = null;
 
+    this.syncFillPixels();
     this.drawEdgeLayer();
     this.clearFillLayer();
   }
@@ -385,6 +411,7 @@ export class Renderer {
     this.lastDBlockCount = 0;
     resetDirty(this.dirty);
     markFull(this.dirty, this.target.width, this.target.height);
+    this.syncFillPixels();
     this.drawEdgeLayer();
     this.clearFillLayer();
   }
@@ -449,10 +476,12 @@ export class Renderer {
     }
 
     const fillCtx = requireContext(this.fillLayer, "fillLayer");
+    let fillChanged = false;
 
     if (hadUnsettle) {
       this.clearFillLayer();
       markFull(this.dirty, width, height);
+      fillChanged = true;
       for (let v = 0; v < n; v += 1) {
         const order = state.settleOrder[v];
         if (order === undefined) {
@@ -471,8 +500,13 @@ export class Renderer {
         }
         if (prev === UNSETTLED && order !== UNSETTLED) {
           this.drawSettledNode(fillCtx, v, order, n);
+          fillChanged = true;
         }
       }
+    }
+
+    if (this.usesAggregated() && fillChanged) {
+      this.blitFillPixels(fillCtx);
     }
 
     for (let v = 0; v < n; v += 1) {
@@ -486,7 +520,7 @@ export class Renderer {
       }
     }
 
-    if (flags.relaxedEdges) {
+    if (flags.relaxedEdges && !this.usesAggregated()) {
       const targets = this.graph.targets;
       for (let e = 0; e < m; e += 1) {
         const shouldDraw = this.shouldDrawGhost(e, state);
@@ -543,7 +577,8 @@ export class Renderer {
     }
 
     for (let e = 0; e < m; e += 1) {
-      const drawn = flags.relaxedEdges && this.shouldDrawGhost(e, state) ? 1 : 0;
+      const drawn =
+        flags.relaxedEdges && !this.usesAggregated() && this.shouldDrawGhost(e, state) ? 1 : 0;
       this.lastGhost[e] = drawn;
     }
 
@@ -592,6 +627,9 @@ export class Renderer {
 
       for (let e = start; e < end; e += 1) {
         const t = targetAt(targets, e);
+        if (this.usesAggregated() && t < v && hasArc(graph, t, v)) {
+          continue;
+        }
         const x1 = projectX(camera, vertexX(graph, t));
         const y1 = projectY(camera, vertexY(graph, t));
         ctx.moveTo(x0, y0);
@@ -603,17 +641,151 @@ export class Renderer {
   }
 
   /**
-   * Clear the settle-fill layer to transparent.
+   * Clear the settle-fill layer to transparent and zero the aggregated CPU buffer when present.
    */
   private clearFillLayer(): void {
     const ctx = requireContext(this.fillLayer, "fillLayer");
     ctx.clearRect(0, 0, this.fillLayer.width, this.fillLayer.height);
+    this.clearFillPixels();
+  }
+
+  /**
+   * True when the current graph uses the aggregated ImageData node fill path.
+   */
+  private usesAggregated(): boolean {
+    return this.graph.n >= AGGREGATED_RENDER_MIN_N;
+  }
+
+  /**
+   * Dirty-rect radius for one vertex: 2px squares above threshold, camera circle below.
+   */
+  private nodeDirtyRadius(): number {
+    return this.usesAggregated() ? AGGREGATED_NODE_PX : this.camera.radius;
+  }
+
+  /**
+   * Allocate or drop the CPU settle-fill bitmap when crossing the aggregated threshold.
+   */
+  private syncFillPixels(): void {
+    if (!this.usesAggregated()) {
+      this.fillPixels = null;
+      return;
+    }
+
+    const ctx = requireContext(this.fillLayer, "fillLayer");
+    const width = this.fillLayer.width;
+    const height = this.fillLayer.height;
+    const existing = this.fillPixels;
+    if (existing === null || existing.width !== width || existing.height !== height) {
+      this.fillPixels = ctx.getImageData(0, 0, width, height);
+    }
+    this.clearFillPixels();
+  }
+
+  /**
+   * Zero the aggregated CPU buffer without touching the canvas layer.
+   */
+  private clearFillPixels(): void {
+    const pixels = this.fillPixels;
+    if (pixels !== null) {
+      pixels.data.fill(0);
+    }
+  }
+
+  /**
+   * Write one 2×2 settled node into the CPU buffer and expand the dirty rect.
+   */
+  private writeAggregatedNode(v: number, order: number, n: number): void {
+    const pixels = this.fillPixels;
+    if (pixels === null) {
+      throw new Error("writeAggregatedNode: fillPixels is null");
+    }
+
+    const graph = this.graph;
+    const camera = this.camera;
+    const cx = Math.floor(projectX(camera, vertexX(graph, v)));
+    const cy = Math.floor(projectY(camera, vertexY(graph, v)));
+    const { r, g, b } = rgbForSettleOrder(order, n);
+    const data = pixels.data;
+    const canvasWidth = pixels.width;
+    const canvasHeight = pixels.height;
+
+    for (let dy = 0; dy < AGGREGATED_NODE_PX; dy += 1) {
+      const py = cy + dy;
+      if (py < 0 || py >= canvasHeight) {
+        continue;
+      }
+      for (let dx = 0; dx < AGGREGATED_NODE_PX; dx += 1) {
+        const px = cx + dx;
+        if (px < 0 || px >= canvasWidth) {
+          continue;
+        }
+        const offset = (py * canvasWidth + px) * 4;
+        data[offset] = r;
+        data[offset + 1] = g;
+        data[offset + 2] = b;
+        data[offset + 3] = 255;
+      }
+    }
+
+    includeNode(
+      this.dirty,
+      cx + AGGREGATED_NODE_PX * 0.5,
+      cy + AGGREGATED_NODE_PX * 0.5,
+      AGGREGATED_NODE_PX,
+      this.target.width,
+      this.target.height,
+    );
+  }
+
+  /**
+   * Blit the CPU settle buffer onto the fill layer with one {@link DrawContext.putImageData}.
+   */
+  private blitFillPixels(ctx: DrawContext): void {
+    const pixels = this.fillPixels;
+    if (pixels === null) {
+      return;
+    }
+
+    const dirty = this.dirty;
+    const width = this.fillLayer.width;
+    const height = this.fillLayer.height;
+
+    if (dirty.full) {
+      ctx.putImageData(pixels, 0, 0);
+      return;
+    }
+
+    if (dirty.w > 0 && dirty.h > 0) {
+      ctx.putImageData(pixels, 0, 0, dirty.x, dirty.y, dirty.w, dirty.h);
+      return;
+    }
+
+    ctx.putImageData(pixels, 0, 0, 0, 0, width, height);
+  }
+
+  /**
+   * Draw a 2×2 overlay mark at the projected vertex center (aggregated mode).
+   */
+  private drawAggregatedOverlayMark(
+    ctx: DrawContext,
+    cx: number,
+    cy: number,
+    fillStyle: string,
+  ): void {
+    ctx.fillStyle = fillStyle;
+    ctx.fillRect(Math.floor(cx), Math.floor(cy), AGGREGATED_NODE_PX, AGGREGATED_NODE_PX);
   }
 
   /**
    * Fill one settled vertex circle on the fill layer and expand the dirty rect.
    */
   private drawSettledNode(ctx: DrawContext, v: number, order: number, n: number): void {
+    if (this.usesAggregated()) {
+      this.writeAggregatedNode(v, order, n);
+      return;
+    }
+
     const graph = this.graph;
     const camera = this.camera;
     const cx = projectX(camera, vertexX(graph, v));
@@ -634,7 +806,7 @@ export class Renderer {
   private includeVertexDirty(v: number): void {
     const cx = projectX(this.camera, vertexX(this.graph, v));
     const cy = projectY(this.camera, vertexY(this.graph, v));
-    includeNode(this.dirty, cx, cy, this.camera.radius, this.target.width, this.target.height);
+    includeNode(this.dirty, cx, cy, this.nodeDirtyRadius(), this.target.width, this.target.height);
   }
 
   /**
@@ -688,8 +860,7 @@ export class Renderer {
    */
   private includePivotFlareDirty(state: LaneState): void {
     const n = state.n;
-    const radius = this.camera.radius;
-    const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
+    const radius = this.nodeDirtyRadius();
 
     for (let v = 0; v < n; v += 1) {
       if (!this.shouldDrawPivotFlare(v, state)) {
@@ -697,7 +868,7 @@ export class Renderer {
       }
       const cx = projectX(this.camera, vertexX(this.graph, v));
       const cy = projectY(this.camera, vertexY(this.graph, v));
-      includeNode(this.dirty, cx, cy, outerRadius, this.target.width, this.target.height);
+      includeNode(this.dirty, cx, cy, radius, this.target.width, this.target.height);
     }
   }
 
@@ -797,31 +968,49 @@ export class Renderer {
 
     ctx.clearRect(0, 0, width, height);
 
-    if (flags.frontier) {
-      ctx.strokeStyle = this.frontierStroke;
-      ctx.lineWidth = FRONTIER_LINE_WIDTH;
+    const aggregated = this.usesAggregated();
 
+    if (flags.frontier) {
       const n = state.n;
       const frontier = state.frontier;
 
-      for (let v = 0; v < n; v += 1) {
-        const onFrontier = frontier[v];
-        if (onFrontier === undefined) {
-          throw new Error(`frontier[${String(v)}] is missing`);
+      if (aggregated) {
+        ctx.fillStyle = this.frontierStroke;
+        for (let v = 0; v < n; v += 1) {
+          const onFrontier = frontier[v];
+          if (onFrontier === undefined) {
+            throw new Error(`frontier[${String(v)}] is missing`);
+          }
+          if (onFrontier !== 1) {
+            continue;
+          }
+          const cx = projectX(camera, vertexX(graph, v));
+          const cy = projectY(camera, vertexY(graph, v));
+          this.drawAggregatedOverlayMark(ctx, cx, cy, this.frontierStroke);
         }
-        if (onFrontier !== 1) {
-          continue;
-        }
+      } else {
+        ctx.strokeStyle = this.frontierStroke;
+        ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
-        const cx = projectX(camera, vertexX(graph, v));
-        const cy = projectY(camera, vertexY(graph, v));
-        ctx.beginPath();
-        ctx.arc(cx, cy, camera.radius, 0, TAU);
-        ctx.stroke();
+        for (let v = 0; v < n; v += 1) {
+          const onFrontier = frontier[v];
+          if (onFrontier === undefined) {
+            throw new Error(`frontier[${String(v)}] is missing`);
+          }
+          if (onFrontier !== 1) {
+            continue;
+          }
+
+          const cx = projectX(camera, vertexX(graph, v));
+          const cy = projectY(camera, vertexY(graph, v));
+          ctx.beginPath();
+          ctx.arc(cx, cy, camera.radius, 0, TAU);
+          ctx.stroke();
+        }
       }
     }
 
-    if (flags.relaxedEdges) {
+    if (flags.relaxedEdges && !aggregated) {
       const m = state.m;
       const targets = graph.targets;
       const srcOfEdge = this.srcOfEdge;
@@ -857,28 +1046,41 @@ export class Renderer {
 
     if (flags.pivotFlares) {
       const n = state.n;
-      const radius = camera.radius;
-      const innerRadius = radius * PIVOT_FLARE_INNER_SCALE;
-      const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
 
-      ctx.strokeStyle = `rgba(${this.emberRgb}, 0.85)`;
-      ctx.lineWidth = FRONTIER_LINE_WIDTH;
-
-      for (let v = 0; v < n; v += 1) {
-        if (!this.shouldDrawPivotFlare(v, state)) {
-          continue;
+      if (aggregated) {
+        const flareFill = `rgba(${this.emberRgb}, 0.85)`;
+        for (let v = 0; v < n; v += 1) {
+          if (!this.shouldDrawPivotFlare(v, state)) {
+            continue;
+          }
+          const cx = projectX(camera, vertexX(graph, v));
+          const cy = projectY(camera, vertexY(graph, v));
+          this.drawAggregatedOverlayMark(ctx, cx, cy, flareFill);
         }
+      } else {
+        const radius = camera.radius;
+        const innerRadius = radius * PIVOT_FLARE_INNER_SCALE;
+        const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
 
-        const cx = projectX(camera, vertexX(graph, v));
-        const cy = projectY(camera, vertexY(graph, v));
+        ctx.strokeStyle = `rgba(${this.emberRgb}, 0.85)`;
+        ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerRadius, 0, TAU);
-        ctx.stroke();
+        for (let v = 0; v < n; v += 1) {
+          if (!this.shouldDrawPivotFlare(v, state)) {
+            continue;
+          }
 
-        ctx.beginPath();
-        ctx.arc(cx, cy, innerRadius, 0, TAU);
-        ctx.stroke();
+          const cx = projectX(camera, vertexX(graph, v));
+          const cy = projectY(camera, vertexY(graph, v));
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, outerRadius, 0, TAU);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, innerRadius, 0, TAU);
+          ctx.stroke();
+        }
       }
     }
 
@@ -897,25 +1099,34 @@ export class Renderer {
     const camera = this.camera;
     const n = state.n;
     const radius = camera.radius;
+    const aggregated = this.usesAggregated();
 
     if (isVertexInRange(flags.source, n)) {
       const cx = projectX(camera, vertexX(graph, flags.source));
       const cy = projectY(camera, vertexY(graph, flags.source));
-      ctx.strokeStyle = this.sourceMarkStroke;
-      ctx.lineWidth = MARK_LINE_WIDTH;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.stroke();
+      if (aggregated) {
+        this.drawAggregatedOverlayMark(ctx, cx, cy, this.sourceMarkStroke);
+      } else {
+        ctx.strokeStyle = this.sourceMarkStroke;
+        ctx.lineWidth = MARK_LINE_WIDTH;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, TAU);
+        ctx.stroke();
+      }
     }
 
     if (flags.finish !== undefined && isVertexInRange(flags.finish, n)) {
       const cx = projectX(camera, vertexX(graph, flags.finish));
       const cy = projectY(camera, vertexY(graph, flags.finish));
-      ctx.strokeStyle = this.finishMarkStroke;
-      ctx.lineWidth = MARK_LINE_WIDTH;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.stroke();
+      if (aggregated) {
+        this.drawAggregatedOverlayMark(ctx, cx, cy, this.finishMarkStroke);
+      } else {
+        ctx.strokeStyle = this.finishMarkStroke;
+        ctx.lineWidth = MARK_LINE_WIDTH;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, TAU);
+        ctx.stroke();
+      }
     }
   }
 

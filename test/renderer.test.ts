@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import { packCsr, type Graph } from "../src/core/graph.ts";
 import { LaneState } from "../src/harness/laneState.ts";
-import { GHOST_WINDOW_OPS, PHOTO_FINISH_GOLD, Renderer } from "../src/render/renderer.ts";
+import { fitCamera, projectX, projectY } from "../src/render/camera.ts";
+import { rgbForSettleOrder } from "../src/render/palette.ts";
+import {
+  AGGREGATED_RENDER_MIN_N,
+  GHOST_WINDOW_OPS,
+  PHOTO_FINISH_GOLD,
+  Renderer,
+} from "../src/render/renderer.ts";
 import { EMBER_RGB, THEMES } from "../src/render/theme.ts";
 import {
   createFakeSurface,
   getFakeContext,
+  pixelAt,
   type DrawCall,
   type FakeCanvasSurface,
 } from "./helpers/fake-canvas.ts";
@@ -28,6 +36,25 @@ function tinyGraph(): Graph {
   return packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0.2, 0.8], [0.5, 0.5]);
 }
 
+/** Horizontal chain i -> i+1 for aggregated-path tests (issue #20). */
+function chainGraph(n: number): Graph {
+  const x = new Float64Array(n);
+  const y = new Float64Array(n);
+  for (let i = 0; i < n; i += 1) {
+    x[i] = i / n;
+    y[i] = 0.5;
+  }
+  const edges = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    edges.push({ from: i, to: i + 1, weight: 1 });
+  }
+  return packCsr(n, edges, x, y);
+}
+
+function fillCallsSince(fill: FakeCanvasSurface, startIndex: number): readonly DrawCall[] {
+  return getFakeContext(fill).calls.slice(startIndex);
+}
+
 function drawImageCount(surface: FakeCanvasSurface): number {
   const ctx = getFakeContext(surface);
   return ctx.calls.filter((call) => call.op === "drawImage").length;
@@ -37,6 +64,7 @@ function createRendererWithLayers(graph: Graph): {
   renderer: Renderer;
   target: FakeCanvasSurface;
   edge: FakeCanvasSurface;
+  fill: FakeCanvasSurface;
   overlay: FakeCanvasSurface;
   fx: FakeCanvasSurface;
 } {
@@ -59,6 +87,10 @@ function createRendererWithLayers(graph: Graph): {
   if (edge === undefined) {
     throw new Error("edge layer is missing");
   }
+  const fill = layers[1];
+  if (fill === undefined) {
+    throw new Error("fill layer is missing");
+  }
   const overlay = layers[2];
   if (overlay === undefined) {
     throw new Error("overlay layer is missing");
@@ -67,7 +99,7 @@ function createRendererWithLayers(graph: Graph): {
   if (fx === undefined) {
     throw new Error("fx layer is missing");
   }
-  return { renderer, target, edge, overlay, fx };
+  return { renderer, target, edge, fill, overlay, fx };
 }
 
 function overlayCalls(overlay: FakeCanvasSurface): readonly DrawCall[] {
@@ -453,5 +485,77 @@ describe("Renderer", () => {
 
     expect(overlayArcCount(overlay)).toBeGreaterThan(baseArcs);
     expect(overlayStrokeCalls(overlay).length).toBeGreaterThan(baseStrokes);
+  });
+
+  it("exports AGGREGATED_RENDER_MIN_N as the L preset (25000)", () => {
+    expect(AGGREGATED_RENDER_MIN_N).toBe(25000);
+  });
+
+  it("uses arc fills below the aggregated threshold", () => {
+    const graph = tinyGraph();
+    const { renderer, fill } = createRendererWithLayers(graph);
+    const fillCtx = getFakeContext(fill);
+    const before = fillCtx.calls.length;
+
+    const state = new LaneState(2, graph.m);
+    state.settleOrder[0] = 0;
+    renderer.draw(state);
+
+    const fillOps = fillCallsSince(fill, before);
+    expect(fillOps.some((call) => call.op === "arc")).toBe(true);
+    expect(fillOps.some((call) => call.op === "putImageData")).toBe(false);
+  });
+
+  it("blits ImageData node fills at the aggregated threshold", () => {
+    const n = AGGREGATED_RENDER_MIN_N;
+    const graph = chainGraph(n);
+    const { renderer, fill } = createRendererWithLayers(graph);
+    const fillCtx = getFakeContext(fill);
+    const before = fillCtx.calls.length;
+
+    const state = new LaneState(n, graph.m);
+    state.settleOrder[0] = 0;
+    renderer.draw(state);
+
+    const fillOps = fillCallsSince(fill, before);
+    expect(fillOps.some((call) => call.op === "putImageData")).toBe(true);
+    expect(fillOps.some((call) => call.op === "arc")).toBe(false);
+
+    const camera = fitCamera(graph, CANVAS_SIZE, CANVAS_SIZE);
+    const x0 = graph.x[0];
+    const y0 = graph.y[0];
+    if (x0 === undefined || y0 === undefined) {
+      throw new Error("chain graph missing vertex 0 coordinates");
+    }
+    const px = Math.floor(projectX(camera, x0));
+    const py = Math.floor(projectY(camera, y0));
+    const pixel = pixelAt(fill, px, py);
+    const expected = rgbForSettleOrder(0, n);
+    expect(pixel.a).toBe(255);
+    expect(pixel.r).toBe(expected.r);
+    expect(pixel.g).toBe(expected.g);
+    expect(pixel.b).toBe(expected.b);
+  });
+
+  it("skips ghost relaxed-edge strokes in aggregated mode", () => {
+    const n = AGGREGATED_RENDER_MIN_N;
+    const graph = chainGraph(n);
+    const { renderer, overlay } = createRendererWithLayers(graph);
+    const overlayCtx = getFakeContext(overlay);
+    const before = overlayCtx.calls.length;
+
+    const state = new LaneState(n, graph.m);
+    state.lastRelaxWork[0] = 0;
+    state.work = 1;
+    state.frontier[1] = 1;
+
+    renderer.draw(state, { relaxedEdges: true, frontier: true });
+
+    const overlayOps = overlayCalls(overlay).slice(before);
+    expect(overlayOps.some((call) => call.op === "lineTo")).toBe(false);
+    expect(overlayGhostStrokeCalls(overlay)).toHaveLength(0);
+    expect(
+      overlayOps.some((call) => call.op === "fillRect" && call.fillStyle === THEMES.dark.frontier),
+    ).toBe(true);
   });
 });

@@ -9,7 +9,7 @@
 import { mulberry32, type Mulberry32 } from "./prng.ts";
 
 /** Gallery kinds; `city` is the URL slug used in design.md §1. */
-export const GRAPH_KINDS = ["city", "maze", "clusters", "sparse"] as const;
+export const GRAPH_KINDS = ["city", "maze", "clusters", "adversarial", "sparse"] as const;
 
 export type GraphKind = (typeof GRAPH_KINDS)[number];
 
@@ -25,6 +25,12 @@ export const SIZE_PRESETS = {
 } as const;
 
 export type SizePreset = keyof typeof SIZE_PRESETS;
+
+/** City Delaunay is O(n²); XL is rejected (issue #32 / #20). L (25k) is allowed. */
+export const CITY_MAX_N = SIZE_PRESETS.L;
+
+/** Progress ratio in `[0, 1]` while a generator runs (issue #20). */
+export type GraphProgress = (ratio: number) => void;
 
 /**
  * Compressed-sparse-row directed graph on typed arrays.
@@ -171,12 +177,25 @@ export function packCsr(
  * @param kind - One of {@link GRAPH_KINDS}.
  * @param n - Vertex count; integer >= 1. `sparse` requires n >= 3 (cannot place
  *   m = 2n distinct arcs otherwise). `city` with n = 1 or 2 is edgeless — the
- *   Delaunay super-triangle is stripped and nothing remains. URL/UI layers
- *   should clamp rather than pass those sizes through.
+ *   Delaunay super-triangle is stripped and nothing remains. `city` rejects
+ *   n > {@link CITY_MAX_N} (issue #32). URL/UI layers should clamp rather than
+ *   pass those sizes through.
  * @param seed - PRNG seed; coerced to Uint32.
+ * @param onProgress - Optional callback; must not consume RNG or change topology.
  */
-export function generateGraph(kind: GraphKind, n: number, seed: number): Graph {
-  if (kind !== "city" && kind !== "maze" && kind !== "clusters" && kind !== "sparse") {
+export function generateGraph(
+  kind: GraphKind,
+  n: number,
+  seed: number,
+  onProgress?: GraphProgress,
+): Graph {
+  if (
+    kind !== "city" &&
+    kind !== "maze" &&
+    kind !== "clusters" &&
+    kind !== "adversarial" &&
+    kind !== "sparse"
+  ) {
     throw new Error(`unknown graph kind: ${String(kind)}`);
   }
   if (!Number.isInteger(n) || n < 1) {
@@ -185,13 +204,15 @@ export function generateGraph(kind: GraphKind, n: number, seed: number): Graph {
 
   switch (kind) {
     case "city":
-      return generateCity(n, seed);
+      return generateCity(n, seed, onProgress);
     case "maze":
-      return generateMaze(n, seed);
+      return generateMaze(n, seed, onProgress);
     case "clusters":
-      return generateClusters(n, seed);
+      return generateClusters(n, seed, onProgress);
+    case "adversarial":
+      return generateAdversarial(n, seed, onProgress);
     case "sparse":
-      return generateSparse(n, seed);
+      return generateSparse(n, seed, onProgress);
   }
 }
 
@@ -199,7 +220,8 @@ export function generateGraph(kind: GraphKind, n: number, seed: number): Graph {
  * Sparse random digraph with exactly `m = 2n` distinct arcs (design.md §3.4).
  * This is the regime where the Feb-2026 bound is meant to shine.
  */
-function generateSparse(n: number, seed: number): Graph {
+function generateSparse(n: number, seed: number, onProgress?: GraphProgress): Graph {
+  onProgress?.(0);
   const maxArcs = n * (n - 1);
   const want = 2 * n;
   if (want > maxArcs) {
@@ -230,6 +252,7 @@ function generateSparse(n: number, seed: number): Graph {
     edges.push({ from, to, weight: randomWeight(rng) });
   }
 
+  onProgress?.(1);
   return packCsr(n, edges, x, y);
 }
 
@@ -240,7 +263,8 @@ function generateSparse(n: number, seed: number): Graph {
  * row may be short so the vertex count is exactly `n`. A perfect maze is a
  * spanning tree, so the directed graph has `m = 2(n-1)` unit-weight arcs.
  */
-function generateMaze(n: number, seed: number): Graph {
+function generateMaze(n: number, seed: number, onProgress?: GraphProgress): Graph {
+  onProgress?.(0);
   const rng = mulberry32(seed);
   const cols = Math.ceil(Math.sqrt(n));
   const x = new Float64Array(n);
@@ -282,6 +306,7 @@ function generateMaze(n: number, seed: number): Graph {
     }
   }
 
+  onProgress?.(1);
   return packCsr(n, edges, x, y);
 }
 
@@ -291,7 +316,8 @@ function generateMaze(n: number, seed: number): Graph {
  * Batch-blooms read clearly because the frontier jumps between clusters
  * (design.md §3.4).
  */
-function generateClusters(n: number, seed: number): Graph {
+function generateClusters(n: number, seed: number, onProgress?: GraphProgress): Graph {
+  onProgress?.(0);
   const rng = mulberry32(seed);
   const clusterCount = clusterCountFor(n);
   const ranges = partitionContiguous(n, clusterCount);
@@ -384,6 +410,99 @@ function generateClusters(n: number, seed: number): Graph {
     edges.push({ from: b, to: a, weight });
   }
 
+  onProgress?.(1);
+  return packCsr(n, edges, x, y);
+}
+
+/**
+ * Adversarial SSSP stress graph: Θ(√n) chain plus wide fan leaves (issue #20).
+ *
+ * A bidirectional unit-weight path `0 .. chainLen-1` is the long chain; remaining
+ * vertices attach as bidirectional fans onto chain vertices except the sink.
+ * Fan weights are `chainLen + U(0,1)` so Dijkstra walks the chain with a growing heap.
+ */
+function generateAdversarial(n: number, seed: number, onProgress?: GraphProgress): Graph {
+  onProgress?.(0);
+
+  if (n < 2) {
+    const x = new Float64Array(n);
+    const y = new Float64Array(n);
+    if (n === 1) {
+      x[0] = 0;
+      y[0] = 0.5;
+    }
+    onProgress?.(1);
+    return packCsr(n, [], x, y);
+  }
+
+  const rng = mulberry32(seed);
+  const chainLen = Math.max(2, Math.floor(Math.sqrt(n)));
+  const parentCount = chainLen - 1;
+  const x = new Float64Array(n);
+  const y = new Float64Array(n);
+
+  for (let i = 0; i < chainLen; i += 1) {
+    x[i] = i / (chainLen - 1);
+    y[i] = 0.5;
+  }
+
+  const fansByParent: number[][] = [];
+  for (let p = 0; p < parentCount; p += 1) {
+    fansByParent.push([]);
+  }
+  for (let v = chainLen; v < n; v += 1) {
+    const parent = (v - chainLen) % parentCount;
+    const bucket = fansByParent[parent];
+    if (bucket === undefined) {
+      throw new Error(`adversarial: missing fan bucket for parent ${parent}`);
+    }
+    bucket.push(v);
+  }
+
+  for (let p = 0; p < parentCount; p += 1) {
+    const fans = fansByParent[p];
+    if (fans === undefined) {
+      throw new Error(`adversarial: missing fan list for parent ${p}`);
+    }
+    const parentX = x[p];
+    if (parentX === undefined) {
+      throw new Error(`adversarial: missing chain coordinate for parent ${p}`);
+    }
+    const count = fans.length;
+    // Keep squared distance from source (0, 0.5) strictly below the chain tip
+    // at (1, 0.5) so pickFinishVertex is the rightmost chain vertex.
+    const maxDy = Math.sqrt(Math.max(0, 0.999 - parentX * parentX));
+    for (let k = 0; k < count; k += 1) {
+      const v = fans[k];
+      if (v === undefined) {
+        throw new Error(`adversarial: missing fan vertex at index ${k} for parent ${p}`);
+      }
+      x[v] = parentX;
+      if (count <= 1) {
+        y[v] = 0.5 - Math.min(maxDy, 0.08);
+      } else {
+        const t = k / (count - 1);
+        y[v] = 0.5 + (t - 0.5) * 2 * maxDy;
+      }
+    }
+  }
+
+  onProgress?.(0.5);
+
+  const edges: CsrEdge[] = [];
+  for (let i = 0; i < chainLen - 1; i += 1) {
+    edges.push({ from: i, to: i + 1, weight: 1 });
+    edges.push({ from: i + 1, to: i, weight: 1 });
+  }
+
+  for (let v = chainLen; v < n; v += 1) {
+    const parent = (v - chainLen) % parentCount;
+    const weight = chainLen + rng.next();
+    edges.push({ from: parent, to: v, weight });
+    edges.push({ from: v, to: parent, weight });
+  }
+
+  onProgress?.(1);
   return packCsr(n, edges, x, y);
 }
 
@@ -395,7 +514,14 @@ function generateClusters(n: number, seed: number): Graph {
  * beyond that stream — degeneracies are broken by insertion order + CSR sort.
  * n = 1 and n = 2 produce an edgeless graph (no remaining triangles).
  */
-function generateCity(n: number, seed: number): Graph {
+function generateCity(n: number, seed: number, onProgress?: GraphProgress): Graph {
+  if (n > CITY_MAX_N) {
+    throw new Error(
+      `city graphs are capped at L (${String(CITY_MAX_N)} vertices); requested n=${String(n)} (issue #32)`,
+    );
+  }
+
+  onProgress?.(0);
   const rng = mulberry32(seed);
   const px = new Float64Array(n + 3);
   const py = new Float64Array(n + 3);
@@ -417,7 +543,13 @@ function generateCity(n: number, seed: number): Graph {
   type Triangle = { a: number; b: number; c: number };
   let triangles: Triangle[] = [{ a: superA, b: superB, c: superC }];
 
+  const progressStride = Math.max(1, Math.ceil(n / 100));
+
   for (let p = 0; p < n; p += 1) {
+    if (p % progressStride === 0) {
+      onProgress?.(p / n);
+    }
+
     const bad: Triangle[] = [];
     const kept: Triangle[] = [];
     for (const tri of triangles) {
@@ -471,6 +603,7 @@ function generateCity(n: number, seed: number): Graph {
 
   const x = px.subarray(0, n);
   const y = py.subarray(0, n);
+  onProgress?.(1);
   return packCsr(n, edges, x, y);
 }
 

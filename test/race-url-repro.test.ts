@@ -10,6 +10,9 @@ import { runTraceJob, type TraceJobSpec } from "../src/workers/traceJob.ts";
 /** Parsed maze race URL used for reproducibility checks (#15). */
 const MAZE_RACE_QUERY = "?g=maze&n=40&seed=42&race=dijkstra,bmssp";
 
+/** Parsed adversarial S preset for reproducibility checks (#20). */
+const ADVERSARIAL_S_RACE_QUERY = "?g=adversarial&n=500&seed=42&race=dijkstra,bmssp";
+
 /**
  * Run a trace job and collect the emitted graph and chunks in order.
  *
@@ -153,6 +156,22 @@ function traceSpecFromRaceUrl(search: string): TraceJobSpec {
 
 describe("race URL reproducibility — trace jobs from parsed URL", () => {
   const spec = traceSpecFromRaceUrl(MAZE_RACE_QUERY);
+
+  it("identical URL params yield byte-identical dijkstra trace jobs", () => {
+    const first = collectTraceJob("dijkstra", spec);
+    const second = collectTraceJob("dijkstra", spec);
+    expectIdenticalTraceJobs(first, second);
+  });
+
+  it("identical URL params yield byte-identical bmssp trace jobs", () => {
+    const first = collectTraceJob("bmssp", spec);
+    const second = collectTraceJob("bmssp", spec);
+    expectIdenticalTraceJobs(first, second);
+  });
+});
+
+describe("race URL reproducibility — adversarial at S", () => {
+  const spec = traceSpecFromRaceUrl(ADVERSARIAL_S_RACE_QUERY);
 
   it("identical URL params yield byte-identical dijkstra trace jobs", () => {
     const first = collectTraceJob("dijkstra", spec);

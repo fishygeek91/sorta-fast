@@ -230,6 +230,49 @@ describe("RaceWorkerPool message routing", () => {
     expect(chunks).toEqual([{ lane: 1, chunk }]);
     expect(doneLanes).toEqual([0]);
   });
+
+  it("forwards generate progress to onProgress when provided", () => {
+    const progressRatios: number[] = [];
+
+    const { records } = startPool(["dijkstra", "bmssp"], {
+      onProgress: (ratio) => {
+        progressRatios.push(ratio);
+      },
+    });
+
+    const lane0 = records[0];
+    if (lane0 === undefined) {
+      throw new Error("expected fake worker");
+    }
+
+    lane0.handle.onmessage?.({
+      data: { type: "progress", phase: "generate", ratio: 0.25 },
+    });
+    lane0.handle.onmessage?.({ data: sampleGraphMessage() });
+
+    expect(progressRatios).toEqual([0.25]);
+  });
+
+  it("ignores progress when onProgress is omitted", () => {
+    const errors: Array<{ lane: number; message: string }> = [];
+
+    const { records } = startPool(["dijkstra", "bmssp"], {
+      onError: (lane, message) => {
+        errors.push({ lane, message });
+      },
+    });
+
+    const lane0 = records[0];
+    if (lane0 === undefined) {
+      throw new Error("expected fake worker");
+    }
+
+    lane0.handle.onmessage?.({
+      data: { type: "progress", phase: "generate", ratio: 0.5 },
+    });
+
+    expect(errors).toEqual([]);
+  });
 });
 
 describe("RaceWorkerPool terminate", () => {

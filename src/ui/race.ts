@@ -2,7 +2,7 @@
  * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18, #52).
  */
 
-import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
+import { CITY_MAX_N, GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
@@ -51,6 +51,9 @@ const SOURCE_VERTEX = 0;
 
 /** Size presets exposed in the race graph gallery (includes XL). */
 const RACE_SIZE_KEYS = ["S", "M", "L", "XL"] as const;
+
+/** Tooltip on the XL option when city is selected (issue #32). */
+const CITY_XL_OPTION_TITLE = "City preset caps at L — see #32";
 
 type RaceSizeKey = (typeof RACE_SIZE_KEYS)[number];
 
@@ -177,10 +180,14 @@ export function mountRace(): void {
 
   const sizeSelect = document.createElement("select");
   sizeSelect.id = "race-size-select";
+  let xlSizeOption: HTMLOptionElement | null = null;
   for (const key of RACE_SIZE_KEYS) {
     const option = document.createElement("option");
     option.value = key;
-    option.textContent = key;
+    option.textContent = key === "XL" ? "XL (stress)" : key;
+    if (key === "XL") {
+      xlSizeOption = option;
+    }
     sizeSelect.append(option);
   }
   sizeLabel.append(sizeSelect);
@@ -354,11 +361,27 @@ export function mountRace(): void {
   bannerEl.className = "race-banner";
   bannerEl.hidden = true;
 
+  const genProgressWrap = document.createElement("div");
+  genProgressWrap.className = "race-gen-progress-wrap";
+  genProgressWrap.hidden = true;
+
+  const genProgressLabel = document.createElement("span");
+  genProgressLabel.className = "race-gen-progress-label";
+  genProgressLabel.textContent = "Generating graph";
+
+  const genProgress = document.createElement("progress");
+  genProgress.id = "race-gen-progress";
+  genProgress.className = "race-gen-progress";
+  genProgress.max = 100;
+  genProgress.value = 0;
+
+  genProgressWrap.append(genProgressLabel, genProgress);
+
   const statusEl = document.createElement("p");
   statusEl.className = "lens-status";
   statusEl.hidden = true;
 
-  transport.append(transportButtons, speedLabel, scrubLabel, bannerEl, statusEl);
+  transport.append(transportButtons, speedLabel, scrubLabel, bannerEl, genProgressWrap, statusEl);
   raceRoot.append(lanesEl, transport);
   mountDisclosures(raceRoot);
   root.append(header, raceRoot);
@@ -410,6 +433,22 @@ export function mountRace(): void {
   }
 
   /**
+   * Disable XL for city graphs (Delaunay is O(n²); issue #32).
+   */
+  function syncCityXlOption(): void {
+    if (xlSizeOption === null) {
+      return;
+    }
+    if (kindSelect.value === "city") {
+      xlSizeOption.disabled = true;
+      xlSizeOption.title = CITY_XL_OPTION_TITLE;
+    } else {
+      xlSizeOption.disabled = false;
+      xlSizeOption.removeAttribute("title");
+    }
+  }
+
+  /**
    * Sync graph gallery widgets to the current race URL state.
    */
   function syncGalleryControls(): void {
@@ -418,6 +457,7 @@ export function mountRace(): void {
     seedInput.value = String(raceState.seed);
     lanesSelect.value = lanesKeyForRace(raceState.race);
     bmsspSelect.value = raceState.bmssp;
+    syncCityXlOption();
   }
 
   /**
@@ -515,6 +555,41 @@ export function mountRace(): void {
   function clearStatus(): void {
     statusEl.textContent = "";
     statusEl.hidden = true;
+  }
+
+  /**
+   * Show graph-generation progress from worker ratio in [0, 1].
+   *
+   * @param ratio - Generation progress fraction.
+   */
+  function showGenProgress(ratio: number): void {
+    genProgressWrap.hidden = false;
+    genProgress.value = Math.round(100 * ratio);
+  }
+
+  /**
+   * Hide the graph-generation progress bar after handoff or restart.
+   */
+  function hideGenProgress(): void {
+    genProgress.value = 100;
+    genProgressWrap.hidden = true;
+  }
+
+  /** True when a coalesced paint is already scheduled for the next frame. */
+  let paintScheduled = false;
+
+  /**
+   * Coalesce multiple chunk/done updates into one paint per animation frame.
+   */
+  function schedulePaint(): void {
+    if (paintScheduled) {
+      return;
+    }
+    paintScheduled = true;
+    requestAnimationFrame(() => {
+      paintScheduled = false;
+      drawFrame();
+    });
   }
 
   /**
@@ -818,6 +893,7 @@ export function mountRace(): void {
     }
 
     clearStatus();
+    showGenProgress(0);
 
     const speed = Number(speedSelect.value);
     if (!Number.isFinite(speed)) {
@@ -843,7 +919,11 @@ export function mountRace(): void {
     }
 
     pool.start(spec, {
+      onProgress: (ratio) => {
+        showGenProgress(ratio);
+      },
       onGraph: (graph) => {
+        hideGenProgress();
         race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX, params.k);
         race.setSpeed(speed);
 
@@ -884,7 +964,7 @@ export function mountRace(): void {
         race.appendChunk(lane, chunk);
         applyPendingSeek();
         syncScrubberUi();
-        drawFrame();
+        schedulePaint();
       },
       onLaneDone: (lane) => {
         if (race === null) {
@@ -894,7 +974,7 @@ export function mountRace(): void {
         race.markLaneComplete(lane);
         applyPendingSeek();
         syncScrubberUi();
-        drawFrame();
+        schedulePaint();
       },
       onError: (_lane, message) => {
         showStatus(message);
@@ -1091,7 +1171,11 @@ export function mountRace(): void {
       syncGalleryControls();
       return;
     }
-    applyRaceState({ ...raceState, g: raw });
+    let nextN = raceState.n;
+    if (raw === "city" && (raceState.n === SIZE_PRESETS.XL || raceState.n > CITY_MAX_N)) {
+      nextN = CITY_MAX_N;
+    }
+    applyRaceState({ ...raceState, g: raw, n: nextN });
   });
 
   sizeSelect.addEventListener("change", () => {

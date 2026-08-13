@@ -53,9 +53,20 @@ export type TraceDoneMessage = { type: "done" };
 /** Worker → main: run failed; `message` is safe to surface in UI. */
 export type TraceErrorMessage = { type: "error"; message: string };
 
+/** Worker → main: graph generation progress ratio in [0, 1] (issue #20). */
+export type TraceProgressMessage = {
+  type: "progress";
+  phase: "generate";
+  ratio: number;
+};
+
 /** Union of all worker → main payloads. */
 export type WorkerToMain =
-  TraceGraphMessage | TraceChunkMessage | TraceDoneMessage | TraceErrorMessage;
+  | TraceGraphMessage
+  | TraceChunkMessage
+  | TraceDoneMessage
+  | TraceErrorMessage
+  | TraceProgressMessage;
 
 /**
  * Narrow a raw `MessageEvent.data` payload to a {@link WorkerToMain} message.
@@ -107,6 +118,20 @@ export function parseWorkerToMain(data: unknown): WorkerToMain | null {
         return null;
       }
       return { type: "chunk", chunk };
+    }
+    case "progress": {
+      const phase = record["phase"];
+      const ratio = record["ratio"];
+      if (
+        phase !== "generate" ||
+        typeof ratio !== "number" ||
+        !Number.isFinite(ratio) ||
+        ratio < 0 ||
+        ratio > 1
+      ) {
+        return null;
+      }
+      return { type: "progress", phase: "generate", ratio };
     }
     case "done":
       return { type: "done" };

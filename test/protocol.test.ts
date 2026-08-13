@@ -38,6 +38,20 @@ describe("parseWorkerToMain", () => {
       type: "error",
       message: "boom",
     });
+    expect(parseWorkerToMain({ type: "progress", phase: "generate", ratio: 0.5 })).toEqual({
+      type: "progress",
+      phase: "generate",
+      ratio: 0.5,
+    });
+  });
+
+  it("rejects invalid progress messages", () => {
+    expect(parseWorkerToMain({ type: "progress", phase: "generate" })).toBeNull();
+    expect(parseWorkerToMain({ type: "progress", phase: "trace", ratio: 0.5 })).toBeNull();
+    expect(
+      parseWorkerToMain({ type: "progress", phase: "generate", ratio: Number.NaN }),
+    ).toBeNull();
+    expect(parseWorkerToMain({ type: "progress", phase: "generate", ratio: 1.5 })).toBeNull();
   });
 
   it("returns null for garbage payloads", () => {

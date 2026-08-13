@@ -117,6 +117,29 @@ function wrapContext(ctx: CanvasRenderingContext2D): DrawContext {
     lineTo(x: number, y: number): void {
       ctx.lineTo(x, y);
     },
+    getImageData(sx: number, sy: number, sw: number, sh: number): ImageData {
+      return ctx.getImageData(sx, sy, sw, sh);
+    },
+    putImageData(
+      imageData: ImageData,
+      dx: number,
+      dy: number,
+      dirtyX?: number,
+      dirtyY?: number,
+      dirtyWidth?: number,
+      dirtyHeight?: number,
+    ): void {
+      if (
+        dirtyX !== undefined &&
+        dirtyY !== undefined &&
+        dirtyWidth !== undefined &&
+        dirtyHeight !== undefined
+      ) {
+        ctx.putImageData(imageData, dx, dy, dirtyX, dirtyY, dirtyWidth, dirtyHeight);
+        return;
+      }
+      ctx.putImageData(imageData, dx, dy);
+    },
   };
 }
 

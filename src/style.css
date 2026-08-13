@@ -463,6 +463,50 @@ body {
   border-radius: 2px;
 }
 
+.race-gen-progress-wrap,
+.lens-gen-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.race-gen-progress-label,
+.lens-gen-progress-label {
+  font-size: var(--text-ui);
+  color: var(--muted);
+}
+
+.race-gen-progress,
+.lens-gen-progress {
+  width: 100%;
+  height: 0.35rem;
+  border: none;
+  border-radius: 2px;
+  background: var(--panel);
+  overflow: hidden;
+  accent-color: var(--gold);
+}
+
+.race-gen-progress::-webkit-progress-bar,
+.lens-gen-progress::-webkit-progress-bar {
+  background: var(--panel);
+  border-radius: 2px;
+}
+
+.race-gen-progress::-webkit-progress-value,
+.lens-gen-progress::-webkit-progress-value {
+  background: var(--muted);
+  border-radius: 2px;
+}
+
+.race-gen-progress::-moz-progress-bar,
+.lens-gen-progress::-moz-progress-bar {
+  background: var(--muted);
+  border-radius: 2px;
+}
+
 .race-transport {
   display: flex;
   flex-direction: column;
