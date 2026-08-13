@@ -598,14 +598,16 @@ export function mountLens(): void {
       return;
     }
 
-    const workerUrl =
+    // Vite only emits a worker chunk when new Worker(new URL("…", import.meta.url), { type: "module" })
+    // is written inline with a static path. Do not assign the URL to a variable first (#48).
+    const nextWorker =
       lensState.algo === "bmssp"
-        ? new URL("../workers/bmsspTrace.ts", import.meta.url)
-        : new URL("../workers/dijkstraTrace.ts", import.meta.url);
-
-    const nextWorker = new Worker(workerUrl, {
-      type: "module",
-    });
+        ? new Worker(new URL("../workers/bmsspTrace.ts", import.meta.url), {
+            type: "module",
+          })
+        : new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
+            type: "module",
+          });
     worker = nextWorker;
 
     nextWorker.onmessage = (event: MessageEvent<unknown>): void => {

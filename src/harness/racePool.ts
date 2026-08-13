@@ -223,15 +223,22 @@ function isGraphKind(value: string): value is GraphKind {
 /**
  * Default browser worker factory — script URL chosen by algorithm, not request field.
  *
+ * Vite only emits a worker chunk when `new Worker(new URL("…", import.meta.url), { type: "module" })`
+ * is written inline with a static path. Do not assign the URL to a variable first (#48).
+ *
  * @param algo - Lane algorithm selector.
  */
 function defaultSpawnWorker(algo: TraceAlgo): RaceWorkerHandle {
-  const workerUrl =
+  const worker =
     algo === "bmssp"
-      ? new URL("../workers/bmsspTrace.ts", import.meta.url)
-      : new URL("../workers/dijkstraTrace.ts", import.meta.url);
+      ? new Worker(new URL("../workers/bmsspTrace.ts", import.meta.url), {
+          type: "module",
+        })
+      : new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
+          type: "module",
+        });
 
-  return wrapDomWorker(new Worker(workerUrl, { type: "module" }));
+  return wrapDomWorker(worker);
 }
 
 /**
