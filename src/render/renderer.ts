@@ -19,24 +19,15 @@ import {
 } from "./dirtyRect.ts";
 import { cssColorForSettleOrder } from "./palette.ts";
 import { type CanvasSurface, type DrawContext, type SurfaceFactory } from "./surface.ts";
+import { EMBER_RGB, PHOTO_FINISH_GOLD, THEMES, type ThemeTokens } from "./theme.ts";
 
-/** Paper background behind the graph. */
-const PAPER_BG = "rgb(246, 244, 239)";
-
-/** Static edge stroke color. */
-const EDGE_STROKE = "rgb(180, 176, 168)";
-
-/** Frontier ring stroke color. */
-const FRONTIER_STROKE = "rgb(40, 40, 40)";
+export { EMBER_RGB, PHOTO_FINISH_GOLD };
 
 /** Edge line width in pixels. */
 const EDGE_LINE_WIDTH = 1;
 
 /** Frontier ring line width in pixels. */
 const FRONTIER_LINE_WIDTH = 1.5;
-
-/** Ghost relaxed-edge stroke color (muted, distinct from static edges). */
-const GHOST_STROKE = "rgba(40, 40, 40, 0.35)";
 
 /** Ghost edge line width in pixels. */
 const GHOST_LINE_WIDTH = 1.5;
@@ -49,9 +40,6 @@ export const GHOST_WINDOW_OPS = 10_000;
 
 /** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
-
-/** Fixed gold stroke for photo-finish shortest-path highlight (issue #14). */
-export const PHOTO_FINISH_GOLD = "rgb(212, 168, 55)";
 
 /** Optional overlay toggles for frontier, ghosts, BMSSP narration FX, and photo-finish. */
 export type OverlayFlags = {
@@ -82,9 +70,6 @@ type ResolvedOverlayFlags = {
   photoFinish: boolean;
 };
 
-/** BMSSP ember accent (lane persona). */
-const EMBER_RGB = "180, 70, 40";
-
 /** Recursion-depth tint alpha scale (full canvas on fx layer). */
 const RECURSION_TINT_ALPHA_SCALE = 0.08;
 
@@ -102,15 +87,6 @@ const BLOOM_FILL_ALPHA = 0.2;
 
 /** Schematic D-structure strip height in pixels along the canvas bottom. */
 const DSTRUCT_STRIP_HEIGHT = 16;
-
-/** Stone fill for alternating D-block segments. */
-const STONE_FILL = "rgb(180, 176, 168)";
-
-/** Source vertex outer ring stroke (stone/white). */
-const SOURCE_MARK_STROKE = "rgb(255, 255, 255)";
-
-/** Finish vertex ring stroke (darker accent). */
-const FINISH_MARK_STROKE = "rgb(60, 56, 48)";
 
 /** Source/finish mark ring line width in pixels. */
 const MARK_LINE_WIDTH = 2;
@@ -303,6 +279,22 @@ export class Renderer {
   private readonly dirty: DirtyRect;
   /** True until the first composite or after {@link setGraph}; forces a full four-layer blit. */
   private needsFullComposite: boolean;
+  /** Paper background behind the graph. */
+  private paperBg: string;
+  /** Static edge stroke color. */
+  private edgeStroke: string;
+  /** Frontier ring stroke color. */
+  private frontierStroke: string;
+  /** Ghost relaxed-edge stroke color. */
+  private ghostStroke: string;
+  /** BMSSP ember accent channels for `rgba()` templates. */
+  private emberRgb: string;
+  /** D-structure schematic stone fill. */
+  private stoneFill: string;
+  /** Source vertex outer ring stroke. */
+  private sourceMarkStroke: string;
+  /** Finish vertex ring stroke. */
+  private finishMarkStroke: string;
 
   /**
    * @param opts.target - On-screen canvas surface.
@@ -341,8 +333,39 @@ export class Renderer {
     this.overlayLayer = opts.createSurface(width, height);
     this.fxLayer = opts.createSurface(width, height);
 
+    const dark = THEMES.dark;
+    this.paperBg = dark.paper;
+    this.edgeStroke = dark.hairline;
+    this.frontierStroke = dark.frontier;
+    this.ghostStroke = dark.ghost;
+    this.emberRgb = EMBER_RGB;
+    this.stoneFill = dark.stoneFill;
+    this.sourceMarkStroke = dark.sourceMark;
+    this.finishMarkStroke = dark.finishMark;
+
     this.drawEdgeLayer();
     this.clearFillLayer();
+  }
+
+  /**
+   * Apply chrome palette tokens and redraw the static edge layer.
+   *
+   * Photo-finish gold stays the bright {@link PHOTO_FINISH_GOLD} constant;
+   * ember FX channels remain {@link EMBER_RGB}.
+   *
+   * @param tokens - Semantic chrome colors from {@link THEMES}.
+   */
+  setChrome(tokens: ThemeTokens): void {
+    this.paperBg = tokens.paper;
+    this.edgeStroke = tokens.hairline;
+    this.frontierStroke = tokens.frontier;
+    this.ghostStroke = tokens.ghost;
+    this.emberRgb = EMBER_RGB;
+    this.stoneFill = tokens.stoneFill;
+    this.sourceMarkStroke = tokens.sourceMark;
+    this.finishMarkStroke = tokens.finishMark;
+    this.drawEdgeLayer();
+    this.needsFullComposite = true;
   }
 
   /**
@@ -550,10 +573,10 @@ export class Renderer {
     const width = this.edgeLayer.width;
     const height = this.edgeLayer.height;
 
-    ctx.fillStyle = PAPER_BG;
+    ctx.fillStyle = this.paperBg;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = EDGE_STROKE;
+    ctx.strokeStyle = this.edgeStroke;
     ctx.lineWidth = EDGE_LINE_WIDTH;
     ctx.beginPath();
 
@@ -775,7 +798,7 @@ export class Renderer {
     ctx.clearRect(0, 0, width, height);
 
     if (flags.frontier) {
-      ctx.strokeStyle = FRONTIER_STROKE;
+      ctx.strokeStyle = this.frontierStroke;
       ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
       const n = state.n;
@@ -803,7 +826,7 @@ export class Renderer {
       const targets = graph.targets;
       const srcOfEdge = this.srcOfEdge;
 
-      ctx.strokeStyle = GHOST_STROKE;
+      ctx.strokeStyle = this.ghostStroke;
       ctx.lineWidth = GHOST_LINE_WIDTH;
       ctx.beginPath();
 
@@ -838,7 +861,7 @@ export class Renderer {
       const innerRadius = radius * PIVOT_FLARE_INNER_SCALE;
       const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
 
-      ctx.strokeStyle = `rgba(${EMBER_RGB}, 0.85)`;
+      ctx.strokeStyle = `rgba(${this.emberRgb}, 0.85)`;
       ctx.lineWidth = FRONTIER_LINE_WIDTH;
 
       for (let v = 0; v < n; v += 1) {
@@ -878,7 +901,7 @@ export class Renderer {
     if (isVertexInRange(flags.source, n)) {
       const cx = projectX(camera, vertexX(graph, flags.source));
       const cy = projectY(camera, vertexY(graph, flags.source));
-      ctx.strokeStyle = SOURCE_MARK_STROKE;
+      ctx.strokeStyle = this.sourceMarkStroke;
       ctx.lineWidth = MARK_LINE_WIDTH;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, TAU);
@@ -888,7 +911,7 @@ export class Renderer {
     if (flags.finish !== undefined && isVertexInRange(flags.finish, n)) {
       const cx = projectX(camera, vertexX(graph, flags.finish));
       const cy = projectY(camera, vertexY(graph, flags.finish));
-      ctx.strokeStyle = FINISH_MARK_STROKE;
+      ctx.strokeStyle = this.finishMarkStroke;
       ctx.lineWidth = MARK_LINE_WIDTH;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, TAU);
@@ -909,7 +932,7 @@ export class Renderer {
     if (flags.recursionTint && state.recursionDepth > 0) {
       const depthFactor = Math.min(1, state.recursionDepth / RECURSION_DEPTH_CAP);
       const alpha = depthFactor * RECURSION_TINT_ALPHA_SCALE;
-      ctx.fillStyle = `rgba(${EMBER_RGB}, ${String(alpha)})`;
+      ctx.fillStyle = `rgba(${this.emberRgb}, ${String(alpha)})`;
       ctx.fillRect(0, 0, width, height);
     }
 
@@ -920,7 +943,7 @@ export class Renderer {
       const y0 = projectY(camera, state.bloomMinY) - pad;
       const x1 = projectX(camera, state.bloomMaxX) + pad;
       const y1 = projectY(camera, state.bloomMaxY) + pad;
-      ctx.fillStyle = `rgba(${EMBER_RGB}, ${String(BLOOM_FILL_ALPHA)})`;
+      ctx.fillStyle = `rgba(${this.emberRgb}, ${String(BLOOM_FILL_ALPHA)})`;
       ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     }
 
@@ -949,7 +972,7 @@ export class Renderer {
         const nextX = i === blockCount - 1 ? width : Math.min(width, x + segmentWidth);
         const w = nextX - x;
         if (w > 0) {
-          ctx.fillStyle = i % 2 === 0 ? `rgb(${EMBER_RGB})` : STONE_FILL;
+          ctx.fillStyle = i % 2 === 0 ? `rgb(${this.emberRgb})` : this.stoneFill;
           ctx.fillRect(x, stripY, w, DSTRUCT_STRIP_HEIGHT);
         }
         x = nextX;
@@ -1016,7 +1039,7 @@ export class Renderer {
     const dirty = this.dirty;
 
     if (this.needsFullComposite || dirty.full) {
-      targetCtx.fillStyle = PAPER_BG;
+      targetCtx.fillStyle = this.paperBg;
       targetCtx.fillRect(0, 0, width, height);
       targetCtx.drawImage(this.edgeLayer, 0, 0, width, height, 0, 0, width, height);
       targetCtx.drawImage(this.fillLayer, 0, 0, width, height, 0, 0, width, height);

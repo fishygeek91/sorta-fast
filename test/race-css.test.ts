@@ -101,3 +101,27 @@ describe("site disclosures CSS", () => {
     expect(afterMedia).toMatch(/\.site-disclosures\s*\{[\s\S]*?flex-direction:\s*column/);
   });
 });
+
+describe("issue #17 visual tokens", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("defines light-theme overrides and design-token hooks", () => {
+    expect(css).toContain('[data-theme="light"]');
+    expect(css).toContain("--paper:");
+    expect(css).toContain("--text-title:");
+  });
+
+  it("uses tabular numerals via font-feature-settings", () => {
+    const hasTnum =
+      css.includes('font-feature-settings: "tnum" 1') ||
+      css.includes('font-feature-settings: "tnum" 1;');
+    expect(hasTnum).toBe(true);
+  });
+
+  it("styles persona lanes, theme toggle, and marble accent hooks", () => {
+    expect(css).toContain('.race-lane[data-persona="stub"]');
+    expect(css).toContain(".theme-toggle");
+    expect(css).toMatch(/data-accent="marble"/);
+    expect(css).toContain('.lens-canvas[data-persona="marble"]');
+  });
+});

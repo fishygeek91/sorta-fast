@@ -33,6 +33,21 @@ describe("disclosures mount wiring", () => {
     expect(source).toContain("mountDisclosures");
   });
 
+  it("race.ts source contains mountThemeToggle", () => {
+    const source = readUiSource("race.ts");
+    expect(source).toContain("mountThemeToggle");
+  });
+
+  it("lens.ts source contains mountThemeToggle", () => {
+    const source = readUiSource("lens.ts");
+    expect(source).toContain("mountThemeToggle");
+  });
+
+  it("disclosures.ts source sets dataset.accent on disclosure items", () => {
+    const source = readUiSource("disclosures.ts");
+    expect(source).toContain("dataset.accent");
+  });
+
   it("disclosures.ts source does not reference pause, teardown, or reload", () => {
     const source = readUiSource("disclosures.ts");
     expect(source).not.toMatch(FORBIDDEN_DISCLOSURE_WORDS);

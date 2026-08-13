@@ -9,6 +9,9 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Chrome token module `src/render/theme.ts` (dark default + light cream palettes, marble/ember/moss accents) with WCAG contrast and deuteranopia helpers; headless tests in `test/theme.test.ts` and `test/theme-contrast.test.ts` (#17).
+- Theme toggle in Race and Lens mode nav (`mountThemeToggle`); renderers apply stored light/dark chrome on boot; Lens canvas `data-persona` syncs marble/ember with Dijkstra/BMSSP (#17).
+- Open Graph and Twitter Card meta in `index.html` plus `public/og-card.png` (1200×630 dark photo-finish poster: three persona lanes with settle-order gradient and gold path; authored illustration resized with `sips`, not a live `?seed=` capture); headless contract tests in `test/og-meta.test.ts`, issue #17 visual-token CSS scans in `test/race-css.test.ts`, and post-build `og-card.png` / `og:image` checks in `test/build-workers.ts` (#17).
 - Production favicon (`public/favicon.svg`) and `<link rel="icon">` in `index.html` so GitHub Pages stops 404ing the default favicon request (#48).
 - Isolated `test:build` CI job runs `vite build` then asserts Dijkstra and BMSSP trace worker chunks (and copied `favicon.svg`) under `dist/` so production Play regressions are caught before deploy (#48).
 - Footer disclosures in Race and Lens: Fairness rules (work-clock op-cost model + link to the `src/core/trace.ts` cost table), What am I looking at? (sorting-barrier story, Perfectionist / Batcher / Forester personas, visual vocabulary), and The papers (STOC 2025, arXiv 2504.17033, arXiv 2602.07868, Quanta). Opening a panel does not pause playback (#16).
@@ -21,6 +24,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Canvas renderer chrome follows theme tokens via `setChrome` (dark default paper/edges/frontier/ghost); photo-finish gold stays the shared bright stroke (#17).
+- Dark-first design tokens in `src/style.css`: CSS custom properties for paper/ink/panel/hairline/persona accents, `[data-theme="light"]` overrides, ember/moss `#app` glows (cream radials in light), grouped tabular numerals, theme-toggle and explainer swatch hooks, and `index.html` `data-theme="dark"` plus `theme-color` / `color-scheme` for first paint (#17).
 - Fairness intro describes lanes advancing to the shared clock tick; explainer names four of the five 2025 authors for the Feb 2026 record (#16).
 - Canonical race share links write `race=` and omit `lane3=`; old `?lane3=dijkstra` links still parse as a third Dijkstra lane (#15).
 - `resolveRaceFinishVertex` and `isBfsReachable` so Race can warn on `?target=` equal to the source, out of range, or unreachable instead of silently substituting (#14).

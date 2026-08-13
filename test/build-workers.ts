@@ -95,6 +95,22 @@ function main(): void {
     return;
   }
 
+  const ogCardPath = join(distDir, "og-card.png");
+  if (!existsSync(ogCardPath)) {
+    fail("dist/og-card.png missing");
+    return;
+  }
+
+  if (!indexHtml.includes("og:image")) {
+    fail("dist/index.html does not include og:image meta tag");
+    return;
+  }
+
+  if (!indexHtml.includes("og-card.png")) {
+    fail("dist/index.html does not reference og-card.png");
+    return;
+  }
+
   console.log(`build-workers ok: ${dijkstraChunk}, ${bmsspChunk}`);
 }
 

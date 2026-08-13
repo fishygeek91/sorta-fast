@@ -7,6 +7,7 @@ import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
+import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
@@ -14,6 +15,7 @@ import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
+import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 
 /** Visible canvas edge length in CSS pixels per lane. */
 const CANVAS_SIZE = 400;
@@ -190,6 +192,15 @@ export function mountRace(): void {
   for (const config of configs) {
     laneUis.push(buildLanePanel(lanesEl, config));
   }
+
+  mountThemeToggle(modeNav, (mode: ThemeMode) => {
+    for (const ui of laneUis) {
+      if (ui.renderer !== null) {
+        ui.renderer.setChrome(THEMES[mode]);
+      }
+    }
+    drawFrame();
+  });
 
   const transport = document.createElement("div");
   transport.className = "race-transport";
@@ -556,6 +567,7 @@ export function mountRace(): void {
             createSurface: createDomSurface,
             graph,
           });
+          ui.renderer.setChrome(THEMES[readStoredTheme()]);
         }
 
         applyPendingSeek();
