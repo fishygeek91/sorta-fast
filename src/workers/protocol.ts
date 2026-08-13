@@ -1,13 +1,21 @@
 /**
- * Worker ↔ main thread message types for streamed Dijkstra traces (issue #8).
+ * Worker ↔ main thread message types for streamed trace runs (issue #8, #12).
+ *
+ * Dijkstra and BMSSP workers share the same request shape; optional `algo`
+ * defaults to `"dijkstra"` for backward compatibility on the Dijkstra worker.
  */
 
 import { type GraphKind } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
 
-/** Main → worker: start a graph generation + Dijkstra trace run. */
+/** Lane algorithm selector for trace worker requests. */
+export type TraceAlgo = "dijkstra" | "bmssp";
+
+/** Main → worker: start a graph generation + algorithm trace run. */
 export type TraceRunRequest = {
   type: "run";
+  /** Defaults to `"dijkstra"` when omitted (Dijkstra worker). BMSSP worker ignores or expects `"bmssp"`. */
+  algo?: TraceAlgo;
   kind: GraphKind;
   n: number;
   seed: number;

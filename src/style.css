@@ -92,6 +92,20 @@ body {
   gap: 1.25rem;
 }
 
+.lens-counter-bmssp:not([hidden]) {
+  margin-top: 0.15rem;
+}
+
+.lens-narration {
+  margin: 0;
+  width: min(720px, calc(100vw - 2rem));
+  font-size: 0.92rem;
+  line-height: 1.45;
+  text-align: center;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
 .lens-counter-secondary {
   font-size: 0.9rem;
   opacity: 0.85;

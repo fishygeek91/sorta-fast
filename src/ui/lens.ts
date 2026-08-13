@@ -1,17 +1,19 @@
 /**
- * Lens mode UI: single-lane Dijkstra playback with worker-streamed traces (issue #8).
+ * Lens mode UI: single-lane playback with worker-streamed traces (issue #8, #12).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type Graph, type GraphKind } from "../core/graph.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
-import { Renderer } from "../render/renderer.ts";
+import { Renderer, type OverlayFlags } from "../render/renderer.ts";
 import {
   type TraceChunkMessage,
   type TraceGraphMessage,
+  type TraceRunRequest,
   type WorkerToMain,
 } from "../workers/protocol.ts";
-import { parseLensUrl, serializeLensUrl, type LensUrlState } from "./urlState.ts";
+import { formatBmsspNarration } from "./narration.ts";
+import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
 /** Visible canvas edge length in CSS pixels. */
 const CANVAS_SIZE = 720;
@@ -28,11 +30,11 @@ const LENS_SIZE_KEYS = ["S", "M", "L"] as const;
 type LensSizeKey = (typeof LENS_SIZE_KEYS)[number];
 
 /**
- * Mount Lens mode into `#app`: worker-streamed Dijkstra, playback, and renderer.
+ * Mount Lens mode into `#app`: worker-streamed single-lane playback and renderer.
  *
- * Parses and canonicalizes `?g=&n=&seed=` on boot. Graph controls rewrite the URL
- * and restart the worker. Transport, scrubber, overlay toggles, and live counters
- * mirror the issue #8 spec.
+ * Parses and canonicalizes `?g=&n=&seed=&algo=` on boot. Algorithm and graph
+ * controls rewrite the URL and restart the worker. Transport, scrubber, overlay
+ * toggles, narration, and live counters mirror issues #8 and #12.
  *
  * @throws If `#app` is missing from `index.html`.
  */
@@ -56,7 +58,7 @@ export function mountLens(): void {
 
   const subtitle = document.createElement("p");
   subtitle.className = "lens-subtitle";
-  subtitle.textContent = "Lens · Dijkstra";
+  subtitle.textContent = "Lens";
 
   header.append(title, subtitle);
 
@@ -110,7 +112,68 @@ export function mountLens(): void {
 
   relaxBlock.append(relaxLabel, relaxValue);
   secondaryCounters.append(heapBlock, relaxBlock);
-  counters.append(comparisonsBlock, secondaryCounters);
+
+  const bmsspCounters = document.createElement("div");
+  bmsspCounters.className = "lens-counter-row lens-counter-bmssp";
+
+  const depthBlock = document.createElement("div");
+  depthBlock.className = "lens-counter lens-counter-secondary";
+
+  const depthLabel = document.createElement("span");
+  depthLabel.className = "lens-counter-label";
+  depthLabel.textContent = "Recursion";
+
+  const depthValue = document.createElement("span");
+  depthValue.className = "lens-counter-value";
+  depthValue.textContent = "0";
+
+  depthBlock.append(depthLabel, depthValue);
+
+  const boundBlock = document.createElement("div");
+  boundBlock.className = "lens-counter lens-counter-secondary";
+
+  const boundLabel = document.createElement("span");
+  boundLabel.className = "lens-counter-label";
+  boundLabel.textContent = "Bound";
+
+  const boundValue = document.createElement("span");
+  boundValue.className = "lens-counter-value";
+  boundValue.textContent = "∞";
+
+  boundBlock.append(boundLabel, boundValue);
+
+  const pullBlock = document.createElement("div");
+  pullBlock.className = "lens-counter lens-counter-secondary";
+
+  const pullLabel = document.createElement("span");
+  pullLabel.className = "lens-counter-label";
+  pullLabel.textContent = "Last pull n";
+
+  const pullValue = document.createElement("span");
+  pullValue.className = "lens-counter-value";
+  pullValue.textContent = "0";
+
+  pullBlock.append(pullLabel, pullValue);
+
+  const dstructBlock = document.createElement("div");
+  dstructBlock.className = "lens-counter lens-counter-secondary";
+
+  const dstructLabel = document.createElement("span");
+  dstructLabel.className = "lens-counter-label";
+  dstructLabel.textContent = "D ops";
+
+  const dstructValue = document.createElement("span");
+  dstructValue.className = "lens-counter-value";
+  dstructValue.textContent = "0";
+
+  dstructBlock.append(dstructLabel, dstructValue);
+  bmsspCounters.append(depthBlock, boundBlock, pullBlock, dstructBlock);
+
+  counters.append(comparisonsBlock, secondaryCounters, bmsspCounters);
+
+  const narrationEl = document.createElement("p");
+  narrationEl.className = "lens-narration";
+  narrationEl.textContent = "BMSSP idle";
 
   const controls = document.createElement("div");
   controls.className = "lens-controls";
@@ -189,10 +252,63 @@ export function mountLens(): void {
   relaxedCheckbox.checked = true;
   relaxedLabel.append(relaxedCheckbox, document.createTextNode(" Relaxed edges"));
 
-  overlaysEl.append(frontierLabel, relaxedLabel);
+  const recursionLabel = document.createElement("label");
+  recursionLabel.className = "lens-overlay-toggle";
+
+  const recursionCheckbox = document.createElement("input");
+  recursionCheckbox.type = "checkbox";
+  recursionCheckbox.checked = true;
+  recursionLabel.append(recursionCheckbox, document.createTextNode(" Recursion tint"));
+
+  const pivotLabel = document.createElement("label");
+  pivotLabel.className = "lens-overlay-toggle";
+
+  const pivotCheckbox = document.createElement("input");
+  pivotCheckbox.type = "checkbox";
+  pivotCheckbox.checked = true;
+  pivotLabel.append(pivotCheckbox, document.createTextNode(" Pivot flares"));
+
+  const bloomLabel = document.createElement("label");
+  bloomLabel.className = "lens-overlay-toggle";
+
+  const bloomCheckbox = document.createElement("input");
+  bloomCheckbox.type = "checkbox";
+  bloomCheckbox.checked = true;
+  bloomLabel.append(bloomCheckbox, document.createTextNode(" Batch blooms"));
+
+  const dstructStripLabel = document.createElement("label");
+  dstructStripLabel.className = "lens-overlay-toggle";
+
+  const dstructCheckbox = document.createElement("input");
+  dstructCheckbox.type = "checkbox";
+  dstructCheckbox.checked = true;
+  dstructStripLabel.append(dstructCheckbox, document.createTextNode(" D-structure strip"));
+
+  overlaysEl.append(
+    frontierLabel,
+    relaxedLabel,
+    recursionLabel,
+    pivotLabel,
+    bloomLabel,
+    dstructStripLabel,
+  );
 
   const graphControls = document.createElement("div");
   graphControls.className = "lens-graph-controls";
+
+  const algoLabel = document.createElement("label");
+  algoLabel.className = "lens-graph-field";
+  algoLabel.textContent = "Algorithm ";
+
+  const algoSelect = document.createElement("select");
+  algoSelect.id = "lens-algo-select";
+  for (const algo of ["dijkstra", "bmssp"] as const) {
+    const option = document.createElement("option");
+    option.value = algo;
+    option.textContent = algo === "dijkstra" ? "Dijkstra" : "BMSSP";
+    algoSelect.append(option);
+  }
+  algoLabel.append(algoSelect);
 
   const kindLabel = document.createElement("label");
   kindLabel.className = "lens-graph-field";
@@ -232,7 +348,7 @@ export function mountLens(): void {
   seedInput.step = "1";
   seedLabel.append(seedInput);
 
-  graphControls.append(kindLabel, sizeLabel, seedLabel);
+  graphControls.append(algoLabel, kindLabel, sizeLabel, seedLabel);
 
   const statusEl = document.createElement("p");
   statusEl.className = "lens-status";
@@ -240,14 +356,21 @@ export function mountLens(): void {
 
   controls.append(transport, speedLabel, scrubLabel, overlaysEl, graphControls, statusEl);
 
-  root.append(header, canvas, counters, controls);
+  root.append(header, canvas, counters, narrationEl, controls);
 
   const target = wrapDomCanvas(canvas);
   let playback: Playback | null = null;
   let renderer: Renderer | null = null;
   let worker: Worker | null = null;
 
-  const overlays = { frontier: true, relaxedEdges: true };
+  const overlays: OverlayFlags = {
+    frontier: true,
+    relaxedEdges: true,
+    recursionTint: true,
+    pivotFlares: true,
+    batchBlooms: true,
+    dstructStrip: true,
+  };
 
   /** True while the user is dragging the scrubber thumb. */
   let scrubberPointerDown = false;
@@ -274,15 +397,55 @@ export function mountLens(): void {
   }
 
   /**
+   * @param bound - Active BMSSP bound B, or `Infinity` when unset.
+   */
+  function formatBound(bound: number): string {
+    if (!Number.isFinite(bound)) {
+      return "∞";
+    }
+    return String(bound);
+  }
+
+  /**
    * Sync graph control widgets to the current Lens URL state.
    */
   function syncGraphControls(): void {
+    algoSelect.value = lensState.algo;
     kindSelect.value = lensState.g;
     sizeSelect.value = sizeKeyForN(lensState.n);
     seedInput.value = String(lensState.seed);
   }
 
+  /**
+   * Update subtitle, narration visibility, and BMSSP-only counter row for the active algo.
+   */
+  function syncAlgoUi(): void {
+    if (lensState.algo === "bmssp") {
+      subtitle.textContent = "Lens · BMSSP";
+      bmsspCounters.hidden = false;
+    } else {
+      subtitle.textContent = "Lens · Dijkstra";
+      bmsspCounters.hidden = true;
+    }
+  }
+
+  /**
+   * Refresh the narration strip from playback state and active algorithm.
+   */
+  function syncNarration(): void {
+    if (playback === null) {
+      narrationEl.textContent = lensState.algo === "bmssp" ? "BMSSP idle" : "Dijkstra";
+      return;
+    }
+    if (lensState.algo === "bmssp") {
+      narrationEl.textContent = formatBmsspNarration(playback.state);
+    } else {
+      narrationEl.textContent = "Dijkstra";
+    }
+  }
+
   syncGraphControls();
+  syncAlgoUi();
 
   /**
    * @param message - Worker graph payload.
@@ -347,6 +510,10 @@ export function mountLens(): void {
       comparisonsValue.textContent = "0";
       heapValue.textContent = "0";
       relaxValue.textContent = "0";
+      depthValue.textContent = "0";
+      boundValue.textContent = "∞";
+      pullValue.textContent = "0";
+      dstructValue.textContent = "0";
       return;
     }
 
@@ -354,6 +521,13 @@ export function mountLens(): void {
     comparisonsValue.textContent = String(Math.floor(state.work));
     heapValue.textContent = String(state.heapOps);
     relaxValue.textContent = String(state.relaxations);
+
+    if (lensState.algo === "bmssp") {
+      depthValue.textContent = String(state.recursionDepth);
+      boundValue.textContent = formatBound(state.currentBound);
+      pullValue.textContent = String(state.lastPullN);
+      dstructValue.textContent = String(state.dstructOps);
+    }
   }
 
   /**
@@ -366,6 +540,7 @@ export function mountLens(): void {
     renderer.draw(playback.state, overlays);
     syncScrubberUi();
     syncCounters();
+    syncNarration();
   }
 
   /**
@@ -447,6 +622,11 @@ export function mountLens(): void {
     comparisonsValue.textContent = "0";
     heapValue.textContent = "0";
     relaxValue.textContent = "0";
+    depthValue.textContent = "0";
+    boundValue.textContent = "∞";
+    pullValue.textContent = "0";
+    dstructValue.textContent = "0";
+    syncNarration();
     clearStatus();
 
     const speed = Number(speedSelect.value);
@@ -455,7 +635,12 @@ export function mountLens(): void {
       return;
     }
 
-    const nextWorker = new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
+    const workerUrl =
+      lensState.algo === "bmssp"
+        ? new URL("../workers/bmsspTrace.ts", import.meta.url)
+        : new URL("../workers/dijkstraTrace.ts", import.meta.url);
+
+    const nextWorker = new Worker(workerUrl, {
       type: "module",
     });
     worker = nextWorker;
@@ -528,8 +713,9 @@ export function mountLens(): void {
       showStatus(detail);
     };
 
-    const runMessage = {
-      type: "run" as const,
+    const runMessage: TraceRunRequest = {
+      type: "run",
+      algo: lensState.algo,
       kind: lensState.g,
       n: lensState.n,
       seed: lensState.seed,
@@ -547,6 +733,7 @@ export function mountLens(): void {
     lensState = next;
     history.replaceState(null, "", serializeLensUrl(lensState) + window.location.hash);
     syncGraphControls();
+    syncAlgoUi();
     startRun();
   }
 
@@ -605,6 +792,7 @@ export function mountLens(): void {
     }
     workLabel.textContent = formatWorkLabel(playback.state.work, playback.totalWork);
     syncCounters();
+    syncNarration();
   });
 
   frontierCheckbox.addEventListener("change", () => {
@@ -615,6 +803,36 @@ export function mountLens(): void {
   relaxedCheckbox.addEventListener("change", () => {
     overlays.relaxedEdges = relaxedCheckbox.checked;
     drawFrame();
+  });
+
+  recursionCheckbox.addEventListener("change", () => {
+    overlays.recursionTint = recursionCheckbox.checked;
+    drawFrame();
+  });
+
+  pivotCheckbox.addEventListener("change", () => {
+    overlays.pivotFlares = pivotCheckbox.checked;
+    drawFrame();
+  });
+
+  bloomCheckbox.addEventListener("change", () => {
+    overlays.batchBlooms = bloomCheckbox.checked;
+    drawFrame();
+  });
+
+  dstructCheckbox.addEventListener("change", () => {
+    overlays.dstructStrip = dstructCheckbox.checked;
+    drawFrame();
+  });
+
+  algoSelect.addEventListener("change", () => {
+    const raw = algoSelect.value;
+    if (!isLensAlgo(raw)) {
+      showStatus(`invalid algorithm: ${raw}`);
+      syncGraphControls();
+      return;
+    }
+    applyLensState({ ...lensState, algo: raw });
   });
 
   kindSelect.addEventListener("change", () => {
@@ -660,6 +878,7 @@ export function mountLens(): void {
         renderer.draw(playback.state, overlays);
         syncScrubberUi();
         syncCounters();
+        syncNarration();
       }
     }
 
@@ -668,6 +887,13 @@ export function mountLens(): void {
 
   startRun();
   requestAnimationFrame(frame);
+}
+
+/**
+ * @param value - Candidate lens algorithm slug from a select option.
+ */
+function isLensAlgo(value: string): value is LensAlgo {
+  return value === "dijkstra" || value === "bmssp";
 }
 
 /**
