@@ -1,5 +1,5 @@
 /**
- * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16).
+ * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18).
  */
 
 import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
@@ -9,6 +9,25 @@ import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { mountDisclosures } from "./disclosures.ts";
+import {
+  captureCanvasPng,
+  exportPhotoFinishWhenPainted,
+  triggerDownload,
+} from "./exportDownload.ts";
+import {
+  canExportPhotoFinish,
+  exportCaption,
+  exportFilename,
+  shareUrlFromLocation,
+} from "./exportMeta.ts";
+import { paintRaceExportSheet } from "./exportPaint.ts";
+import {
+  createCanvasRecorder,
+  createStreamRecorder,
+  exportKindFromMime,
+  pickRecorderMimeType,
+} from "./exportRecorder.ts";
+import { sheetSize, type ExportSheetSpec } from "./exportSheet.ts";
 import { mountLens } from "./lens.ts";
 import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
@@ -233,6 +252,20 @@ export function mountRace(): void {
   stepOpBtn.type = "button";
   stepOpBtn.textContent = "Step op";
 
+  const exportPngBtn = document.createElement("button");
+  exportPngBtn.type = "button";
+  exportPngBtn.id = "race-export-png";
+  exportPngBtn.textContent = "PNG";
+  exportPngBtn.disabled = true;
+  exportPngBtn.setAttribute("aria-label", "Export photo-finish PNG");
+
+  const exportWebmBtn = document.createElement("button");
+  exportWebmBtn.type = "button";
+  exportWebmBtn.id = "race-export-webm";
+  exportWebmBtn.textContent = "WebM";
+  exportWebmBtn.disabled = true;
+  exportWebmBtn.setAttribute("aria-label", "Export race video");
+
   const transportButtons = document.createElement("div");
   transportButtons.className = "lens-transport";
   transportButtons.append(
@@ -243,6 +276,8 @@ export function mountRace(): void {
     skipEndBtn,
     stepEventBtn,
     stepOpBtn,
+    exportPngBtn,
+    exportWebmBtn,
   );
 
   const speedLabel = document.createElement("label");
@@ -303,6 +338,27 @@ export function mountRace(): void {
 
   /** Last time `t` was written to the URL during playback (for throttling). */
   let lastUrlWriteMs = 0;
+
+  /** True while a WebM replay capture is in progress. */
+  let recording = false;
+
+  /** True while awaiting {@link finishVideoRecording} after photo-finish freeze. */
+  let finishingVideo = false;
+
+  /**
+   * True from recording start until {@link RaceScheduler.seek}(0) + play;
+   * prevents finishing before the replay begins.
+   */
+  let recordingAwaitingReplay = false;
+
+  /** MIME type passed to the active canvas recorder. */
+  let recordingMimeType = "";
+
+  /** Active canvas recorder during WebM export, or null when idle. */
+  let activeCanvasRecorder: ReturnType<typeof createCanvasRecorder> | null = null;
+
+  /** Offscreen sheet canvas reused for PNG and WebM export compositing. */
+  let exportSheet: HTMLCanvasElement | null = null;
 
   /**
    * @param n - Node count from URL state.
@@ -464,6 +520,183 @@ export function mountRace(): void {
   }
 
   /**
+   * @returns Whether PNG/WebM export buttons should be interactive.
+   */
+  function exportButtonsEnabled(): boolean {
+    return race !== null && canExportPhotoFinish(race.allPhotoFrozen()) && !recording;
+  }
+
+  /**
+   * Sync PNG/WebM export button disabled state.
+   */
+  function syncExportButtons(): void {
+    const enabled = exportButtonsEnabled();
+    exportPngBtn.disabled = !enabled;
+    exportWebmBtn.disabled = !enabled;
+  }
+
+  /**
+   * Enable or disable gallery and transport controls during WebM recording.
+   */
+  function syncRecordingControls(): void {
+    const disabled = recording;
+    kindSelect.disabled = disabled;
+    sizeSelect.disabled = disabled;
+    seedInput.disabled = disabled;
+    diceButton.disabled = disabled;
+    lanesSelect.disabled = disabled;
+    speedSelect.disabled = disabled;
+    skipStartBtn.disabled = disabled;
+    stepBackBtn.disabled = disabled;
+    playBtn.disabled = disabled;
+    pauseBtn.disabled = disabled;
+    skipEndBtn.disabled = disabled;
+    stepEventBtn.disabled = disabled;
+    stepOpBtn.disabled = disabled;
+    scrubber.disabled = disabled;
+    if (recording) {
+      exportWebmBtn.dataset.recording = "true";
+    } else {
+      delete exportWebmBtn.dataset.recording;
+    }
+    exportWebmBtn.textContent = recording ? "Recording…" : "WebM";
+  }
+
+  /**
+   * Reset recording state and re-enable controls after WebM export ends or is aborted.
+   */
+  function restoreRecordingUi(): void {
+    recording = false;
+    recordingAwaitingReplay = false;
+    recordingMimeType = "";
+    activeCanvasRecorder = null;
+    exportWebmBtn.textContent = "WebM";
+    syncRecordingControls();
+    syncExportButtons();
+  }
+
+  /**
+   * Create or resize the offscreen export sheet canvas for the current lane count.
+   *
+   * @returns Sheet canvas, or null when `document` is unavailable.
+   */
+  function ensureSheetCanvas(): HTMLCanvasElement | null {
+    if (typeof document === "undefined") {
+      return null;
+    }
+    const { width, height } = sheetSize(configs.length);
+    if (exportSheet === null) {
+      exportSheet = document.createElement("canvas");
+    }
+    if (exportSheet.width !== width || exportSheet.height !== height) {
+      exportSheet.width = width;
+      exportSheet.height = height;
+    }
+    return exportSheet;
+  }
+
+  /**
+   * Build export sheet content from the live race and gallery state.
+   *
+   * @throws When no race is mounted.
+   */
+  function buildExportSheetSpec(): ExportSheetSpec {
+    const activeRace = race;
+    if (activeRace === null) {
+      throw new Error("cannot build export sheet without active race");
+    }
+
+    const theme = THEMES[readStoredTheme()];
+    const shareUrl = shareUrlFromLocation(raceState, window.location);
+    const caption = exportCaption(raceState, shareUrl);
+
+    const lanes = configs.map((config, lane) => {
+      const ui = laneUis[lane];
+      if (ui === undefined) {
+        throw new Error(`missing lane UI at index ${String(lane)}`);
+      }
+      const state = activeRace.laneState(lane);
+      return {
+        label: config.label,
+        comparisons: raceCountersFromLane(state).comparisons,
+        canvas: ui.canvas,
+      };
+    });
+
+    return {
+      lanes,
+      banner: formatRaceBanner(
+        configs.map((config, lane) => ({
+          label: config.label,
+          work: activeRace.laneState(lane).work,
+        })),
+      ),
+      seedLine: caption.seedLine,
+      urlLine: caption.urlLine,
+      chrome: {
+        paper: theme.paper,
+        ink: theme.ink,
+        muted: theme.muted,
+        gold: theme.gold,
+      },
+    };
+  }
+
+  /**
+   * Composite lane tiles and footer onto the offscreen export sheet.
+   *
+   * @returns `true` when the sheet was painted; `false` when status was shown instead.
+   */
+  function paintExportSheet(): boolean {
+    const sheet = ensureSheetCanvas();
+    if (sheet === null) {
+      showStatus("export sheet canvas unavailable");
+      return false;
+    }
+    try {
+      paintRaceExportSheet(sheet, buildExportSheetSpec());
+      return true;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      showStatus(message);
+      return false;
+    }
+  }
+
+  /**
+   * Stop an in-flight WebM capture, download the blob, and restore UI.
+   *
+   * Idempotent: guarded by the `recording` flag.
+   */
+  async function finishVideoRecording(): Promise<void> {
+    if (!recording || finishingVideo) {
+      return;
+    }
+
+    finishingVideo = true;
+    recordingAwaitingReplay = false;
+    race?.pause();
+
+    const recorder = activeCanvasRecorder;
+    const mime = recordingMimeType;
+    activeCanvasRecorder = null;
+    recordingMimeType = "";
+
+    try {
+      if (recorder !== null) {
+        const blob = await recorder.stop();
+        triggerDownload(blob, exportFilename(raceState, exportKindFromMime(mime)));
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      showStatus(message);
+    } finally {
+      finishingVideo = false;
+      restoreRecordingUi();
+    }
+  }
+
+  /**
    * Paint every lane and refresh counters, scrubber, and banner.
    */
   function drawFrame(): void {
@@ -499,12 +732,34 @@ export function mountRace(): void {
 
     syncScrubberUi();
     syncBanner();
+    syncExportButtons();
+
+    if (recording) {
+      if (paintExportSheet()) {
+        if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
+          void finishVideoRecording();
+        }
+      }
+    }
   }
 
   /**
    * Terminate any in-flight workers and post a fresh multi-lane trace run.
    */
   function startRun(): void {
+    if (recording) {
+      const recorder = activeCanvasRecorder;
+      activeCanvasRecorder = null;
+      finishingVideo = false;
+      restoreRecordingUi();
+      if (recorder !== null) {
+        try {
+          void recorder.stop().catch(() => undefined);
+        } catch {
+          // already stopped
+        }
+      }
+    }
     pool.terminate();
     race = null;
     finishVertex = null;
@@ -512,6 +767,7 @@ export function mountRace(): void {
     scrubber.max = "0";
     workLabel.textContent = "0 / 0";
     bannerEl.hidden = true;
+    syncExportButtons();
 
     for (const ui of laneUis) {
       ui.comparisonsValue.textContent = "0";
@@ -658,6 +914,99 @@ export function mountRace(): void {
     race?.pause();
     race?.stepOp();
     writeClockToUrl();
+    drawFrame();
+  });
+
+  exportPngBtn.addEventListener("click", () => {
+    if (!exportButtonsEnabled()) {
+      return;
+    }
+
+    drawFrame();
+
+    const sheet = ensureSheetCanvas();
+    if (sheet === null) {
+      showStatus("export sheet canvas unavailable");
+      return;
+    }
+
+    const painted = paintExportSheet();
+    void (async () => {
+      try {
+        await exportPhotoFinishWhenPainted(painted, {
+          filename: exportFilename(raceState, "png"),
+          capturePng: () => captureCanvasPng(sheet),
+          download: triggerDownload,
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        showStatus(message);
+      }
+    })();
+  });
+
+  exportWebmBtn.addEventListener("click", () => {
+    if (!exportButtonsEnabled()) {
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined") {
+      showStatus("Video export is not supported in this browser; PNG export still works.");
+      return;
+    }
+
+    const mimeType = pickRecorderMimeType((mime) => MediaRecorder.isTypeSupported(mime));
+    if (mimeType === null) {
+      showStatus("Video export is not supported in this browser; PNG export still works.");
+      return;
+    }
+
+    const sheet = ensureSheetCanvas();
+    if (sheet === null) {
+      showStatus("export sheet canvas unavailable");
+      return;
+    }
+
+    if (typeof sheet.captureStream !== "function") {
+      showStatus("Video export is not supported in this browser; PNG export still works.");
+      return;
+    }
+
+    recording = true;
+    recordingAwaitingReplay = true;
+    recordingMimeType = mimeType;
+    syncExportButtons();
+    syncRecordingControls();
+
+    drawFrame();
+    if (!paintExportSheet()) {
+      restoreRecordingUi();
+      return;
+    }
+
+    const stream = sheet.captureStream(30);
+    const recorder = createCanvasRecorder({
+      mimeType,
+      createRecorder: (mt) => createStreamRecorder(stream, mt),
+    });
+    activeCanvasRecorder = recorder;
+
+    try {
+      recorder.start();
+    } catch (error: unknown) {
+      restoreRecordingUi();
+      const message = error instanceof Error ? error.message : String(error);
+      showStatus(message);
+      return;
+    }
+
+    if (race !== null) {
+      race.pause();
+      race.seek(0);
+      race.play();
+      recordingAwaitingReplay = false;
+    }
+
     drawFrame();
   });
 
