@@ -9,6 +9,9 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
+- Wall-clock benchmark page (`/sorta-fast/bench/`) plus headless harness (`npm run bench:wall-clock`) with committed S–XL sparse timings and the work-clock vs milliseconds caveat (#21).
+- v1.0 launch checklist in `docs/launch-checklist.md` (#21).
 - Adversarial gallery kind (`g=adversarial`): Θ(√n) chain + wide fans, seeded, property-tested (#20).
 - City graphs reject n > L (25000); Race/Lens disable XL for city with #32 tooltip and clamp on kind switch (#20, #32).
 - Aggregated render at ≥25k nodes: 2px ImageData settle squares, undirected-once edge prerender, simplified overlays (#20).

@@ -111,6 +111,12 @@ function main(): void {
     return;
   }
 
+  const benchIndexPath = join(distDir, "bench/index.html");
+  if (!existsSync(benchIndexPath)) {
+    fail("dist/bench/index.html missing — run npm run build first");
+    return;
+  }
+
   console.log(`build-workers ok: ${dijkstraChunk}, ${bmsspChunk}`);
 }
 

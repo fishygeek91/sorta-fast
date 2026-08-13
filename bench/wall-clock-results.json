@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-08-13T23:45:15.934Z",
+  "node": "v24.8.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cells": [
+    {
+      "kind": "sparse",
+      "n": 500,
+      "seed": 4,
+      "dijkstraWallMs": 1.719332999999999,
+      "bmsspWallMs": 7.027290999999998,
+      "dijkstraWork": 5498,
+      "bmsspWork": 9910
+    },
+    {
+      "kind": "sparse",
+      "n": 5000,
+      "seed": 4,
+      "dijkstraWallMs": 5.021709000000001,
+      "bmsspWallMs": 40.612792,
+      "dijkstraWork": 82326,
+      "bmsspWork": 105601
+    },
+    {
+      "kind": "sparse",
+      "n": 25000,
+      "seed": 4,
+      "dijkstraWallMs": 10.819290999999993,
+      "bmsspWallMs": 203.08004199999996,
+      "dijkstraWork": 519411,
+      "bmsspWork": 495618
+    },
+    {
+      "kind": "sparse",
+      "n": 100000,
+      "seed": 4,
+      "dijkstraWallMs": 44.58170899999999,
+      "bmsspWallMs": 1132.268958,
+      "dijkstraWork": 2413981,
+      "bmsspWork": 2044058
+    }
+  ]
+}
