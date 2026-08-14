@@ -10,6 +10,7 @@
   --ember: rgb(180, 70, 40);
   --moss: rgb(56, 128, 118);
   --gold: rgb(212, 168, 55);
+  --frontier: rgb(236, 230, 220);
   --text-title: 1.75rem;
   --text-subtitle: 1rem;
   --text-body: 1rem;
@@ -40,6 +41,7 @@
   --hairline: rgb(180, 176, 168);
   --hover: rgb(255, 248, 236);
   --gold: rgb(148, 108, 20);
+  --frontier: rgb(40, 40, 40);
 }
 
 * {
@@ -397,6 +399,50 @@ body {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+.race-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+.race-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.race-legend-swatch {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+  flex: 0 0 auto;
+}
+
+.race-legend-swatch[data-swatch="frontier"] {
+  background: var(--frontier);
+}
+
+.race-legend-swatch[data-swatch="settled"] {
+  background: linear-gradient(90deg, var(--ink), var(--gold));
+  border-radius: 2px;
+}
+
+.race-legend-swatch[data-swatch="unreached"] {
+  background: var(--paper);
+}
+
+.race-legend-swatch[data-swatch="gold"] {
+  background: var(--gold);
+}
+
 @media (max-width: 720px) {
   .race-lanes {
     grid-template-columns: 1fr;
@@ -424,6 +470,11 @@ body {
     flex: 1 1 auto;
     width: 100%;
   }
+
+  .race-legend {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 
 .race-lane {
@@ -445,6 +496,33 @@ body {
   font-size: var(--text-label);
   letter-spacing: 0.04em;
   font-weight: 500;
+}
+
+.race-lane-label::before {
+  content: "";
+  display: inline-block;
+  width: 0.65em;
+  height: 0.65em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--hairline);
+}
+
+.race-lane[data-persona="marble"] .race-lane-label::before {
+  background: var(--marble);
+}
+
+.race-lane[data-persona="ember"] .race-lane-label::before {
+  background: var(--ember);
+}
+
+.race-lane[data-persona="moss"] .race-lane-label::before {
+  background: var(--moss);
+}
+
+.race-lane[data-persona="stub"] .race-lane-label::before {
+  background: rgba(180, 176, 168, 0.45);
 }
 
 .race-lane-heading {
@@ -546,6 +624,20 @@ body {
 .race-progress::-moz-progress-bar {
   background: var(--muted);
   border-radius: 2px;
+}
+
+.race-settled-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.race-settled-label {
+  font-size: var(--text-label);
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .race-gen-progress-wrap,

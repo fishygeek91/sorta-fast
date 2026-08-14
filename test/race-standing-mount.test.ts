@@ -11,7 +11,8 @@ const CORE_DIJKSTRA_IMPORT = /from\s+["'][^"']*core\/dijkstra(?:\.ts)?["']/;
 
 const CORE_BMSSP_IMPORT = /from\s+["'][^"']*core\/bmssp/;
 
-const BANNER_FIRST_APPEND = /raceRoot\.append\(\s*bannerEl\s*,\s*lanesEl\s*,\s*transport\s*\)/;
+const BANNER_FIRST_APPEND =
+  /raceRoot\.append\(\s*bannerEl\s*,\s*lanesEl\s*,\s*legendEl\s*,\s*transport\s*\)/;
 
 const LANES_ONLY_APPEND = /raceRoot\.append\(\s*lanesEl\s*,\s*transport\s*\)/;
 
@@ -33,7 +34,7 @@ describe("issue #63 race standing mount wiring", () => {
     expect(raceSource).toContain("delete root.dataset.mode");
   });
 
-  it("race.ts appends banner before lanes in raceRoot", () => {
+  it("race.ts appends banner before lanes (legend between lanes and transport) in raceRoot", () => {
     expect(raceSource).toMatch(BANNER_FIRST_APPEND);
     expect(raceSource, "banner must precede lanes in raceRoot.append").not.toMatch(
       LANES_ONLY_APPEND,

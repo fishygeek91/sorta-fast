@@ -153,6 +153,11 @@ export const EXPLAINER_COPY: ExplainerCopy = {
       meaning: "Vertices improved but not yet settled — the active wavefront ring on each lane.",
     },
     {
+      term: "Unreached",
+      meaning:
+        "Vertices not yet improved or settled — they stay the canvas paper color with no fill.",
+    },
+    {
       term: "Relaxed edges (ghost trails)",
       meaning:
         'Recently relaxed edges drawn as faint ghost strokes behind the static graph; the Lens toggle is labeled "Relaxed edges."',
@@ -188,6 +193,79 @@ export const EXPLAINER_COPY: ExplainerCopy = {
     },
   ],
 };
+
+/**
+ * Short point-of-use strings for race chrome (legend, counters, controls).
+ */
+export type RaceChromeCopy = {
+  legendSettled: string;
+  legendUnreached: string;
+  legendShortestPath: string;
+  counterTitles: {
+    comparisons: string;
+    heapOps: string;
+    dOps: string;
+    relaxations: string;
+    outOfOrder: string;
+  };
+  diceTitle: string;
+  bmsspSelectTitle: string;
+  settledLabel: string;
+  stubPersonaTitle: string;
+};
+
+/**
+ * Race chrome labels and counter tooltips surfaced at point of use.
+ */
+export const RACE_CHROME_COPY: RaceChromeCopy = {
+  legendSettled: "Settled",
+  legendUnreached: "Unreached",
+  legendShortestPath: "Shortest path",
+  counterTitles: {
+    comparisons: "Headline metric: total billed comparisons on the shared work clock.",
+    heapOps: "Heap operations — kind count, not an extra fee. Dijkstra's binary-heap work.",
+    dOps: "D-structure operations (BMSSP's batched pull/insert; billed at their comparison count).",
+    relaxations: "Edge relaxations — kind count, not an extra fee.",
+    outOfOrder:
+      "Vertices settled before their final distance order — BMSSP's allowed shortcut; always 0 for Dijkstra.",
+  },
+  diceTitle: "Roll a new random seed",
+  bmsspSelectTitle: "Demo uses browser-scale k; Paper uses the paper formula. See Fairness rules.",
+  settledLabel: "settled",
+  stubPersonaTitle: "Duplicate Dijkstra lane",
+};
+
+/**
+ * Return the explainer vocabulary meaning for `term`.
+ *
+ * @param term - Exact `EXPLAINER_COPY.vocabulary[].term` value.
+ * @returns The matching meaning string.
+ * @throws {Error} When `term` is not in the vocabulary.
+ */
+export function explainerMeaning(term: string): string {
+  for (const entry of EXPLAINER_COPY.vocabulary) {
+    if (entry.term === term) {
+      return entry.meaning;
+    }
+  }
+  throw new Error(`explainerMeaning: unknown vocabulary term "${term}"`);
+}
+
+/**
+ * Return the persona title for a lane accent.
+ *
+ * @param accent - Persona accent token (`marble`, `ember`, or `moss`).
+ * @returns `"<persona> (<accent>)"` from EXPLAINER_COPY.personas.
+ * @throws {Error} When no persona has that accent.
+ */
+export function personaTitle(accent: string): string {
+  for (const persona of EXPLAINER_COPY.personas) {
+    if (persona.accent === accent) {
+      return `${persona.persona} (${persona.accent})`;
+    }
+  }
+  throw new Error(`personaTitle: unknown accent "${accent}"`);
+}
 
 /**
  * External reference for the papers disclosure panel.
