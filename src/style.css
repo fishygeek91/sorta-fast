@@ -65,6 +65,10 @@ body {
     linear-gradient(160deg, var(--paper) 0%, var(--panel) 100%);
 }
 
+#app[data-mode="race"] {
+  justify-content: flex-start;
+}
+
 [data-theme="light"] #app {
   background:
     radial-gradient(circle at 20% 20%, #ffe8c8 0%, transparent 45%),
@@ -408,6 +412,30 @@ body {
   font-weight: 500;
 }
 
+.race-lane-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.race-lane-winner {
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 0.1rem var(--space-2);
+}
+
+.race-lane-lead {
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .race-lane[data-persona="marble"] {
   box-shadow: inset 0 3px 0 var(--marble);
 }
@@ -440,6 +468,24 @@ body {
   align-items: center;
   gap: 0.35rem;
   width: 100%;
+}
+
+.race-counters .lens-counter[data-best="true"] {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .race-progress {
@@ -563,7 +609,10 @@ body {
   font-weight: 500;
   border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: var(--hover);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
 }
 
 .race-banner[hidden] {

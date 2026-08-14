@@ -91,6 +91,7 @@ At browser scale (10³–10⁵ nodes), Dijkstra + binary heap will often win **w
 - Nodes fill with a **settle-order gradient** (perceptually uniform, colorblind-safe). Dijkstra's panel becomes a perfect radial rainbow; BMSSP's is streaky and batchy; DMSY's is patchwork-by-subtree. Screenshot any finished race and the story is legible with zero animation.
 - Per-lane overlays (toggleable): current frontier, relaxed edges (ghost trails), pivots (flare + ring), recursion depth (nested background tint), forest partition boundaries (DMSY), the D-structure as a live strip of blocks under the lane.
 - **Photo finish:** when a lane's source-to-target path settles, that lane freezes with the path drawn in gold and its counter locked. Final banner: "BMSSP beat Dijkstra by 17,133 comparisons on this graph."
+- After photo-finish, the winning lane is marked on the panel (lowest billed work) and best-in-class secondary counters are highlighted; while no lane is frozen, the live lead is settle-count at equal billed work.
 - **Scrubbing is sacred:** the entire race is a precomputed trace, so the timeline slider scrubs forward *and backward* at any speed, including single-step. This turns the demo from a video into an instrument.
 
 ### 3.3 Modes

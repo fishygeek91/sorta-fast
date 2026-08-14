@@ -88,12 +88,15 @@ export type RaceBannerLane = {
 };
 
 /**
- * Rank lanes by billed work; ties keep array order (first entry wins).
+ * Single ranking source for the race banner headline and lane winner chip.
+ *
+ * Winner is the lane with lowest {@link Math.floor} work; ties keep original
+ * array order (lower index wins).
  *
  * @param lanes - Lane rows in UI order.
- * @returns Indices sorted by `(work, original index)`.
+ * @returns Indices sorted by `(floored work, original index)`.
  */
-function rankLaneIndices(lanes: readonly RaceBannerLane[]): number[] {
+export function rankLaneIndices(lanes: readonly RaceBannerLane[]): number[] {
   const indices = lanes.map((_, index) => index);
   indices.sort((a, b) => {
     const workA = Math.floor(lanes[a].work);
@@ -177,4 +180,146 @@ export function raceCountersFromLane(state: LaneState): RaceLaneCounters {
     settledCount: state.settledCount,
     n: state.n,
   };
+}
+
+/** Secondary counter fields compared for best-in-class lane chips. */
+const SECONDARY_COUNTER_FIELDS = [
+  "heapOps",
+  "dstructOps",
+  "relaxations",
+  "outOfOrderSettles",
+] as const;
+
+/** Name of a secondary counter field on {@link RaceLaneCounters}. */
+type SecondaryCounterField = (typeof SECONDARY_COUNTER_FIELDS)[number];
+
+/**
+ * Per-lane best-in-class flags for secondary race counters.
+ *
+ * Each field is `true` when that lane's value equals the minimum across lanes
+ * (ties share the mark).
+ */
+export type BestInClassSecondary = {
+  /** Lane has the fewest heap operations (or ties for fewest). */
+  heapOps: boolean;
+  /** Lane has the fewest d-structure operations (or ties for fewest). */
+  dstructOps: boolean;
+  /** Lane has the fewest relaxations (or ties for fewest). */
+  relaxations: boolean;
+  /** Lane has the fewest out-of-order settles (or ties for fewest). */
+  outOfOrderSettles: boolean;
+};
+
+/**
+ * Mark lanes that tie for the lowest value on each secondary counter.
+ *
+ * @param lanes - Per-lane counter bundles in UI order.
+ * @returns One {@link BestInClassSecondary} per lane; all `false` when fewer
+ *   than two lanes (empty input yields `[]`).
+ * @throws If any secondary counter is not a finite number on any lane.
+ */
+export function bestInClassSecondary(lanes: readonly RaceLaneCounters[]): BestInClassSecondary[] {
+  if (lanes.length < 2) {
+    return lanes.map(() => ({
+      heapOps: false,
+      dstructOps: false,
+      relaxations: false,
+      outOfOrderSettles: false,
+    }));
+  }
+
+  for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
+    const lane = lanes[laneIndex];
+    for (const field of SECONDARY_COUNTER_FIELDS) {
+      const value = lane[field];
+      if (!Number.isFinite(value)) {
+        throw new Error(
+          `bestInClassSecondary: lane ${String(laneIndex)} field "${field}" is not a finite number`,
+        );
+      }
+    }
+  }
+
+  const mins: Record<SecondaryCounterField, number> = {
+    heapOps: Infinity,
+    dstructOps: Infinity,
+    relaxations: Infinity,
+    outOfOrderSettles: Infinity,
+  };
+
+  for (const lane of lanes) {
+    for (const field of SECONDARY_COUNTER_FIELDS) {
+      const value = lane[field];
+      if (value < mins[field]) {
+        mins[field] = value;
+      }
+    }
+  }
+
+  return lanes.map((lane) => ({
+    heapOps: lane.heapOps === mins.heapOps,
+    dstructOps: lane.dstructOps === mins.dstructOps,
+    relaxations: lane.relaxations === mins.relaxations,
+    outOfOrderSettles: lane.outOfOrderSettles === mins.outOfOrderSettles,
+  }));
+}
+
+/**
+ * Settle-count leadership while every lane is still actively settling.
+ *
+ * The Race UI must **not** show this lead after any lane is photo-frozen: the
+ * first frozen lane stops settling while others keep going, so settle-count
+ * leadership inverts and would name the slower lane.
+ */
+export type SettleLead = {
+  /** Index of the lane with the highest settled vertex count (lowest index on ties). */
+  leaderIndex: number;
+  /** Settled-count gap between the leader and the best remaining lane. */
+  margin: number;
+};
+
+/**
+ * Compute settle-count leadership and margin between first and second place.
+ *
+ * @param settledCounts - Per-lane settled vertex counts in UI order.
+ * @returns Leader index and margin, or `null` when fewer than two lanes, any
+ *   count is non-finite, or the top two lanes tie for the maximum settled count.
+ */
+export function settleLead(settledCounts: readonly number[]): SettleLead | null {
+  if (settledCounts.length < 2) {
+    return null;
+  }
+
+  for (let index = 0; index < settledCounts.length; index += 1) {
+    const count = settledCounts[index];
+    if (!Number.isFinite(count)) {
+      return null;
+    }
+  }
+
+  let leaderIndex = 0;
+  let maxCount = settledCounts[0];
+  let secondMaxAmongRest = -Infinity;
+  let tieForMax = false;
+
+  for (let index = 1; index < settledCounts.length; index += 1) {
+    const count = settledCounts[index];
+    if (count > maxCount) {
+      secondMaxAmongRest = maxCount;
+      maxCount = count;
+      leaderIndex = index;
+      tieForMax = false;
+    } else if (count === maxCount) {
+      tieForMax = true;
+    } else if (count > secondMaxAmongRest) {
+      secondMaxAmongRest = count;
+    }
+  }
+
+  if (tieForMax) {
+    return null;
+  }
+
+  // Ties for the max already returned above; remaining gap is always > 0.
+  return { leaderIndex, margin: maxCount - secondMaxAmongRest };
 }

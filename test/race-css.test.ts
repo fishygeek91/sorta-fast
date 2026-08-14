@@ -185,3 +185,38 @@ describe("story mode CSS", () => {
     expect(css).toMatch(/\.race-lane\[hidden\]\s*\{[\s\S]*?display:\s*none/);
   });
 });
+
+describe("issue #63 race standing CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("anchors race mode content to the top of the viewport", () => {
+    expect(css).toMatch(/#app\[data-mode="race"\]\s*\{[\s\S]*?justify-content:\s*flex-start/);
+  });
+
+  it("defines standing badge classes on lane headings", () => {
+    expect(css).toContain(".race-lane-heading");
+    expect(css).toContain(".race-lane-winner");
+    expect(css).toContain(".race-lane-lead");
+  });
+
+  it("highlights the best comparison counter", () => {
+    expect(css).toContain('.race-counters .lens-counter[data-best="true"]');
+  });
+
+  it("defines visually-hidden text for best-in-class notes", () => {
+    expect(css).toMatch(/\.visually-hidden\s*\{[\s\S]*?position:\s*absolute/);
+  });
+
+  it("pins the race banner while scrolling", () => {
+    expect(css).toMatch(/\.race-banner\s*\{[\s\S]*?position:\s*sticky/);
+    expect(css).toMatch(/\.race-banner\s*\{[\s\S]*?top:\s*0/);
+  });
+
+  it("hides lanes with the hidden attribute via display: none", () => {
+    expect(css).toMatch(/\.race-lane\[hidden\]\s*\{[\s\S]*?display:\s*none/);
+  });
+
+  it("uses flex layout for visible lanes by default", () => {
+    expect(css).toMatch(/\.race-lane\s*\{[\s\S]*?display:\s*flex/);
+  });
+});

@@ -9,12 +9,14 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Best-in-class race counters announce with visually-hidden text instead of an `aria-label` that replaced the counter name (#63).
 - `.race-lane[hidden]` now sets `display: none`, so Story single-lane beats actually hide the unused algorithm (author `display: flex` was defeating the `hidden` attribute) (#60).
 - Story wheel navigation uses a 600ms cooldown and never exits to Race free play from scroll, so one flick cannot skip the whole tour (#60).
 - WebM export holds ~1.5s after both lanes photo-freeze so the winner banner is captured, and the rAF loop keeps painting while the clock is paused (MediaRecorder was stopping on the freeze frame, then the hold never elapsed) (#21).
 
 ### Added
 
+- Race mode marks the photo-finish winner on the lane panels, highlights each lane's best-in-class secondary counters, shows a live settle-count lead until the first freeze, and hoists the existing verdict banner above the lanes so it stays visible at 1440×900 (#63).
 - Chromium Playwright smoke (`npm run test:e2e`) mounts Story and asserts computed-style single-lane beats plus one wheel burst per step with no scroll exit to Race (#61).
 - `npm run bench:trace` now measures best-of-3 after warmup and exits non-zero if best ≥ 100ms, so the issue #3 Node-bench claim is enforced (#35).
 - Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
