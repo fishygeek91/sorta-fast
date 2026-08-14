@@ -5,7 +5,7 @@
  */
 
 import { run } from "../core/bmssp/bmssp.ts";
-import { bmsspParams, type BmsspParamMode } from "../core/bmssp/params.ts";
+import { bmsspParams, type BmsspParamMode, type BmsspParams } from "../core/bmssp/params.ts";
 import { generateGraph, type Graph, type GraphKind } from "../core/graph.ts";
 import { TraceWriter, type TraceChunk } from "../core/trace.ts";
 
@@ -25,9 +25,13 @@ export type BmsspTraceSpec = {
   chunkCapacity?: number;
 };
 
-/** Callbacks invoked as graph and trace chunks become available. */
+/**
+ * Callbacks invoked as graph and trace chunks become available.
+ *
+ * `onGraph` receives the resolved {@link BmsspParams} (k/t) used for the subsequent run.
+ */
 export type JobSink = {
-  onGraph: (graph: Graph) => void;
+  onGraph: (graph: Graph, params: BmsspParams) => void;
   onChunk: (chunk: TraceChunk) => void;
   /** Optional graph-generation progress ratio in [0, 1] (issue #20). */
   onProgress?: (ratio: number) => void;
@@ -70,24 +74,21 @@ function validateSpec(spec: BmsspTraceSpec): void {
 
 /**
  * Generate graph, run BMSSP, stream completed slabs via drainCompleted,
- * then takeChunks remainder. Calls onGraph once, onChunk zero or more times.
+ * then takeChunks remainder. Calls onGraph once (with resolved k/t), onChunk zero or more times.
  *
  * @param spec - Graph kind, size, seed, source, optional k/t overrides, and optional writer capacity.
- * @param sink - Receives the CSR graph once, then each trace chunk in order.
+ * @param sink - Receives the CSR graph and resolved BMSSP params once, then each trace chunk in order.
  */
 export function runBmsspTraceJob(spec: BmsspTraceSpec, sink: JobSink): void {
   validateSpec(spec);
 
   const graph = generateGraph(spec.kind, spec.n, spec.seed, sink.onProgress);
-  sink.onGraph(graph);
+  const params = bmsspParams(graph.n, { mode: spec.mode, k: spec.k, t: spec.t });
+  sink.onGraph(graph, params);
 
   const writer = new TraceWriter(spec.chunkCapacity);
 
-  const events = run(
-    graph,
-    spec.source,
-    bmsspParams(graph.n, { mode: spec.mode, k: spec.k, t: spec.t }),
-  );
+  const events = run(graph, spec.source, params);
 
   for (const event of events) {
     writer.append(event);

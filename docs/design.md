@@ -156,6 +156,7 @@ Consequences: algorithms are testable headless in Node; the renderer never knows
 
 ### 4.3 Execution model
 - On "race": UI posts `(graphSpec, seed, lanes)` to a **Web Worker pool**; each lane's trace is generated concurrently and streamed back in chunks (transferables), so the race can *start animating before generation finishes*.
+- BMSSP worker `graph` messages echo the resolved `{k, t}` used for the run; Dijkstra omits those fields. Race/Lens/Story pass echoed k into playback so FindPivots narration matches execution if a generator ever rounds `n`.
 - Main thread holds `TraceBuffer` per lane + a `WorkClock`; each rAF frame advances the clock by `speed × dt` ops and applies events up to the new cursor. Rewind = reset lane state snapshot + replay (keyframe snapshots every ~250k ops make backward scrubbing O(1)-ish).
 
 ### 4.4 Rendering

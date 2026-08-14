@@ -20,13 +20,15 @@ function readUiSource(filename: string): string {
 describe("issue #52 BMSSP gallery wiring", () => {
   const raceSource = readUiSource("race.ts");
   const lensSource = readUiSource("lens.ts");
+  const storySource = readUiSource("story.ts");
 
   it("race.ts mounts a Demo vs Paper BMSSP select and writes bmssp=", () => {
     expect(raceSource).toContain("race-bmssp-select");
     expect(raceSource).toContain("Demo (browser-scale)");
     expect(raceSource).toContain("Paper (asymptotic)");
     expect(raceSource).toContain("applyRaceState({ ...raceState, bmssp: raw })");
-    expect(raceSource).toContain("resolveBmsspRunParams");
+    expect(raceSource).toContain("findPivotsKFromEcho");
+    expect(raceSource).not.toContain("resolveBmsspRunParams(raceState.n");
     expect(raceSource).toContain("mode: raceState.bmssp");
   });
 
@@ -35,8 +37,15 @@ describe("issue #52 BMSSP gallery wiring", () => {
     expect(lensSource).toContain("Demo (browser-scale)");
     expect(lensSource).toContain("Paper (asymptotic)");
     expect(lensSource).toContain("applyLensState({ ...lensState, bmssp: raw })");
-    expect(lensSource).toContain("resolveBmsspRunParams");
+    expect(lensSource).toContain("findPivotsKFromEcho");
+    expect(lensSource).not.toContain("resolveBmsspRunParams(lensState.n");
     expect(lensSource).toContain("mode: lensState.bmssp");
+  });
+
+  it("story.ts resolves FindPivots k from worker echo, not URL n", () => {
+    expect(storySource).toContain("findPivotsKFromEcho");
+    expect(storySource).not.toContain("resolveBmsspRunParams(storyState.n");
+    expect(storySource).not.toMatch(/from\s+["'][^"']*core\/bmssp/);
   });
 
   it("race.ts does not import core/bmssp algorithm modules", () => {

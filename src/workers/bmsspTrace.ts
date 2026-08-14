@@ -21,7 +21,7 @@ self.onmessage = (event: MessageEvent<TraceRunRequest>): void => {
     runBmsspTraceJob(
       { kind, n, seed, source, mode, k, t },
       {
-        onGraph(graph) {
+        onGraph(graph, params) {
           const offsets = graph.offsets.slice();
           const targets = graph.targets.slice();
           const weights = graph.weights.slice();
@@ -36,6 +36,9 @@ self.onmessage = (event: MessageEvent<TraceRunRequest>): void => {
             weights,
             x,
             y,
+            // Resolved k/t from bmsspTraceJob (issue #56).
+            k: params.k,
+            t: params.t,
           };
           const buffers = [offsets.buffer, targets.buffer, weights.buffer, x.buffer, y.buffer];
           self.postMessage(msg, buffers);

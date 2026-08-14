@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { paperBmsspParams } from "../src/core/bmssp/params.ts";
+import { bmsspParams, paperBmsspParams, type BmsspParams } from "../src/core/bmssp/params.ts";
 import { type Graph } from "../src/core/graph.ts";
 import { type TraceChunk, tally } from "../src/core/trace.ts";
 import { Playback } from "../src/harness/playback.ts";
@@ -10,6 +10,7 @@ import { runBmsspTraceJob, type BmsspTraceSpec } from "../src/workers/bmsspTrace
 /** Collected output from one {@link runBmsspTraceJob} invocation. */
 type JobResult = {
   graph: Graph;
+  params: BmsspParams;
   chunks: TraceChunk[];
   onGraphCalls: number;
   onChunkCalls: number;
@@ -27,19 +28,21 @@ const SMALL_MAZE_SPEC: BmsspTraceSpec = {
  * Run the job and record sink callbacks plus emitted chunks.
  *
  * @param spec - BMSSP trace job parameters.
- * @returns Graph, chunks, and callback invocation counts.
+ * @returns Graph, resolved BMSSP params, chunks, and callback invocation counts.
  * @throws When `onGraph` was never called.
  */
 function runJob(spec: BmsspTraceSpec): JobResult {
   let graph: Graph | undefined;
+  let params: BmsspParams | undefined;
   const chunks: TraceChunk[] = [];
   let onGraphCalls = 0;
   let onChunkCalls = 0;
 
   runBmsspTraceJob(spec, {
-    onGraph: (received) => {
+    onGraph: (received, receivedParams) => {
       onGraphCalls += 1;
       graph = received;
+      params = receivedParams;
     },
     onChunk: (chunk) => {
       onChunkCalls += 1;
@@ -47,11 +50,11 @@ function runJob(spec: BmsspTraceSpec): JobResult {
     },
   });
 
-  if (graph === undefined) {
+  if (graph === undefined || params === undefined) {
     throw new Error("onGraph was not called");
   }
 
-  return { graph, chunks, onGraphCalls, onChunkCalls };
+  return { graph, params, chunks, onGraphCalls, onChunkCalls };
 }
 
 /**
@@ -165,6 +168,27 @@ describe("runBmsspTraceJob validation", () => {
         { onGraph: () => {}, onChunk: () => {} },
       ),
     ).toThrow(/source must be an integer in \[0, n\)/);
+  });
+});
+
+describe("runBmsspTraceJob resolved params echo", () => {
+  it("default demo spec echoes bmsspParams(graph.n) and preserves n", () => {
+    const { graph, params } = runJob(SMALL_MAZE_SPEC);
+
+    expect(graph.n).toBe(SMALL_MAZE_SPEC.n);
+    expect(params).toEqual(bmsspParams(graph.n));
+  });
+
+  it('paper mode echoes bmsspParams(graph.n, { mode: "paper" })', () => {
+    const { graph, params } = runJob({ ...SMALL_MAZE_SPEC, mode: "paper" });
+
+    expect(params).toEqual(bmsspParams(graph.n, { mode: "paper" }));
+  });
+
+  it("k/t overrides echo bmsspParams(graph.n, { k, t })", () => {
+    const { graph, params } = runJob({ ...SMALL_MAZE_SPEC, k: 8, t: 3 });
+
+    expect(params).toEqual(bmsspParams(graph.n, { k: 8, t: 3 }));
   });
 });
 

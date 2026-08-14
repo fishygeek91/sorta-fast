@@ -31,9 +31,18 @@ export type RaceSpec = {
   lanes: readonly TraceAlgo[];
 };
 
+/**
+ * Resolved BMSSP k/t echoed on the first worker graph message.
+ * Omitted when the first graph arrives from a Dijkstra lane (no k/t on message).
+ */
+export type EchoedBmsspParams = {
+  k: number;
+  t: number;
+};
+
 /** Callbacks invoked as workers stream graph, chunks, and completion per lane. */
 export type RacePoolHandlers = {
-  onGraph: (graph: Graph) => void;
+  onGraph: (graph: Graph, bmssp?: EchoedBmsspParams) => void;
   onChunk: (lane: number, chunk: TraceChunk) => void;
   onLaneDone: (lane: number) => void;
   onError: (lane: number, message: string) => void;
@@ -153,7 +162,12 @@ export class RaceWorkerPool {
         if (this.graphN === null || this.graphM === null) {
           this.graphN = message.n;
           this.graphM = message.m;
-          handlers.onGraph(graphFromTraceMessage(message));
+          const graph = graphFromTraceMessage(message);
+          if (typeof message.k === "number" && typeof message.t === "number") {
+            handlers.onGraph(graph, { k: message.k, t: message.t });
+          } else {
+            handlers.onGraph(graph);
+          }
           return;
         }
 
