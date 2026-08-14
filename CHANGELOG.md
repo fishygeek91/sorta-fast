@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Race header and lane column share a centered 1200px axis, so wide viewports no longer leave a left-anchored dead zone (#67).
 - Gold-legend swatch uses canvas `PHOTO_FINISH_GOLD` in both themes, and the Frontier label is sourced from `siteCopy` (#65).
 - Settled-legend swatch uses the canvas OKLCH blue→mid→gold ramp (`palette.ts` endpoints) instead of ink→gold, so the key matches the dots (#65).
 - Best-in-class race counters announce with visually-hidden text instead of an `aria-label` that replaced the counter name (#63).

@@ -69,6 +69,14 @@ body {
 
 #app[data-mode="race"] {
   justify-content: flex-start;
+  --race-content-max: 1200px;
+}
+
+/* Issue #67: header + lanes share one centered 1200px axis (not a side rail). */
+#app[data-mode="race"] > .lens-header,
+#app[data-mode="race"] > .race-root {
+  width: min(var(--race-content-max), 100%);
+  align-self: center;
 }
 
 [data-theme="light"] #app {
@@ -390,8 +398,6 @@ body {
 .race-root {
   display: flex;
   flex-direction: column;
-  align-self: stretch;
-  width: min(1200px, 100%);
   flex: 1;
   gap: var(--space-4);
 }

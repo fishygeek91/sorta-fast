@@ -369,3 +369,84 @@ describe("issue #66 transport groups CSS", () => {
     expect(afterMedia).toMatch(/\.transport-play\s*\{[\s\S]*?order:\s*-1/);
   });
 });
+
+describe("issue #67 race wide layout CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+  const raceTs = readFileSync(join(TEST_DIR, "../src/ui/race.ts"), "utf8");
+
+  /**
+   * Desktop rules only (before the first 720px breakpoint).
+   *
+   * @param stylesheet - Full style.css source.
+   * @returns Text before `@media (max-width: 720px)`.
+   */
+  function desktopCss(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(0, index);
+  }
+
+  /**
+   * Slice from the first 720px media query to EOF.
+   *
+   * @param stylesheet - Full style.css source.
+   * @returns Text from `@media (max-width: 720px)` onward.
+   */
+  function cssFromMedia720(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(index);
+  }
+
+  it("defines a shared 1200px content-max token on race mode", () => {
+    expect(css).toMatch(/#app\[data-mode="race"\]\s*\{[\s\S]*?--race-content-max:\s*1200px/);
+  });
+
+  it("aligns race header and race-root on the same centered axis", () => {
+    expect(css).toContain('#app[data-mode="race"] > .lens-header');
+    expect(css).toContain('#app[data-mode="race"] > .race-root');
+    expect(css).toMatch(
+      /#app\[data-mode="race"\]\s*>\s*\.lens-header,\s*\n#app\[data-mode="race"\]\s*>\s*\.race-root\s*\{[\s\S]*?width:\s*min\(\s*var\(--race-content-max\),\s*100%\s*\)/,
+    );
+    expect(css).toMatch(
+      /#app\[data-mode="race"\]\s*>\s*\.lens-header,\s*\n#app\[data-mode="race"\]\s*>\s*\.race-root\s*\{[\s\S]*?align-self:\s*center/,
+    );
+  });
+
+  it("does not left-anchor .race-root with align-self stretch", () => {
+    const desktop = desktopCss(css);
+    const rootBlock = desktop.match(/\.race-root\s*\{[^}]*\}/);
+    expect(rootBlock).not.toBeNull();
+    expect(rootBlock?.[0] ?? "").not.toMatch(/align-self:\s*stretch/);
+  });
+
+  it("keeps 2- and 3-lane grid templates", () => {
+    expect(css).toMatch(/\.race-lanes\[data-lanes="2"\][\s\S]*?grid-template-columns:\s*1fr\s+1fr/);
+    expect(css).toMatch(
+      /\.race-lanes\[data-lanes="3"\][\s\S]*?grid-template-columns:\s*1fr\s+1fr\s+1fr/,
+    );
+  });
+
+  it("still stacks lanes vertically below 720px", () => {
+    const afterMedia = cssFromMedia720(css);
+    expect(afterMedia).toMatch(/\.race-lanes\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
+  });
+
+  it("does not upscale race canvases with 100vw", () => {
+    const canvasBlock = css.match(/\.race-canvas\s*\{[^}]*\}/);
+    expect(canvasBlock).not.toBeNull();
+    const block = canvasBlock?.[0] ?? "";
+    expect(block).toMatch(/width:\s*100%/);
+    expect(block).not.toContain("100vw");
+  });
+
+  it("keeps race CANVAS_SIZE at 400", () => {
+    expect(raceTs).toMatch(/const CANVAS_SIZE\s*=\s*400/);
+  });
+
+  it("leaves story-root left-stretch unchanged", () => {
+    expect(css).toMatch(/\.story-root\s*\{[\s\S]*?align-self:\s*stretch/);
+  });
+});
