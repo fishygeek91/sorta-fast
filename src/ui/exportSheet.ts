@@ -6,9 +6,10 @@
  */
 
 import type { ThemeTokens } from "../render/theme.ts";
+import { RACE_LANE_CSS_PX } from "./raceLaneSize.ts";
 
-/** Lane tile edge length in CSS pixels; matches {@link race.ts} `CANVAS_SIZE`. */
-export const LANE_TILE = 400;
+/** Export tile edge in CSS pixels. Live Race canvases may be clientWidth × dpr (#77). */
+export const LANE_TILE = RACE_LANE_CSS_PX;
 
 /** Outer padding on all sides of the export sheet. */
 export const PAD = 24;

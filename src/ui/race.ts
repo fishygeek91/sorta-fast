@@ -2,7 +2,13 @@
  * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18, #52).
  */
 
-import { CITY_MAX_N, GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
+import {
+  CITY_MAX_N,
+  GRAPH_KINDS,
+  SIZE_PRESETS,
+  type Graph,
+  type GraphKind,
+} from "../core/graph.ts";
 import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
@@ -48,9 +54,7 @@ import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
-
-/** Visible canvas edge length in CSS pixels per lane. */
-const CANVAS_SIZE = 400;
+import { applyRaceCanvasBackingStore, RACE_LANE_CSS_PX } from "./raceLaneSize.ts";
 
 /** Default play-speed multiplier. */
 const DEFAULT_SPEED = 8;
@@ -279,6 +283,11 @@ export function mountRace(): void {
     laneUis.push(buildLanePanel(lanesEl, config));
   }
 
+  let activeGraph: Graph | null = null;
+  let laneResizeObserver: ResizeObserver | null = null;
+  let resizeRafId = 0;
+  let pendingBackingRebuild = false;
+
   mountThemeToggle(chrome, (mode: ThemeMode) => {
     for (const ui of laneUis) {
       if (ui.renderer !== null) {
@@ -418,6 +427,12 @@ export function mountRace(): void {
   raceRoot.append(bannerEl, lanesEl, legendEl, transport);
   mountDisclosures(raceRoot);
   root.append(header, raceRoot);
+
+  applyAllLaneBackingStores();
+  laneResizeObserver = new ResizeObserver(() => {
+    onLanesResized();
+  });
+  laneResizeObserver.observe(lanesEl);
 
   const pool = new RaceWorkerPool();
   let race: RaceScheduler | null = null;
@@ -902,6 +917,12 @@ export function mountRace(): void {
     syncRecordingControls();
     syncExportButtons();
     syncPlayPauseUi();
+    if (pendingBackingRebuild) {
+      pendingBackingRebuild = false;
+      applyAllLaneBackingStores();
+      rebuildLaneRenderers();
+      drawFrame();
+    }
   }
 
   /**
@@ -1090,6 +1111,73 @@ export function mountRace(): void {
   }
 
   /**
+   * Apply DPR-aware backing-store dimensions to every live lane canvas.
+   *
+   * @returns True if any canvas backing store changed.
+   */
+  function applyAllLaneBackingStores(): boolean {
+    let changed = false;
+    for (const ui of laneUis) {
+      if (applyRaceCanvasBackingStore(ui.canvas)) {
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * Rebuild lane {@link Renderer}s after a backing-store resize when a graph is mounted.
+   */
+  function rebuildLaneRenderers(): void {
+    if (activeGraph === null) {
+      return;
+    }
+    const graph = activeGraph;
+    for (const ui of laneUis) {
+      ui.renderer = new Renderer({
+        target: wrapDomCanvas(ui.canvas),
+        createSurface: createDomSurface,
+        graph,
+      });
+      ui.renderer.setChrome(THEMES[readStoredTheme()]);
+    }
+  }
+
+  /**
+   * Sync lane backing stores and rebuild renderers when not recording.
+   *
+   * Must check {@link recording} before touching `canvas.width` — assigning
+   * width clears the bitmap and would corrupt in-flight WebM frames (#77).
+   */
+  function syncLaneBackingStoresAndRenderers(): void {
+    if (recording) {
+      pendingBackingRebuild = true;
+      return;
+    }
+    const changed = applyAllLaneBackingStores();
+    if (!changed) {
+      return;
+    }
+    if (activeGraph !== null) {
+      rebuildLaneRenderers();
+      drawFrame();
+    }
+  }
+
+  /**
+   * Coalesce lane container resize notifications into one backing-store sync per frame.
+   */
+  function onLanesResized(): void {
+    if (resizeRafId !== 0) {
+      return;
+    }
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = 0;
+      syncLaneBackingStoresAndRenderers();
+    });
+  }
+
+  /**
    * Terminate any in-flight workers and post a fresh multi-lane trace run.
    */
   function startRun(): void {
@@ -1108,6 +1196,7 @@ export function mountRace(): void {
     }
     pool.terminate();
     race = null;
+    activeGraph = null;
     finishVertex = null;
     scrubber.value = "0";
     scrubber.max = "0";
@@ -1168,6 +1257,7 @@ export function mountRace(): void {
       },
       onGraph: (graph) => {
         hideGenProgress();
+        activeGraph = graph;
         race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX, params.k);
         race.setSpeed(speed);
 
@@ -1184,6 +1274,7 @@ export function mountRace(): void {
         finishVertex = resolution.finish;
         race.setFinishVertex(resolution.finish);
 
+        applyAllLaneBackingStores();
         for (let lane = 0; lane < configs.length; lane += 1) {
           const ui = laneUis[lane];
           if (ui === undefined) {
@@ -1474,6 +1565,15 @@ export function mountRace(): void {
   function teardown(): void {
     stopped = true;
     cancelAnimationFrame(rafId);
+    if (laneResizeObserver !== null) {
+      laneResizeObserver.disconnect();
+      laneResizeObserver = null;
+    }
+    if (resizeRafId !== 0) {
+      cancelAnimationFrame(resizeRafId);
+      resizeRafId = 0;
+    }
+    activeGraph = null;
     pool.terminate();
     race = null;
     if (root !== null) {
@@ -1550,8 +1650,8 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
 
   const canvas = document.createElement("canvas");
   canvas.className = "race-canvas";
-  canvas.width = CANVAS_SIZE;
-  canvas.height = CANVAS_SIZE;
+  canvas.width = RACE_LANE_CSS_PX;
+  canvas.height = RACE_LANE_CSS_PX;
 
   const counters = document.createElement("div");
   counters.className = "race-counters";

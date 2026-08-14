@@ -372,7 +372,6 @@ describe("issue #66 transport groups CSS", () => {
 
 describe("issue #67 race wide layout CSS", () => {
   const css = readFileSync(STYLE_CSS, "utf8");
-  const raceTs = readFileSync(join(TEST_DIR, "../src/ui/race.ts"), "utf8");
 
   /**
    * Desktop rules only (before the first 720px breakpoint).
@@ -440,10 +439,6 @@ describe("issue #67 race wide layout CSS", () => {
     const block = canvasBlock?.[0] ?? "";
     expect(block).toMatch(/width:\s*100%/);
     expect(block).not.toContain("100vw");
-  });
-
-  it("keeps race CANVAS_SIZE at 400", () => {
-    expect(raceTs).toMatch(/const CANVAS_SIZE\s*=\s*400/);
   });
 
   it("leaves story-root left-stretch unchanged", () => {
