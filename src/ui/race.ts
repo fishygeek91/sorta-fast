@@ -31,7 +31,13 @@ import {
 } from "./exportRecorder.ts";
 import { sheetSize, type ExportSheetSpec } from "./exportSheet.ts";
 import { mountLens } from "./lens.ts";
-import { formatRaceBanner, raceCountersFromLane } from "./photoFinish.ts";
+import {
+  bestInClassSecondary,
+  formatRaceBanner,
+  raceCountersFromLane,
+  rankLaneIndices,
+  settleLead,
+} from "./photoFinish.ts";
 import { mountStory } from "./story.ts";
 import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
@@ -77,12 +83,25 @@ const URL_WRITE_THROTTLE_MS = 250;
  */
 const EXPORT_BANNER_HOLD_MS = 1500;
 
+/** Photo-finish winner chip copy (issue #63). Lower billed work wins. */
+const WINNER_CHIP_TEXT = "Winner — lowest work";
+
+/** Accessible name on a best-in-class secondary counter (issue #63). */
+const BEST_IN_CLASS_ARIA = "lowest on this race";
+
 /** DOM handles for one race lane panel. */
 type LaneUi = {
+  laneEl: HTMLDivElement;
+  winnerEl: HTMLSpanElement;
+  leadEl: HTMLSpanElement;
   comparisonsValue: HTMLSpanElement;
+  heapBlock: HTMLDivElement;
   heapValue: HTMLSpanElement;
+  dstructBlock: HTMLDivElement;
   dstructValue: HTMLSpanElement;
+  relaxBlock: HTMLDivElement;
   relaxValue: HTMLSpanElement;
+  outOfOrderBlock: HTMLDivElement;
   outOfOrderValue: HTMLSpanElement;
   progress: HTMLProgressElement;
   canvas: HTMLCanvasElement;
@@ -121,6 +140,7 @@ export function mountRace(): void {
   const configs = lanesFromRaceState(raceState);
   let pendingT = raceState.t;
   root.replaceChildren();
+  root.dataset.mode = "race";
 
   const header = document.createElement("header");
   header.className = "lens-header";
@@ -387,8 +407,8 @@ export function mountRace(): void {
   statusEl.className = "lens-status";
   statusEl.hidden = true;
 
-  transport.append(transportButtons, speedLabel, scrubLabel, bannerEl, genProgressWrap, statusEl);
-  raceRoot.append(lanesEl, transport);
+  transport.append(transportButtons, speedLabel, scrubLabel, genProgressWrap, statusEl);
+  raceRoot.append(bannerEl, lanesEl, transport);
   mountDisclosures(raceRoot);
   root.append(header, raceRoot);
 
@@ -641,6 +661,167 @@ export function mountRace(): void {
   }
 
   /**
+   * Set or clear best-in-class marks on a secondary counter block (dirty-checked).
+   *
+   * @param block - Secondary counter container element.
+   * @param isBest - Whether this lane ties for the lowest value on that counter.
+   */
+  function applyBestMark(block: HTMLElement, isBest: boolean): void {
+    if (isBest) {
+      if (block.dataset.best !== "true") {
+        block.dataset.best = "true";
+      }
+      if (block.getAttribute("aria-label") !== BEST_IN_CLASS_ARIA) {
+        block.setAttribute("aria-label", BEST_IN_CLASS_ARIA);
+      }
+    } else {
+      if (block.dataset.best !== undefined) {
+        delete block.dataset.best;
+      }
+      if (block.hasAttribute("aria-label")) {
+        block.removeAttribute("aria-label");
+      }
+    }
+  }
+
+  /**
+   * Hide winner/lead chips and clear best-in-class marks on every lane.
+   */
+  function clearStanding(): void {
+    for (const ui of laneUis) {
+      if (ui.winnerEl.hidden !== true) {
+        ui.winnerEl.hidden = true;
+      }
+      if (ui.leadEl.hidden !== true) {
+        ui.leadEl.hidden = true;
+      }
+      applyBestMark(ui.heapBlock, false);
+      applyBestMark(ui.dstructBlock, false);
+      applyBestMark(ui.relaxBlock, false);
+      applyBestMark(ui.outOfOrderBlock, false);
+    }
+  }
+
+  /**
+   * Sync per-lane winner chip, settle-count lead, and best-in-class secondary marks.
+   */
+  function syncStanding(): void {
+    if (race === null || finishVertex === null) {
+      clearStanding();
+      return;
+    }
+
+    const activeRace = race;
+    const bannerLanes = configs.map((config, lane) => ({
+      label: config.label,
+      work: activeRace.laneState(lane).work,
+    }));
+    const counterRows = configs.map((_, lane) => raceCountersFromLane(activeRace.laneState(lane)));
+
+    const allFrozen = activeRace.allPhotoFrozen();
+    let anyFrozen = false;
+    for (let lane = 0; lane < configs.length; lane += 1) {
+      if (activeRace.lanePhotoFrozen(lane)) {
+        anyFrozen = true;
+        break;
+      }
+    }
+
+    if (allFrozen) {
+      for (const ui of laneUis) {
+        if (ui.leadEl.hidden !== true) {
+          ui.leadEl.hidden = true;
+        }
+      }
+
+      const ranked = rankLaneIndices(bannerLanes);
+      const winnerIndex = ranked[0];
+
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        if (ui === undefined) {
+          continue;
+        }
+
+        const isWinner = winnerIndex !== undefined && lane === winnerIndex;
+        if (ui.winnerEl.hidden === isWinner) {
+          ui.winnerEl.hidden = !isWinner;
+        }
+        if (isWinner && ui.winnerEl.textContent !== WINNER_CHIP_TEXT) {
+          ui.winnerEl.textContent = WINNER_CHIP_TEXT;
+        }
+      }
+
+      const flags = bestInClassSecondary(counterRows);
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        const laneFlags = flags[lane];
+        if (ui === undefined || laneFlags === undefined) {
+          continue;
+        }
+        applyBestMark(ui.heapBlock, laneFlags.heapOps);
+        applyBestMark(ui.dstructBlock, laneFlags.dstructOps);
+        applyBestMark(ui.relaxBlock, laneFlags.relaxations);
+        applyBestMark(ui.outOfOrderBlock, laneFlags.outOfOrderSettles);
+      }
+      return;
+    }
+
+    if (!anyFrozen) {
+      for (const ui of laneUis) {
+        if (ui.winnerEl.hidden !== true) {
+          ui.winnerEl.hidden = true;
+        }
+        applyBestMark(ui.heapBlock, false);
+        applyBestMark(ui.dstructBlock, false);
+        applyBestMark(ui.relaxBlock, false);
+        applyBestMark(ui.outOfOrderBlock, false);
+      }
+
+      const lead = settleLead(counterRows.map((c) => c.settledCount));
+      if (lead === null) {
+        for (const ui of laneUis) {
+          if (ui.leadEl.hidden !== true) {
+            ui.leadEl.hidden = true;
+          }
+        }
+        return;
+      }
+
+      const leadText = `Ahead by ${String(lead.margin)} settles`;
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        if (ui === undefined) {
+          continue;
+        }
+        const isLeader = lane === lead.leaderIndex;
+        if (ui.leadEl.hidden === isLeader) {
+          ui.leadEl.hidden = !isLeader;
+        }
+        if (isLeader && ui.leadEl.textContent !== leadText) {
+          ui.leadEl.textContent = leadText;
+        }
+      }
+      return;
+    }
+
+    // Partial freeze: first frozen lane stops settling while others continue, so
+    // settle-count leadership would invert — hide winner/lead and best marks.
+    for (const ui of laneUis) {
+      if (ui.winnerEl.hidden !== true) {
+        ui.winnerEl.hidden = true;
+      }
+      if (ui.leadEl.hidden !== true) {
+        ui.leadEl.hidden = true;
+      }
+      applyBestMark(ui.heapBlock, false);
+      applyBestMark(ui.dstructBlock, false);
+      applyBestMark(ui.relaxBlock, false);
+      applyBestMark(ui.outOfOrderBlock, false);
+    }
+  }
+
+  /**
    * @returns Whether PNG/WebM export buttons should be interactive.
    */
   function exportButtonsEnabled(): boolean {
@@ -858,6 +1039,7 @@ export function mountRace(): void {
 
     syncScrubberUi();
     syncBanner();
+    syncStanding();
     syncExportButtons();
 
     if (recording) {
@@ -908,6 +1090,16 @@ export function mountRace(): void {
       ui.outOfOrderValue.textContent = "0";
       ui.progress.value = 0;
       ui.renderer = null;
+      if (ui.winnerEl.hidden !== true) {
+        ui.winnerEl.hidden = true;
+      }
+      if (ui.leadEl.hidden !== true) {
+        ui.leadEl.hidden = true;
+      }
+      applyBestMark(ui.heapBlock, false);
+      applyBestMark(ui.dstructBlock, false);
+      applyBestMark(ui.relaxBlock, false);
+      applyBestMark(ui.outOfOrderBlock, false);
     }
 
     clearStatus();
@@ -1246,6 +1438,9 @@ export function mountRace(): void {
     cancelAnimationFrame(rafId);
     pool.terminate();
     race = null;
+    if (root !== null) {
+      delete root.dataset.mode;
+    }
     window.removeEventListener("pointerup", onScrubberPointerRelease);
     window.removeEventListener("pointercancel", onScrubberPointerRelease);
   }
@@ -1292,9 +1487,23 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
   laneEl.className = "race-lane";
   laneEl.dataset.persona = config.persona;
 
+  const heading = document.createElement("div");
+  heading.className = "race-lane-heading";
+
   const labelEl = document.createElement("span");
   labelEl.className = "race-lane-label";
   labelEl.textContent = config.label;
+
+  const winnerEl = document.createElement("span");
+  winnerEl.className = "race-lane-winner";
+  winnerEl.textContent = WINNER_CHIP_TEXT;
+  winnerEl.hidden = true;
+
+  const leadEl = document.createElement("span");
+  leadEl.className = "race-lane-lead";
+  leadEl.hidden = true;
+
+  heading.append(labelEl, winnerEl, leadEl);
 
   const canvas = document.createElement("canvas");
   canvas.className = "race-canvas";
@@ -1321,14 +1530,21 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
   progress.max = 100;
   progress.value = 0;
 
-  laneEl.append(labelEl, canvas, counters, progress);
+  laneEl.append(heading, canvas, counters, progress);
   parent.append(laneEl);
 
   return {
+    laneEl,
+    winnerEl,
+    leadEl,
     comparisonsValue: comparisonsBlock.value,
+    heapBlock: heapBlock.block,
     heapValue: heapBlock.value,
+    dstructBlock: dstructBlock.block,
     dstructValue: dstructBlock.value,
+    relaxBlock: relaxBlock.block,
     relaxValue: relaxBlock.value,
+    outOfOrderBlock: outOfOrderBlock.block,
     outOfOrderValue: outOfOrderBlock.value,
     progress,
     canvas,
