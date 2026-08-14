@@ -50,6 +50,17 @@ describe("issue #63 race standing mount wiring", () => {
     expect(raceSource).toContain("function syncStanding");
     expect(raceSource).toMatch(/WINNER_CHIP_TEXT|"Winner — lowest work"/);
     expect(raceSource).toContain("Ahead by");
+    expect(raceSource).toContain("race-best-note");
+    expect(raceSource).toContain("visually-hidden");
+  });
+
+  it("race.ts does not replace best-in-class counter names with aria-label", () => {
+    const applyIdx = raceSource.indexOf("function applyBestMark");
+    expect(applyIdx).toBeGreaterThanOrEqual(0);
+    const applyBody = raceSource.slice(applyIdx);
+    const nextFn = applyBody.indexOf("\n  function ", 1);
+    const applySource = nextFn >= 0 ? applyBody.slice(0, nextFn) : applyBody;
+    expect(applySource).not.toContain("aria-label");
   });
 
   it("race.ts gates live lead on lanePhotoFrozen inside syncStanding", () => {
@@ -72,7 +83,7 @@ describe("issue #63 race standing mount wiring", () => {
     const nextFn = drawBody.indexOf("\n  function ", 1);
     const drawFrameSource = nextFn >= 0 ? drawBody.slice(0, nextFn) : drawBody;
 
-    expect(drawFrameSource).toContain("syncStanding()");
+    expect(drawFrameSource).toMatch(/syncStanding\(/);
   });
 
   it("race.ts keeps formatRaceBanner and allPhotoFrozen for banner sync", () => {

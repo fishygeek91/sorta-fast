@@ -320,10 +320,6 @@ export function settleLead(settledCounts: readonly number[]): SettleLead | null 
     return null;
   }
 
-  const margin = maxCount - secondMaxAmongRest;
-  if (margin === 0) {
-    return null;
-  }
-
-  return { leaderIndex, margin };
+  // Ties for the max already returned above; remaining gap is always > 0.
+  return { leaderIndex, margin: maxCount - secondMaxAmongRest };
 }

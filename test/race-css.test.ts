@@ -203,6 +203,10 @@ describe("issue #63 race standing CSS", () => {
     expect(css).toContain('.race-counters .lens-counter[data-best="true"]');
   });
 
+  it("defines visually-hidden text for best-in-class notes", () => {
+    expect(css).toMatch(/\.visually-hidden\s*\{[\s\S]*?position:\s*absolute/);
+  });
+
   it("pins the race banner while scrolling", () => {
     expect(css).toMatch(/\.race-banner\s*\{[\s\S]*?position:\s*sticky/);
     expect(css).toMatch(/\.race-banner\s*\{[\s\S]*?top:\s*0/);

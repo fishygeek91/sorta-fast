@@ -37,6 +37,7 @@ import {
   raceCountersFromLane,
   rankLaneIndices,
   settleLead,
+  type RaceLaneCounters,
 } from "./photoFinish.ts";
 import { mountStory } from "./story.ts";
 import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
@@ -86,8 +87,8 @@ const EXPORT_BANNER_HOLD_MS = 1500;
 /** Photo-finish winner chip copy (issue #63). Lower billed work wins. */
 const WINNER_CHIP_TEXT = "Winner — lowest work";
 
-/** Accessible name on a best-in-class secondary counter (issue #63). */
-const BEST_IN_CLASS_ARIA = "lowest on this race";
+/** Visually-hidden suffix appended to a best-in-class secondary counter (issue #63). */
+const BEST_IN_CLASS_NOTE = " — lowest on this race";
 
 /** DOM handles for one race lane panel. */
 type LaneUi = {
@@ -663,6 +664,9 @@ export function mountRace(): void {
   /**
    * Set or clear best-in-class marks on a secondary counter block (dirty-checked).
    *
+   * Uses a visually-hidden note so the counter label and value stay the
+   * accessible name (an `aria-label` on the block would replace them).
+   *
    * @param block - Secondary counter container element.
    * @param isBest - Whether this lane ties for the lowest value on that counter.
    */
@@ -671,16 +675,16 @@ export function mountRace(): void {
       if (block.dataset.best !== "true") {
         block.dataset.best = "true";
       }
-      if (block.getAttribute("aria-label") !== BEST_IN_CLASS_ARIA) {
-        block.setAttribute("aria-label", BEST_IN_CLASS_ARIA);
-      }
-    } else {
-      if (block.dataset.best !== undefined) {
-        delete block.dataset.best;
-      }
-      if (block.hasAttribute("aria-label")) {
-        block.removeAttribute("aria-label");
-      }
+    } else if (block.dataset.best !== undefined) {
+      delete block.dataset.best;
+    }
+
+    const note = block.querySelector(".race-best-note");
+    if (!(note instanceof HTMLElement)) {
+      return;
+    }
+    if (note.hidden === isBest) {
+      note.hidden = !isBest;
     }
   }
 
@@ -704,19 +708,16 @@ export function mountRace(): void {
 
   /**
    * Sync per-lane winner chip, settle-count lead, and best-in-class secondary marks.
+   *
+   * @param counterRows - Per-lane counters already read in {@link drawFrame}.
    */
-  function syncStanding(): void {
+  function syncStanding(counterRows: readonly RaceLaneCounters[]): void {
     if (race === null || finishVertex === null) {
       clearStanding();
       return;
     }
 
     const activeRace = race;
-    const bannerLanes = configs.map((config, lane) => ({
-      label: config.label,
-      work: activeRace.laneState(lane).work,
-    }));
-    const counterRows = configs.map((_, lane) => raceCountersFromLane(activeRace.laneState(lane)));
 
     const allFrozen = activeRace.allPhotoFrozen();
     let anyFrozen = false;
@@ -734,6 +735,13 @@ export function mountRace(): void {
         }
       }
 
+      const bannerLanes = configs.map((config, lane) => {
+        const row = counterRows[lane];
+        return {
+          label: config.label,
+          work: row === undefined ? 0 : row.comparisons,
+        };
+      });
       const ranked = rankLaneIndices(bannerLanes);
       const winnerIndex = ranked[0];
 
@@ -1011,13 +1019,17 @@ export function mountRace(): void {
       return;
     }
 
+    const counterRows: RaceLaneCounters[] = [];
     for (let lane = 0; lane < configs.length; lane += 1) {
+      const state = race.laneState(lane);
+      const counters = raceCountersFromLane(state);
+      counterRows.push(counters);
+
       const ui = laneUis[lane];
       if (ui === undefined) {
         continue;
       }
 
-      const state = race.laneState(lane);
       const renderer = ui.renderer;
       if (renderer !== null) {
         renderer.draw(state, {
@@ -1027,7 +1039,6 @@ export function mountRace(): void {
         });
       }
 
-      const counters = raceCountersFromLane(state);
       ui.comparisonsValue.textContent = String(counters.comparisons);
       ui.heapValue.textContent = String(counters.heapOps);
       ui.dstructValue.textContent = String(counters.dstructOps);
@@ -1039,7 +1050,7 @@ export function mountRace(): void {
 
     syncScrubberUi();
     syncBanner();
-    syncStanding();
+    syncStanding(counterRows);
     syncExportButtons();
 
     if (recording) {
@@ -1571,7 +1582,12 @@ function createCounterBlock(
   value.className = "race-counter-value";
   value.textContent = "0";
 
-  block.append(label, value);
+  const bestNote = document.createElement("span");
+  bestNote.className = "visually-hidden race-best-note";
+  bestNote.textContent = BEST_IN_CLASS_NOTE;
+  bestNote.hidden = true;
+
+  block.append(label, value, bestNote);
   return { block, value };
 }
 
