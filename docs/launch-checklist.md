@@ -33,17 +33,25 @@ Hero seed URL:
 
 `https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp`
 
-1. Open that race, wait for photo-finish, set a high transport speed, click WebM export. Whole clip ≤ ~10s; hold the frozen banner ~1.5s.
-2. Save as `docs/assets/hero.webm`.
-3. Convert:
+1. Record from a **local preview** of a build that includes the export-banner gate (`npm run build && npm run preview`). Do not use a cut-short take from an older or production-only build.
+2. Open that hero seed URL, wait until both lanes are photo-frozen and `#race-export-webm` is enabled, then set a high transport speed and click WebM export. Whole clip ≤ ~10s.
+3. Save as `docs/assets/hero.webm`.
+4. Pad the last frame ~1.5s before palette encode:
 
 ```
-ffmpeg -i docs/assets/hero.webm -vf "fps=20,scale=960:-1:flags=lanczos,palettegen" docs/assets/palette.png
-ffmpeg -i docs/assets/hero.webm -i docs/assets/palette.png -lavfi "fps=20,scale=960:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4" docs/assets/hero.gif
+ffmpeg -i docs/assets/hero.webm -vf "tpad=stop_mode=clone:stop_duration=1.5" docs/assets/hero-padded.webm
 ```
 
-4. Target < 8–10 MB. Delete `docs/assets/palette.png` (do not commit it). Commit `docs/assets/hero.gif` and `docs/assets/hero.webm`.
-5. - [x] Hero GIF path `docs/assets/hero.gif` referenced from README (asset added in this PR).
+5. Convert (run on the padded clip):
+
+```
+ffmpeg -i docs/assets/hero-padded.webm -vf "fps=20,scale=960:-1:flags=lanczos,palettegen" docs/assets/palette.png
+ffmpeg -i docs/assets/hero-padded.webm -i docs/assets/palette.png -lavfi "fps=20,scale=960:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4" docs/assets/hero.gif
+```
+
+6. Target < 8–10 MB. Delete `docs/assets/palette.png` and `docs/assets/hero-padded.webm` (do not commit them). Commit `docs/assets/hero.gif` and `docs/assets/hero.webm`.
+7. On the default seed (`sparse` / 25k / 4), the **completed** photo-finish banner names **Dijkstra** (race to the marked target). That is expected; BMSSP still wins settle-all work-clock. README caption must match the banner — do not claim the GIF shows a BMSSP photo-finish win.
+8. - [x] Hero GIF path `docs/assets/hero.gif` referenced from README (asset added in this PR).
 
 ## Bench page
 

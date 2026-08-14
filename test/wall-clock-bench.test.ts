@@ -10,6 +10,7 @@ import {
   measureCell,
   quickWallClockConfig,
   shouldSkipWallClockCell,
+  shouldWriteWallClockResults,
   type WallClockCell,
 } from "../bench/wall-clock.ts";
 import { CITY_MAX_N, GRAPH_KINDS, SIZE_PRESETS } from "../src/core/graph.ts";
@@ -139,6 +140,13 @@ describe("issue #21 wall-clock bench", () => {
       expect(config.kind).toBe("sparse");
       expect(config.seed).toBe(4);
       expect(config.sizes).toEqual([32]);
+    });
+  });
+
+  describe("shouldWriteWallClockResults", () => {
+    it("skips JSON write for --quick smoke runs", () => {
+      expect(shouldWriteWallClockResults(true)).toBe(false);
+      expect(shouldWriteWallClockResults(false)).toBe(true);
     });
   });
 

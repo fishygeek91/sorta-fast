@@ -200,6 +200,16 @@ export function defaultResultsPath(): string {
   return join(dir, "wall-clock-results.json");
 }
 
+/**
+ * Whether the CLI should persist wall-clock results to disk.
+ *
+ * `--quick` smoke runs still measure and log cells but must not overwrite
+ * committed `bench/wall-clock-results.json`.
+ */
+export function shouldWriteWallClockResults(quick: boolean): boolean {
+  return !quick;
+}
+
 /** Format one cell for CLI streaming output. */
 function formatCellSummary(cell: WallClockCell): string {
   return (
@@ -218,18 +228,20 @@ if (process.argv[1]?.includes("wall-clock.ts")) {
     console.log(formatCellSummary(cell));
   }
 
-  const results: WallClockResults = {
-    generatedAt: new Date().toISOString(),
-    node: process.version,
-    platform: process.platform,
-    arch: process.arch,
-    cells,
-  };
+  if (shouldWriteWallClockResults(quick)) {
+    const results: WallClockResults = {
+      generatedAt: new Date().toISOString(),
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      cells,
+    };
 
-  const outPath = defaultResultsPath();
-  writeFileSync(outPath, `${JSON.stringify(results, null, 2)}\n`, "utf8");
+    const outPath = defaultResultsPath();
+    writeFileSync(outPath, `${JSON.stringify(results, null, 2)}\n`, "utf8");
 
-  console.log(
-    `wall-clock done: cells=${String(cells.length)} wrote ${outPath}` + (quick ? " (quick)" : ""),
-  );
+    console.log(`wall-clock done: cells=${String(cells.length)} wrote ${outPath}`);
+  } else {
+    console.log(`wall-clock done: cells=${String(cells.length)} (quick, skipped write)`);
+  }
 }

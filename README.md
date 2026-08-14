@@ -2,6 +2,8 @@
 
 [![Sorta Fast photo-finish](docs/assets/hero.gif)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp)
 
+The clip is a **photo-finish** (race to the marked target): on this seed Dijkstra reaches the target first. BMSSP still wins the **settle-all work clock** on the same graph. See the [wall-clock bench](https://fishygeek91.github.io/sorta-fast/bench/) and [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md) for comparison counts.
+
 *Shortest paths that only sorta sort. That's not a joke, that's the algorithm.*
 
 67 years of shortest-path history racing in the browser — Dijkstra (1959) vs BMSSP (STOC 2025) vs DMSY (Feb 2026, first public implementation).
@@ -18,14 +20,14 @@ The headline metric is a **work clock** (total comparisons), not wall-clock mill
 
 | Preset | What to look for |
 |---|---|
-| [BMSSP work-clock win (default)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp) | Sparse 25k graph — the hero race; BMSSP leads on comparisons. |
+| [Default race (sparse 25k, seed 4)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp) | BMSSP wins settle-all comparisons; Dijkstra often wins the photo-finish to the marked target. |
 | [Story preset](https://fishygeek91.github.io/sorta-fast/?g=city&n=500&seed=1729) | City layout at n=500 — good for watching wavefronts. |
 | [Dijkstra work-clock win (easy)](https://fishygeek91.github.io/sorta-fast/?g=maze&n=500&seed=0) | Maze graph — Dijkstra wins the work clock here. |
 | [Paper-k Dijkstra win on the default graph](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp&bmssp=paper) | Same sparse 25k seed as the hero, but BMSSP uses paper k/t — Dijkstra takes comparisons. |
 
 ## Seed challenge
 
-Can you find a seed where **Dijkstra wins the work clock** on the default sparse 25k graph with demo k (`k = max(4, paper k)`)? We have not found one in seeds 0–9 at k=4; BMSSP wins every seed we tried in that range. Maze graphs and `&bmssp=paper` already give Dijkstra wins — the hard case is sparse at large n with the in-browser demo parameters.
+Can you find a seed where **Dijkstra wins the work clock** on the default sparse 25k graph with demo k (`k = max(4, paper k)`)? Seeds 0–9 at sparse L / demo k=4 are tabulated in [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md): all BMSSP work-clock wins; the best margin is seed 4. Maze graphs and `&bmssp=paper` already give Dijkstra wins — the hard case is sparse at large n with the in-browser demo parameters.
 
 ## Fairness
 

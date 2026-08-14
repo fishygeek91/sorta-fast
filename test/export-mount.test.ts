@@ -49,6 +49,19 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("canExportPhotoFinish");
   });
 
+  it("race.ts gates export-sheet banner on allPhotoFrozen in buildExportSheetSpec", () => {
+    const buildExportIdx = raceSource.indexOf("function buildExportSheetSpec");
+    expect(buildExportIdx).toBeGreaterThanOrEqual(0);
+
+    const buildExportBody = raceSource.slice(buildExportIdx);
+    const bannerIdx = buildExportBody.indexOf("banner:");
+    expect(bannerIdx).toBeGreaterThanOrEqual(0);
+
+    const bannerSlice = buildExportBody.slice(bannerIdx, bannerIdx + 400);
+    expect(bannerSlice).toContain("allPhotoFrozen()");
+    expect(bannerSlice).toContain("formatRaceBanner");
+  });
+
   it("race.ts shows a fallback status when video export is unsupported", () => {
     expect(raceSource).toContain(
       "Video export is not supported in this browser; PNG export still works.",

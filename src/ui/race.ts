@@ -738,12 +738,14 @@ export function mountRace(): void {
 
     return {
       lanes,
-      banner: formatRaceBanner(
-        configs.map((config, lane) => ({
-          label: config.label,
-          work: activeRace.laneState(lane).work,
-        })),
-      ),
+      banner: activeRace.allPhotoFrozen()
+        ? formatRaceBanner(
+            configs.map((config, lane) => ({
+              label: config.label,
+              work: activeRace.laneState(lane).work,
+            })),
+          )
+        : "",
       seedLine: caption.seedLine,
       urlLine: caption.urlLine,
       chrome: {
