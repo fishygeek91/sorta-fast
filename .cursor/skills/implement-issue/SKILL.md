@@ -47,7 +47,7 @@ This skill **does not run** without Maestro. An `/implement-issue` turn that wri
 3. **Correctness battery** — write/extend everything the issue's Testing requirements name: differential fuzzing (with weight ties), debug invariants, golden traces, trace audits. For perf ACs, measure and report actual numbers in the PR. Test files are `generalPurpose` work unless a retry already failed.
 4. **Verify**: typecheck + `vitest run` + lint green locally before opening the PR (`shell` subagent is fine; you still confirm the output).
 5. **Close out**: PR title `[M#] #<issue>: <title>`; body `Closes #N`, how each AC checkbox is met, deviations, test/perf evidence. Tick the corresponding box in Roadmap #29 via the PR description note (reviewer confirms on merge).
-6. **Stop**. Comment ready-for-review. Do not merge unless the human later explicitly asks. Claude reviews as the human on another platform. Discovered work → new issue, never scope creep.
+6. **Stop**. Comment ready-for-review on the PR. In the chat with the human, the last line of the close-out **must** be exactly `Issue #<N> Ready for review: #<PR>` (issue number first, then the PR number) so the issue and PR are both identifiable. Do not merge unless the human later explicitly asks. Claude reviews as the human on another platform. Discovered work → new issue, never scope creep.
 
 ## Anti-patterns
 
