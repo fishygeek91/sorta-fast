@@ -77,6 +77,23 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("seek(0)");
   });
 
+  it("race.ts uses shareUrlForExport for export captions", () => {
+    expect(raceSource).toContain("shareUrlForExport");
+  });
+
+  it("race.ts holds WebM capture after photo-freeze before stopping recorder", () => {
+    expect(raceSource).toContain("EXPORT_BANNER_HOLD_MS");
+    expect(raceSource).toContain("recordingHoldUntilMs");
+  });
+
+  it("race.ts keeps drawing while recording after the photo-finish pause", () => {
+    expect(raceSource).toContain("} else if (recording) {");
+  });
+
+  it("race.ts does not bake window.location into export share URLs", () => {
+    expect(raceSource).not.toContain("shareUrlFromLocation(raceState, window.location)");
+  });
+
   it("race.ts stops an in-flight recorder when startRun aborts recording", () => {
     expect(raceSource).toContain("recorder.stop().catch");
   });

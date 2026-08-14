@@ -33,16 +33,16 @@ Hero seed URL:
 
 `https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp`
 
-1. Record from a **local preview** of a build that includes the export-banner gate (`npm run build && npm run preview`). Do not use a cut-short take from an older or production-only build.
-2. Open that hero seed URL, wait until both lanes are photo-frozen and `#race-export-webm` is enabled, then set a high transport speed and click WebM export. Whole clip ≤ ~10s.
+1. Record from a **local preview** of a build that includes the export-banner gate and in-app banner hold (`npm run build && npm run preview`). Do not use a cut-short take from an older or production-only build.
+2. Open that hero seed URL, wait until both lanes are photo-frozen and `#race-export-webm` is enabled, then set a high transport speed and click WebM export. WebM export holds ~1.5s on the completed banner before stopping MediaRecorder; whole clip ≤ ~10s. Export captions always show the canonical Pages URL (`https://fishygeek91.github.io/sorta-fast/…`), never `127.0.0.1` or `localhost`.
 3. Save as `docs/assets/hero.webm`.
-4. Pad the last frame ~1.5s before palette encode:
+4. Optional backup only — in-app hold should already pad the banner frame; if the clip still ends too early, pad the last frame ~1.5s before palette encode:
 
 ```
 ffmpeg -i docs/assets/hero.webm -vf "tpad=stop_mode=clone:stop_duration=1.5" docs/assets/hero-padded.webm
 ```
 
-5. Convert (run on the padded clip):
+5. Convert (run on the padded clip, or on `hero.webm` when step 4 was skipped):
 
 ```
 ffmpeg -i docs/assets/hero-padded.webm -vf "fps=20,scale=960:-1:flags=lanczos,palettegen" docs/assets/palette.png

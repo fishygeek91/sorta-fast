@@ -7,6 +7,10 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ## [Unreleased]
 
+### Fixed
+
+- WebM export holds ~1.5s after both lanes photo-freeze so the winner banner is captured, and the rAF loop keeps painting while the clock is paused (MediaRecorder was stopping on the freeze frame, then the hold never elapsed) (#21).
+
 ### Added
 
 - Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
@@ -50,6 +54,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Export captions always use the canonical GitHub Pages origin (`https://fishygeek91.github.io/sorta-fast/`), so localhost preview URLs never bake into PNG/WebM (#21).
 - Re-recorded the README hero GIF through both-lane photo-finish (plus a 1.5s last-frame hold) and captioned it as Dijkstra's race-to-target on seed 4, not a BMSSP settle-all win (#21).
 - README hero caption distinguishes photo-finish (Dijkstra on seed 4) from settle-all work-clock (BMSSP) (#21).
 - `npm run bench:wall-clock -- --quick` no longer overwrites committed `bench/wall-clock-results.json` (#21).
