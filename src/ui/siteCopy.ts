@@ -198,6 +198,7 @@ export const EXPLAINER_COPY: ExplainerCopy = {
  * Short point-of-use strings for race chrome (legend, counters, controls).
  */
 export type RaceChromeCopy = {
+  legendFrontier: string;
   legendSettled: string;
   legendUnreached: string;
   legendShortestPath: string;
@@ -218,6 +219,7 @@ export type RaceChromeCopy = {
  * Race chrome labels and counter tooltips surfaced at point of use.
  */
 export const RACE_CHROME_COPY: RaceChromeCopy = {
+  legendFrontier: "Frontier",
   legendSettled: "Settled",
   legendUnreached: "Unreached",
   legendShortestPath: "Shortest path",

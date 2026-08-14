@@ -1613,7 +1613,7 @@ function mountRaceLegend(): HTMLDivElement {
   legend.className = "race-legend";
 
   const items: ReadonlyArray<{ swatch: string; label: string; term: string }> = [
-    { swatch: "frontier", label: "Frontier", term: "Frontier" },
+    { swatch: "frontier", label: RACE_CHROME_COPY.legendFrontier, term: "Frontier" },
     {
       swatch: "settled",
       label: RACE_CHROME_COPY.legendSettled,
