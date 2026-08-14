@@ -22,6 +22,7 @@ Sorta Fast v1.0 "The Race" (Dijkstra vs BMSSP). Issue #21.
 ## CI green
 
 - [x] Local gate: `npm run typecheck && npm test && npm run lint` before PR. CI Vitest 1M-event guard is 200ms with sequential files; the 100ms claim is `npm run bench:trace` (#35).
+- [x] Story browser smoke: `npm run test:e2e` (Playwright Chromium); separate CI job from Node Vitest (#61).
 
 ## Fairness panel accurate
 

@@ -15,6 +15,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- Chromium Playwright smoke (`npm run test:e2e`) mounts Story and asserts computed-style single-lane beats plus one wheel burst per step with no scroll exit to Race (#61).
 - `npm run bench:trace` now measures best-of-3 after warmup and exits non-zero if best ≥ 100ms, so the issue #3 Node-bench claim is enforced (#35).
 - Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
 - Wall-clock benchmark page (`/sorta-fast/bench/`) plus headless harness (`npm run bench:wall-clock`) with committed S–XL sparse timings and the work-clock vs milliseconds caveat (#21).

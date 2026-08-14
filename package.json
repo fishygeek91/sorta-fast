@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "bench:trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/trace-write.ts",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.17.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
