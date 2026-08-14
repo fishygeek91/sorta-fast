@@ -49,7 +49,7 @@ export function applyStoredTheme(): ThemeMode {
  * Does not call `onChange` during mount — callers apply canvas chrome when constructing
  * renderers. Does not call {@link applyStoredTheme}; `main.ts` applies storage first.
  *
- * @param parent - Container to append the toggle into (e.g. mode nav).
+ * @param parent - Container to append the toggle into (e.g. header chrome).
  * @param onChange - Invoked after a user click with the new active mode.
  * @returns The mounted toggle button.
  */
