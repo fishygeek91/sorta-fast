@@ -291,11 +291,13 @@ describe("issue #65 race chrome CSS", () => {
     expect(css).toContain('[data-swatch="gold"]');
   });
 
-  it("styles settled swatch with gold gradient", () => {
+  it("styles settled swatch with canvas palette ramp", () => {
     expect(css).toMatch(
       /\.race-legend-swatch\[data-swatch="settled"\]\s*\{[\s\S]*?linear-gradient/,
     );
-    expect(css).toMatch(/\.race-legend-swatch\[data-swatch="settled"\]\s*\{[\s\S]*?var\(--gold\)/);
+    expect(css).toContain("rgb(103, 170, 237)");
+    expect(css).toContain("rgb(78, 188, 145)");
+    expect(css).toContain("rgb(204, 156, 66)");
   });
 
   it("defines lane label pseudo-element hook", () => {

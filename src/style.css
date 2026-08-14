@@ -431,7 +431,8 @@ body {
 }
 
 .race-legend-swatch[data-swatch="settled"] {
-  background: linear-gradient(90deg, var(--ink), var(--gold));
+  /* Canvas settle ramp: palette.ts rgbAt(0), rgbAt(0.5), rgbAt(1). Theme-independent. */
+  background: linear-gradient(90deg, rgb(103, 170, 237), rgb(78, 188, 145), rgb(204, 156, 66));
   border-radius: 2px;
 }
 
