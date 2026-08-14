@@ -1,14 +1,18 @@
 /**
- * Node bench: write 1M mixed TraceEvents via TraceWriter, scanCosts each chunk.
- * Issue #3 AC — design.md §4.2 (< 100ms write+scan in Node).
- *
- * Run: npm run bench:trace
- * (uses Node 22 --experimental-strip-types; .ts extension imports may fail on older Node)
+ * Node bench for issue #3 AC (design.md §10: 1M write+scan in Node).
+ * CI headroom budget is issue #35. Run via `npm run bench:trace`.
  */
 
 import { type TraceEvent, TraceWriter, scanCosts } from "../src/core/trace.ts";
 
-const EVENT_COUNT = 1_000_000;
+/** design.md §10 issue #3: 1M mixed TraceEvents written and scanCosts-replayed. */
+export const TRACE_WRITE_EVENT_COUNT = 1_000_000;
+
+/** design.md §10 issue #3: 1M write+scan in Node. */
+export const TRACE_WRITE_CLAIM_MS = 100;
+
+/** GitHub Actions ubuntu-latest headroom (issue #35). */
+export const TRACE_WRITE_CI_BUDGET_MS = 200;
 
 const HEAP_OPS = ["push", "popmin", "sift"] as const;
 const BATCH_PHASES = ["start", "end"] as const;
@@ -69,34 +73,99 @@ export function mixedTraceEvent(i: number): TraceEvent {
   }
 }
 
-/**
- * Write {@link EVENT_COUNT} events, replay with scanCosts (no decodeChunk).
- */
-export function runTraceWriteBench(): {
-  events: number;
+/** Result of one timed write+scan pass (issue #3 / design.md §10). */
+export type TraceWritePassResult = {
   elapsedMs: number;
   work: number;
-} {
+  totalRows: number;
+};
+
+/** Aggregated best-of timed runs after warmup (issue #3 claim; #35 CI budget). */
+export type TraceWriteMeasureResult = {
+  times: number[];
+  bestMs: number;
+  work: number;
+  totalRows: number;
+};
+
+/**
+ * One write+scan pass: append {@link eventCount} mixed events, drain chunks, scanCosts each.
+ * Timing covers append, takeChunks, and column-scan replay only (issue #3 / design.md §10).
+ */
+export function runTraceWritePass(
+  eventCount: number = TRACE_WRITE_EVENT_COUNT,
+): TraceWritePassResult {
+  if (!Number.isInteger(eventCount) || eventCount < 0) {
+    throw new Error(`eventCount must be an integer >= 0, got ${String(eventCount)}`);
+  }
+
   const writer = new TraceWriter();
   const t0 = performance.now();
 
-  for (let i = 0; i < EVENT_COUNT; i += 1) {
+  for (let i = 0; i < eventCount; i += 1) {
     writer.append(mixedTraceEvent(i));
   }
 
   const chunks = writer.takeChunks();
   let work = 0;
+  let totalRows = 0;
   for (const chunk of chunks) {
+    totalRows += chunk.count;
     work += scanCosts(chunk).work;
   }
 
   const elapsedMs = performance.now() - t0;
-  return { events: EVENT_COUNT, elapsedMs, work };
+  return { elapsedMs, work, totalRows };
+}
+
+/**
+ * Warmup plus {@link timedRuns} timed passes; returns best elapsed ms (issue #3 claim).
+ * {@link TRACE_WRITE_CI_BUDGET_MS} is the GitHub Actions headroom from issue #35.
+ */
+export function measureTraceWriteBest(options?: {
+  eventCount?: number;
+  timedRuns?: number;
+}): TraceWriteMeasureResult {
+  const eventCount = options?.eventCount ?? TRACE_WRITE_EVENT_COUNT;
+  const timedRuns = options?.timedRuns ?? 3;
+
+  if (!Number.isInteger(timedRuns) || timedRuns < 1) {
+    throw new Error(`timedRuns must be an integer >= 1, got ${String(timedRuns)}`);
+  }
+
+  runTraceWritePass(eventCount);
+
+  const times: number[] = [];
+  let last: TraceWritePassResult | undefined;
+  for (let run = 0; run < timedRuns; run += 1) {
+    last = runTraceWritePass(eventCount);
+    times.push(last.elapsedMs);
+  }
+
+  if (last === undefined) {
+    throw new Error("timed runs produced no result");
+  }
+
+  const bestMs = Math.min(...times);
+  return {
+    times,
+    bestMs,
+    work: last.work,
+    totalRows: last.totalRows,
+  };
 }
 
 if (process.argv[1]?.includes("trace-write")) {
-  const { events, elapsedMs, work } = runTraceWriteBench();
+  const { times, bestMs, work } = measureTraceWriteBest();
+  const timesStr = times.map((t) => t.toFixed(2)).join(", ");
   console.log(
-    `trace-write: ${events} events  write+scan  ${elapsedMs.toFixed(2)} ms  work=${work}`,
+    `trace-write: ${TRACE_WRITE_EVENT_COUNT} events  ms=[${timesStr}]  best=${bestMs.toFixed(2)}  work=${work}`,
   );
+
+  if (bestMs >= TRACE_WRITE_CLAIM_MS) {
+    console.error(
+      `trace-write FAILED: best ${bestMs.toFixed(2)} ms >= ${TRACE_WRITE_CLAIM_MS} ms claim (issue #3 / design.md §10)`,
+    );
+    process.exit(1);
+  }
 }

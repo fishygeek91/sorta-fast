@@ -1,61 +1,64 @@
+/**
+ * Trace write+scan performance guards for CI (#35) vs the Node bench claim (#3).
+ *
+ * Issue #3: design.md §4.2 — 1M mixed events written and scanCosts-replayed in Node
+ * under 100ms (`npm run bench:trace`).
+ * Issue #35: CI keeps a 200ms budget here so shared runners do not flake; the 100ms
+ * claim lives on the bench script constants exported from `bench/trace-write.ts`.
+ */
+
 import { describe, expect, it } from "vitest";
 
-import { mixedTraceEvent } from "../bench/trace-write.ts";
-import { TraceWriter, scanCosts } from "../src/core/trace.ts";
-
-const EVENT_COUNT = 1_000_000;
-/** CI runners miss the 100ms Node-bench claim (issue #3); see #35. */
-const BUDGET_MS = 200;
-const TIMED_RUNS = 3;
-
-type WriteScanResult = {
-  elapsedMs: number;
-  work: number;
-  totalRows: number;
-};
-
-/**
- * One write+scan pass. Timing includes append and column-scan replay only.
- */
-function writeAndScan(): WriteScanResult {
-  const writer = new TraceWriter();
-  const t0 = performance.now();
-
-  for (let i = 0; i < EVENT_COUNT; i += 1) {
-    writer.append(mixedTraceEvent(i));
-  }
-
-  const chunks = writer.takeChunks();
-  let work = 0;
-  let totalRows = 0;
-  for (const chunk of chunks) {
-    totalRows += chunk.count;
-    work += scanCosts(chunk).work;
-  }
-
-  return { elapsedMs: performance.now() - t0, work, totalRows };
-}
+import {
+  TRACE_WRITE_CLAIM_MS,
+  TRACE_WRITE_CI_BUDGET_MS,
+  TRACE_WRITE_EVENT_COUNT,
+  measureTraceWriteBest,
+  runTraceWritePass,
+} from "../bench/trace-write.ts";
 
 describe("trace write/replay budget", () => {
   it("writes and scanCosts-replays 1M events under the CI budget (best of 3 after warmup)", () => {
-    writeAndScan();
+    const { times, bestMs, work, totalRows } = measureTraceWriteBest();
 
-    const times: number[] = [];
-    let last: WriteScanResult | undefined;
-    for (let run = 0; run < TIMED_RUNS; run += 1) {
-      last = writeAndScan();
-      times.push(last.elapsedMs);
-    }
-    if (last === undefined) {
-      throw new Error("timed runs produced no result");
-    }
+    console.info(
+      `trace-perf 1M times ms=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${bestMs.toFixed(2)}`,
+    );
 
-    const best = Math.min(...times);
-    expect(last.totalRows).toBe(EVENT_COUNT);
-    expect(last.work).toBeGreaterThan(0);
+    expect(totalRows).toBe(TRACE_WRITE_EVENT_COUNT);
+    expect(work).toBeGreaterThan(0);
     expect(
-      best,
-      `1M write+replay times ms=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
-    ).toBeLessThan(BUDGET_MS);
+      bestMs,
+      `1M write+replay times ms=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${bestMs.toFixed(2)}`,
+    ).toBeLessThan(TRACE_WRITE_CI_BUDGET_MS);
+  });
+
+  it("keeps bench constants aligned: 100ms claim, 200ms CI budget, 1M events", () => {
+    expect(TRACE_WRITE_CLAIM_MS).toBe(100);
+    expect(TRACE_WRITE_CI_BUDGET_MS).toBe(200);
+    expect(TRACE_WRITE_CI_BUDGET_MS).toBeGreaterThan(TRACE_WRITE_CLAIM_MS);
+    expect(TRACE_WRITE_EVENT_COUNT).toBe(1_000_000);
+  });
+
+  it("measureTraceWriteBest reports best-of timed runs for small event counts", () => {
+    const { times, bestMs, work, totalRows } = measureTraceWriteBest({
+      eventCount: 64,
+      timedRuns: 3,
+    });
+
+    expect(times.length).toBe(3);
+    expect(bestMs).toBe(Math.min(...times));
+    expect(work).toBeGreaterThan(0);
+    expect(totalRows).toBe(64);
+  });
+
+  it("runTraceWritePass handles zero events and rejects invalid inputs", () => {
+    const zero = runTraceWritePass(0);
+    expect(zero.totalRows).toBe(0);
+    expect(zero.work).toBe(0);
+    expect(zero.elapsedMs).toBeGreaterThanOrEqual(0);
+
+    expect(() => runTraceWritePass(-1)).toThrow();
+    expect(() => measureTraceWriteBest({ timedRuns: 0 })).toThrow();
   });
 });
