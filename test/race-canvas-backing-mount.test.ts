@@ -44,4 +44,25 @@ describe("issue #77 race canvas backing mount wiring", () => {
     const teardownSlice = raceSource.slice(teardownIdx, teardownIdx + 800);
     expect(teardownSlice).toContain("laneResizeObserver.disconnect");
   });
+
+  it("defers backing-store mutation while recording", () => {
+    const start = raceSource.indexOf("function syncLaneBackingStoresAndRenderers");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = raceSource.slice(start, start + 600);
+    const recordingIdx = body.indexOf("if (recording)");
+    const applyIdx = body.indexOf("applyAllLaneBackingStores");
+    expect(recordingIdx).toBeGreaterThanOrEqual(0);
+    expect(applyIdx).toBeGreaterThan(recordingIdx);
+  });
+
+  it("flushes deferred backing-store rebuild after recording ends", () => {
+    const start = raceSource.indexOf("function restoreRecordingUi");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = raceSource.slice(start, start + 700);
+    expect(body).toContain("pendingBackingRebuild");
+    expect(body).toContain("applyAllLaneBackingStores");
+    expect(body).toContain("rebuildLaneRenderers");
+    expect(body).toContain("drawFrame");
+    expect(body).not.toContain("syncLaneBackingStoresAndRenderers");
+  });
 });

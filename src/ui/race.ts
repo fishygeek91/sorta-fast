@@ -919,7 +919,9 @@ export function mountRace(): void {
     syncPlayPauseUi();
     if (pendingBackingRebuild) {
       pendingBackingRebuild = false;
-      syncLaneBackingStoresAndRenderers();
+      applyAllLaneBackingStores();
+      rebuildLaneRenderers();
+      drawFrame();
     }
   }
 
@@ -1143,14 +1145,17 @@ export function mountRace(): void {
 
   /**
    * Sync lane backing stores and rebuild renderers when not recording.
+   *
+   * Must check {@link recording} before touching `canvas.width` — assigning
+   * width clears the bitmap and would corrupt in-flight WebM frames (#77).
    */
   function syncLaneBackingStoresAndRenderers(): void {
-    const changed = applyAllLaneBackingStores();
-    if (!changed) {
-      return;
-    }
     if (recording) {
       pendingBackingRebuild = true;
+      return;
+    }
+    const changed = applyAllLaneBackingStores();
+    if (!changed) {
       return;
     }
     if (activeGraph !== null) {

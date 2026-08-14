@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Race defers lane backing-store resizes until WebM recording ends, so a mid-export window resize no longer clears the live canvases (#77).
 - Race lane canvases size the backing store to CSS size × device pixel ratio so wide viewports no longer upscale a 400px bitmap (#77).
 - Race header and lane column share a centered 1200px axis, so wide viewports no longer leave a left-anchored dead zone (#67).
 - Gold-legend swatch uses canvas `PHOTO_FINISH_GOLD` in both themes, and the Frontier label is sourced from `siteCopy` (#65).
