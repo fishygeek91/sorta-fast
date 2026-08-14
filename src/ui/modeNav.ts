@@ -29,8 +29,8 @@ function createModeNavButton(label: string, mode: AppMode, active: AppMode): HTM
  *
  * Appends a chrome container to {@link parent} with the mode nav and a trailing
  * separator. Callers append extras (theme toggle, Skip, etc.) onto the returned
- * `chrome` after this helper returns. Does not attach click handlers — the active
- * mode button is expected to remain a no-op without a listener.
+ * `chrome` after this helper returns. Does not attach click handlers. Callers
+ * must not add a listener on the active mode's button — it stays a no-op.
  *
  * @param parent - Element to append the chrome container into.
  * @param active - Currently active application mode.

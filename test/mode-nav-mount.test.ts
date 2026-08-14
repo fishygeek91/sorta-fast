@@ -31,7 +31,8 @@ describe("issue #64 mode nav mount wiring", () => {
 
   it("modeNav.ts does not disable mode buttons via .disabled", () => {
     const source = readUiSource("modeNav.ts");
-    expect(source).not.toContain(".disabled");
+    expect(source).not.toContain("button.disabled");
+    expect(source).not.toMatch(/\.(race|lens|story)\.disabled/);
   });
 
   it("race.ts, lens.ts, and story.ts each call mountModeNav", () => {
@@ -54,6 +55,15 @@ describe("issue #64 mode nav mount wiring", () => {
   it("story.ts does not disable the active story mode button", () => {
     const source = readUiSource("story.ts");
     expect(source).not.toContain("storyModeBtn.disabled");
+  });
+
+  it("each surface leaves its active mode button without a click listener", () => {
+    const raceSource = readUiSource("race.ts");
+    const lensSource = readUiSource("lens.ts");
+    const storySource = readUiSource("story.ts");
+    expect(raceSource).not.toMatch(/race(?:ModeBtn)?\.addEventListener/);
+    expect(lensSource).not.toMatch(/lens(?:ModeBtn)?\.addEventListener/);
+    expect(storySource).not.toMatch(/story(?:ModeBtn)?\.addEventListener/);
   });
 
   it("race.ts, lens.ts, and story.ts do not assign mode subtitles via textContent", () => {
