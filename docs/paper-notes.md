@@ -504,6 +504,10 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P15 | §2.3; `trace.ts` | Encode `∞` / missing pred | `SENTINEL = -1`; source pred `SENTINEL`; `B_∞ = ⟨∞, 0, SENTINEL, SENTINEL⟩` | Vertex 0 is a real id |
 | DMSY-P16 | issue #54 | Demo vs paper params | **#54** owns the sweep; `paperDmsyParams` stays selectable | Parallel to BMSSP #52 |
 | DMSY-P17 | `demoBmsspParams` | Copy `k = 4` floor? | **No** | Different `k` formula; #54 decides |
+| DMSY-P18 | §2.1 | Δ_v=0 or \|C_v\|=1 | Δ_v=0 → one vertex, no cycle edges (DMSY-P09). \|C_v\|=1 → omit the self-loop (`packCsr` rejects self-loops); degrees still ≤ δ−2 < δ. | packCsr; §2.1; DMSY-P09 |
+| DMSY-P19 | §2.1 | Neighbor/id/coord order | Neighbors of v sorted by ascending id; slot k → cycle vertex floor(k/(δ−2)); reduced ids allocated v-major then cycle-index; split-copy (x,y) copy the original vertex. | Determinism (AGENTS.md); packCsr coords |
+| DMSY-P20 | §2.1; design §4.2 | How to un-map traces | Drop VIRTUAL_EDGE (cycle) relax/forest. First settle per original vertex wins; first pivot per original vertex wins (separate seen-sets). Pass through heap/batch/recurse/dstruct. Helpers only in degreeReduce.ts; harness/render unchanged. | Renderer sees original IDs; #26 wires the boundary |
+| DMSY-P21 | §2.1; `trace.ts` relax | Un-mapped `improved` flags | `createTraceUnmapper` preserves the reduced-graph `improved` bit. Two original edges can improve two different copies of `v` on G′; last-write replay on G is then wrong. Callers that replay on the original CSR (`TraceBuffer`, `auditDistancesFromTrace`) must recompute improvement. #26 does this at the emission boundary. | TraceBuffer last-write on `improved===1`; #23 tests rewrite in-test |
 
 ## 7. Lemma and cost-bound sanity checklist
 
