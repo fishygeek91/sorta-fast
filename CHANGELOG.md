@@ -7,6 +7,10 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ## [Unreleased]
 
+### Added
+
+- `docs/paper-notes.md`: DMSY (arXiv 2602.07868 v2) implementation spec — section-cited pseudocode, 4-tuple tie-break, paper parameter formulas with gallery-n degeneracy, and a living ambiguity log (#22).
+
 ## [1.0.0] - 2026-08-14
 
 v1.0 "The Race": Dijkstra vs BMSSP in the browser (Race, Lens, Story), with work-clock fairness, URL seeds, PNG/WebM export, and GitHub Pages. DMSY remains v2.0 (#22–#28).
