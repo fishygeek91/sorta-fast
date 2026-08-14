@@ -2,7 +2,7 @@
  * Story mode UI: guided tour playback without gallery, export, or scrubber (issue #19).
  */
 
-import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
+import { findPivotsKFromEcho } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
@@ -265,7 +265,6 @@ export function mountStory(): void {
       ui.comparisonsValue.textContent = "0";
       ui.renderer = null;
     }
-    const params = resolveBmsspRunParams(storyState.n, "demo", null, null);
     const spec: RaceSpec = {
       kind: storyState.g,
       n: storyState.n,
@@ -275,8 +274,9 @@ export function mountStory(): void {
       lanes: ["dijkstra", "bmssp"],
     };
     pool.start(spec, {
-      onGraph: (graph) => {
-        race = new RaceScheduler(graph, 2, SOURCE_VERTEX, params.k);
+      onGraph: (graph, bmssp) => {
+        const findPivotsK = findPivotsKFromEcho(graph.n, bmssp?.k, "demo", null, null);
+        race = new RaceScheduler(graph, 2, SOURCE_VERTEX, findPivotsK);
         race.setSpeed(STORY_SPEED);
         for (const ui of laneUis) {
           ui.renderer = new Renderer({

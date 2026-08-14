@@ -3,7 +3,7 @@
  */
 
 import { CITY_MAX_N, GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
-import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
+import { findPivotsKFromEcho } from "../harness/bmsspRunParams.ts";
 import { Playback } from "../harness/playback.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer, type OverlayFlags } from "../render/renderer.ts";
@@ -736,13 +736,14 @@ export function mountLens(): void {
         case "graph": {
           hideGenProgress();
           const graph = graphFromTraceMessage(message);
-          const params = resolveBmsspRunParams(
-            lensState.n,
+          const findPivotsK = findPivotsKFromEcho(
+            graph.n,
+            message.k,
             lensState.bmssp,
             lensState.bk,
             lensState.bt,
           );
-          playback = new Playback(graph, [], params.k);
+          playback = new Playback(graph, [], findPivotsK);
           playback.beginStreaming();
 
           const graphSpeed = Number(speedSelect.value);

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { allocateChunk } from "../src/core/trace.ts";
 import {
   RaceWorkerPool,
+  type EchoedBmsspParams,
   type RacePoolHandlers,
   type RaceSpec,
   type RaceWorkerHandle,
@@ -285,6 +286,82 @@ describe("RaceWorkerPool terminate", () => {
 
     pool.terminate();
     expect(records.every((record) => record.terminated)).toBe(true);
+  });
+});
+
+describe("RaceWorkerPool BMSSP k/t echo", () => {
+  it("forwards echoed k and t on first graph when both are present", () => {
+    let capturedBmssp: EchoedBmsspParams | undefined;
+
+    const { records } = startPool(["dijkstra", "bmssp"], {
+      onGraph: (_graph, bmssp) => {
+        capturedBmssp = bmssp;
+      },
+    });
+
+    const lane0 = records[0];
+    if (lane0 === undefined) {
+      throw new Error("expected fake worker");
+    }
+
+    lane0.handle.onmessage?.({
+      data: { ...sampleGraphMessage(4, 3), k: 4, t: 2 },
+    });
+
+    expect(capturedBmssp).toEqual({ k: 4, t: 2 });
+  });
+
+  it("calls onGraph without bmssp when first graph omits k and t", () => {
+    let capturedBmssp: EchoedBmsspParams | undefined;
+
+    const { records } = startPool(["dijkstra", "bmssp"], {
+      onGraph: (_graph, bmssp) => {
+        capturedBmssp = bmssp;
+      },
+    });
+
+    const lane0 = records[0];
+    if (lane0 === undefined) {
+      throw new Error("expected fake worker");
+    }
+
+    lane0.handle.onmessage?.({ data: sampleGraphMessage(4, 3) });
+
+    expect(capturedBmssp).toBeUndefined();
+  });
+
+  it("does not retrofit k/t when first graph is Dijkstra and second has k/t", () => {
+    let graphCount = 0;
+    let capturedBmssp: EchoedBmsspParams | undefined;
+
+    const { spawn, records } = createFakeSpawn();
+    const pool = new RaceWorkerPool(spawn);
+    pool.start(
+      { ...BASE_SPEC, lanes: ["dijkstra", "bmssp"] },
+      {
+        onGraph: (_graph, bmssp) => {
+          graphCount += 1;
+          capturedBmssp = bmssp;
+        },
+        onChunk: () => {},
+        onLaneDone: () => {},
+        onError: () => {},
+      },
+    );
+
+    const lane0 = records[0];
+    const lane1 = records[1];
+    if (lane0 === undefined || lane1 === undefined) {
+      throw new Error("expected two fake workers");
+    }
+
+    lane0.handle.onmessage?.({ data: sampleGraphMessage(4, 3) });
+    lane1.handle.onmessage?.({
+      data: { ...sampleGraphMessage(4, 3), k: 4, t: 2 },
+    });
+
+    expect(graphCount).toBe(1);
+    expect(capturedBmssp).toBeUndefined();
   });
 });
 

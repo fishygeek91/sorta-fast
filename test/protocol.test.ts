@@ -62,6 +62,41 @@ describe("parseWorkerToMain", () => {
     expect(parseWorkerToMain({ type: "error" })).toBeNull();
     expect(parseWorkerToMain({ type: "unknown" })).toBeNull();
   });
+
+  it("accepts graph with optional BMSSP k and t", () => {
+    const graphMessage = { ...sampleGraphMessage(), k: 4, t: 2 };
+    expect(parseWorkerToMain(graphMessage)).toEqual(graphMessage);
+  });
+
+  it("accepts graph without k or t", () => {
+    const graphMessage = sampleGraphMessage();
+    const parsed = parseWorkerToMain(graphMessage);
+    expect(parsed).toEqual(graphMessage);
+    if (parsed?.type === "graph") {
+      expect("k" in parsed).toBe(false);
+      expect("t" in parsed).toBe(false);
+    }
+  });
+
+  it("rejects invalid k on graph messages", () => {
+    const base = sampleGraphMessage();
+    expect(parseWorkerToMain({ ...base, k: 0 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, k: 1.5 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, k: "4" })).toBeNull();
+  });
+
+  it("rejects invalid t on graph messages", () => {
+    const base = sampleGraphMessage();
+    expect(parseWorkerToMain({ ...base, t: 0 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, t: 2.5 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, t: "3" })).toBeNull();
+  });
+
+  it("rejects a half pair of k and t", () => {
+    const base = sampleGraphMessage();
+    expect(parseWorkerToMain({ ...base, k: 4 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, t: 2 })).toBeNull();
+  });
 });
 
 describe("graphFromTraceMessage", () => {
@@ -76,6 +111,23 @@ describe("graphFromTraceMessage", () => {
     expect(graph.weights).toBe(message.weights);
     expect(graph.x).toBe(message.x);
     expect(graph.y).toBe(message.y);
+  });
+
+  it("omits BMSSP k and t from the Graph view", () => {
+    const message = { ...sampleGraphMessage(), k: 3, t: 2 };
+    const graph = graphFromTraceMessage(message);
+
+    expect(graph).toEqual({
+      n: message.n,
+      m: message.m,
+      offsets: message.offsets,
+      targets: message.targets,
+      weights: message.weights,
+      x: message.x,
+      y: message.y,
+    });
+    expect("k" in graph).toBe(false);
+    expect("t" in graph).toBe(false);
   });
 });
 

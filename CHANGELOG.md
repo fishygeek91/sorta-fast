@@ -69,6 +69,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- BMSSP worker `graph` messages echo resolved `{k, t}`; Race/Lens/Story narrate FindPivots k from that echo (or `graph.n` fallback), not URL `n`. Parser rejects a half pair (`k` XOR `t`) so a malformed echo cannot silently fall back (#56).
 - Race and Lens merge Play/Pause into one toggle, separate PNG/WebM from the playback cluster, and tooltip Step event, Step op, and disabled exports (#66).
 - Mode nav marks the active Race/Lens/Story button as selected (`aria-current="page"`) instead of `disabled`, drops the duplicate mode subtitle, and separates the theme toggle behind a divider (#64).
 - CI 1M-event Vitest guard stays at 200ms with sequential files; the 100ms number is no longer only a comment (#35).

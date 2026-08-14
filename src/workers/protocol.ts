@@ -39,6 +39,10 @@ export type TraceGraphMessage = {
   weights: Float64Array;
   x: Float64Array;
   y: Float64Array;
+  /** BMSSP only: resolved FindPivots/level k. Must arrive with `t`; Dijkstra omits both. */
+  k?: number;
+  /** BMSSP only: resolved block parameter t. Must arrive with `k`; Dijkstra omits both. */
+  t?: number;
 };
 
 /** Worker → main: one completed or flushed trace slab. */
@@ -101,7 +105,19 @@ export function parseWorkerToMain(data: unknown): WorkerToMain | null {
       ) {
         return null;
       }
-      return {
+      const k = parseOptionalBmsspInt(record["k"]);
+      if (k === null) {
+        return null;
+      }
+      const t = parseOptionalBmsspInt(record["t"]);
+      if (t === null) {
+        return null;
+      }
+      // BMSSP always sends both; Dijkstra omits both. A half pair is malformed.
+      if ((k === undefined) !== (t === undefined)) {
+        return null;
+      }
+      const message: TraceGraphMessage = {
         type: "graph",
         n,
         m,
@@ -111,6 +127,13 @@ export function parseWorkerToMain(data: unknown): WorkerToMain | null {
         x,
         y,
       };
+      if (k !== undefined) {
+        message.k = k;
+      }
+      if (t !== undefined) {
+        message.t = t;
+      }
+      return message;
     }
     case "chunk": {
       const chunk = record["chunk"];
@@ -145,6 +168,27 @@ export function parseWorkerToMain(data: unknown): WorkerToMain | null {
     default:
       return null;
   }
+}
+
+/**
+ * Validate an optional BMSSP integer parameter on a worker graph message.
+ *
+ * @param value - Raw field from the payload.
+ * @returns The validated integer, `undefined` when omitted, or `null` when invalid.
+ */
+function parseOptionalBmsspInt(value: unknown): number | undefined | null {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    !Number.isInteger(value) ||
+    value < 1
+  ) {
+    return null;
+  }
+  return value;
 }
 
 /**

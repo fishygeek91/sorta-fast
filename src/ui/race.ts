@@ -9,7 +9,7 @@ import {
   type Graph,
   type GraphKind,
 } from "../core/graph.ts";
-import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
+import { findPivotsKFromEcho } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
@@ -1325,8 +1325,6 @@ export function mountRace(): void {
       return;
     }
 
-    const params = resolveBmsspRunParams(raceState.n, raceState.bmssp, raceState.bk, raceState.bt);
-
     const spec: RaceSpec = {
       kind: raceState.g,
       n: raceState.n,
@@ -1346,10 +1344,17 @@ export function mountRace(): void {
       onProgress: (ratio) => {
         showGenProgress(ratio);
       },
-      onGraph: (graph) => {
+      onGraph: (graph, bmssp) => {
         hideGenProgress();
         activeGraph = graph;
-        race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX, params.k);
+        const findPivotsK = findPivotsKFromEcho(
+          graph.n,
+          bmssp?.k,
+          raceState.bmssp,
+          raceState.bk,
+          raceState.bt,
+        );
+        race = new RaceScheduler(graph, configs.length, SOURCE_VERTEX, findPivotsK);
         race.setSpeed(speed);
 
         const resolution = resolveRaceFinishVertex(graph, SOURCE_VERTEX, raceState.target);
