@@ -93,6 +93,8 @@ Do **not** use `M = 2^{l · t}`.
 
 **Gallery footnote-1 relaxation.** At every gallery `n` below, `⌊(1/4) · log₂ log₂ n⌋ ∈ {0, 1}` so implementation δ is either “skip” or **3**. With `k ∈ {2, 3}`, `log₂ k ≤ 1.58 < 3`, hence **δ > log k**. Correctness still holds (footnote 1). Do not claim the simplified `O((p + |Q|) k log k)` FindPivots bound that assumes `δ ≤ log k` at these sizes (DMSY-P04).
 
+**Representable-n clamp.** `⌊(1/4) · log₂ log₂ n⌋ ≥ 3` needs `n ≥ 2^{2^{12}}`, far beyond IEEE-754 finite range (`Number.MAX_VALUE ≈ 2^{1024}`). For every finite JS `n` where reduction runs, the min-clamp fires and **implementation δ is 3**. Demo δ never varies; do not look for a size where the formula yields 4.
+
 **#54** chooses demo defaults from a committed `scanCosts` sweep. Paper formulas stay selectable. Do not copy BMSSP demo `k = 4` (DMSY-P16, DMSY-P17).
 
 ### 1.3 Computed gallery table

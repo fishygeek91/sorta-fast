@@ -13,6 +13,10 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 - `TraceBuffer.applyCount` counts live-cursor applies so a second `syncLanes` past photo-finish freeze can assert zero applies, not only matching final `eventIndex` (#44).
 - `docs/paper-notes.md`: DMSY (arXiv 2602.07868 v2) implementation spec — section-cited pseudocode, 4-tuple tie-break, paper parameter formulas with gallery-n degeneracy, and a living ambiguity log (#22).
 
+### Changed
+
+- paper-notes §1.2: implementation δ is 3 for every finite JS `n` (the raw `⌊(1/4)·log₂ log₂ n⌋` term never reaches 3); `reducedSource` JSDoc notes the O(|V′|) scan for #26 (#23).
+
 ## [1.0.0] - 2026-08-14
 
 v1.0 "The Race": Dijkstra vs BMSSP in the browser (Race, Lens, Story), with work-clock fairness, URL seeds, PNG/WebM export, and GitHub Pages. DMSY remains v2.0 (#22–#28).

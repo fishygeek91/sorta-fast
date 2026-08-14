@@ -373,6 +373,10 @@ export function degreeReduce(graph: Graph, delta?: number): DegreeReduceResult {
  * Lowest reduced vertex id whose {@link DegreeReduceResult.vertexMap} entry equals
  * the original source.
  *
+ * Linear scan of `vertexMap` (O(|V′|)). Copy 0 of `v` is the first hit because
+ * reduced ids are allocated v-major. Fine for one-shot use; if a later issue
+ * (#26) calls this in a hot loop, cache the result or store `reducedBase[v]`.
+ *
  * @param vertexMap - Reduced → original vertex map from {@link degreeReduce}.
  * @param source - Original source vertex id.
  * @returns Reduced source id (cycle copy 0 when identity).
