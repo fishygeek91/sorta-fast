@@ -20,6 +20,7 @@ import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { DEFAULT_STORY_URL, serializeStoryUrl } from "./storyUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
+import { RACE_CHROME_COPY } from "./siteCopy.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 import { parseLensUrl, serializeLensUrl, type LensAlgo, type LensUrlState } from "./urlState.ts";
 
@@ -239,23 +240,23 @@ export function mountLens(): void {
   const transport = document.createElement("div");
   transport.className = "lens-transport";
 
-  const playBtn = document.createElement("button");
-  playBtn.type = "button";
-  playBtn.textContent = "Play";
-
-  const pauseBtn = document.createElement("button");
-  pauseBtn.type = "button";
-  pauseBtn.textContent = "Pause";
+  const playPauseBtn = document.createElement("button");
+  playPauseBtn.type = "button";
+  playPauseBtn.className = "transport-play";
+  playPauseBtn.textContent = "Play";
+  playPauseBtn.setAttribute("aria-pressed", "false");
 
   const stepEventBtn = document.createElement("button");
   stepEventBtn.type = "button";
   stepEventBtn.textContent = "Step event";
+  stepEventBtn.title = RACE_CHROME_COPY.stepEventTitle;
 
   const stepOpBtn = document.createElement("button");
   stepOpBtn.type = "button";
   stepOpBtn.textContent = "Step op";
+  stepOpBtn.title = RACE_CHROME_COPY.stepOpTitle;
 
-  transport.append(playBtn, pauseBtn, stepEventBtn, stepOpBtn);
+  transport.append(playPauseBtn, stepEventBtn, stepOpBtn);
 
   const speedLabel = document.createElement("label");
   speedLabel.className = "lens-speed";
@@ -656,6 +657,15 @@ export function mountLens(): void {
   }
 
   /**
+   * Sync Play/Pause toggle label and aria-pressed to the work clock.
+   */
+  function syncPlayPauseUi(): void {
+    const playing = playback !== null && playback.clock.playing;
+    playPauseBtn.textContent = playing ? "Pause" : "Play";
+    playPauseBtn.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /**
    * Paint the current frame and refresh scrubber + counters.
    */
   function drawFrame(): void {
@@ -666,6 +676,7 @@ export function mountLens(): void {
     syncScrubberUi();
     syncCounters();
     syncNarration();
+    syncPlayPauseUi();
   }
 
   /**
@@ -689,6 +700,7 @@ export function mountLens(): void {
     pullValue.textContent = "0";
     dstructValue.textContent = "0";
     syncNarration();
+    syncPlayPauseUi();
     clearStatus();
     showGenProgress(0);
 
@@ -831,12 +843,16 @@ export function mountLens(): void {
   window.addEventListener("pointerup", onScrubberPointerRelease);
   window.addEventListener("pointercancel", onScrubberPointerRelease);
 
-  playBtn.addEventListener("click", () => {
-    playback?.play();
-  });
-
-  pauseBtn.addEventListener("click", () => {
-    playback?.pause();
+  playPauseBtn.addEventListener("click", () => {
+    if (playback === null) {
+      return;
+    }
+    if (playback.clock.playing) {
+      playback.pause();
+    } else {
+      playback.play();
+    }
+    syncPlayPauseUi();
   });
 
   stepEventBtn.addEventListener("click", () => {

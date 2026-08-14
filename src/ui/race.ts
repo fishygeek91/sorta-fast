@@ -299,13 +299,11 @@ export function mountRace(): void {
   stepBackBtn.type = "button";
   stepBackBtn.textContent = "Step back";
 
-  const playBtn = document.createElement("button");
-  playBtn.type = "button";
-  playBtn.textContent = "Play";
-
-  const pauseBtn = document.createElement("button");
-  pauseBtn.type = "button";
-  pauseBtn.textContent = "Pause";
+  const playPauseBtn = document.createElement("button");
+  playPauseBtn.type = "button";
+  playPauseBtn.className = "transport-play";
+  playPauseBtn.textContent = "Play";
+  playPauseBtn.setAttribute("aria-pressed", "false");
 
   const skipEndBtn = document.createElement("button");
   skipEndBtn.type = "button";
@@ -314,10 +312,12 @@ export function mountRace(): void {
   const stepEventBtn = document.createElement("button");
   stepEventBtn.type = "button";
   stepEventBtn.textContent = "Step event";
+  stepEventBtn.title = RACE_CHROME_COPY.stepEventTitle;
 
   const stepOpBtn = document.createElement("button");
   stepOpBtn.type = "button";
   stepOpBtn.textContent = "Step op";
+  stepOpBtn.title = RACE_CHROME_COPY.stepOpTitle;
 
   const exportPngBtn = document.createElement("button");
   exportPngBtn.type = "button";
@@ -325,6 +325,7 @@ export function mountRace(): void {
   exportPngBtn.textContent = "PNG";
   exportPngBtn.disabled = true;
   exportPngBtn.setAttribute("aria-label", "Export photo-finish PNG");
+  exportPngBtn.title = RACE_CHROME_COPY.exportDisabledTitle;
 
   const exportWebmBtn = document.createElement("button");
   exportWebmBtn.type = "button";
@@ -332,20 +333,26 @@ export function mountRace(): void {
   exportWebmBtn.textContent = "WebM";
   exportWebmBtn.disabled = true;
   exportWebmBtn.setAttribute("aria-label", "Export race video");
+  exportWebmBtn.title = RACE_CHROME_COPY.exportDisabledTitle;
+
+  const playbackGroup = document.createElement("div");
+  playbackGroup.className = "transport-playback";
+  playbackGroup.append(
+    skipStartBtn,
+    stepBackBtn,
+    playPauseBtn,
+    stepEventBtn,
+    stepOpBtn,
+    skipEndBtn,
+  );
+
+  const exportGroup = document.createElement("div");
+  exportGroup.className = "transport-export";
+  exportGroup.append(exportPngBtn, exportWebmBtn);
 
   const transportButtons = document.createElement("div");
   transportButtons.className = "lens-transport";
-  transportButtons.append(
-    skipStartBtn,
-    stepBackBtn,
-    playBtn,
-    pauseBtn,
-    skipEndBtn,
-    stepEventBtn,
-    stepOpBtn,
-    exportPngBtn,
-    exportWebmBtn,
-  );
+  transportButtons.append(playbackGroup, exportGroup);
 
   const speedLabel = document.createElement("label");
   speedLabel.className = "lens-speed";
@@ -842,6 +849,17 @@ export function mountRace(): void {
     const enabled = exportButtonsEnabled();
     exportPngBtn.disabled = !enabled;
     exportWebmBtn.disabled = !enabled;
+    exportPngBtn.title = enabled ? "Export photo-finish PNG" : RACE_CHROME_COPY.exportDisabledTitle;
+    exportWebmBtn.title = enabled ? "Export race video" : RACE_CHROME_COPY.exportDisabledTitle;
+  }
+
+  /**
+   * Sync Play/Pause toggle label and aria-pressed to the work clock.
+   */
+  function syncPlayPauseUi(): void {
+    const playing = race !== null && race.clock.playing;
+    playPauseBtn.textContent = playing ? "Pause" : "Play";
+    playPauseBtn.setAttribute("aria-pressed", playing ? "true" : "false");
   }
 
   /**
@@ -858,8 +876,7 @@ export function mountRace(): void {
     speedSelect.disabled = disabled;
     skipStartBtn.disabled = disabled;
     stepBackBtn.disabled = disabled;
-    playBtn.disabled = disabled;
-    pauseBtn.disabled = disabled;
+    playPauseBtn.disabled = disabled;
     skipEndBtn.disabled = disabled;
     stepEventBtn.disabled = disabled;
     stepOpBtn.disabled = disabled;
@@ -884,6 +901,7 @@ export function mountRace(): void {
     exportWebmBtn.textContent = "WebM";
     syncRecordingControls();
     syncExportButtons();
+    syncPlayPauseUi();
   }
 
   /**
@@ -1055,6 +1073,7 @@ export function mountRace(): void {
     syncBanner();
     syncStanding(counterRows);
     syncExportButtons();
+    syncPlayPauseUi();
 
     if (recording) {
       if (paintExportSheet()) {
@@ -1095,6 +1114,7 @@ export function mountRace(): void {
     workLabel.textContent = "0 / 0";
     bannerEl.hidden = true;
     syncExportButtons();
+    syncPlayPauseUi();
 
     for (const ui of laneUis) {
       ui.comparisonsValue.textContent = "0";
@@ -1234,13 +1254,17 @@ export function mountRace(): void {
     drawFrame();
   });
 
-  playBtn.addEventListener("click", () => {
-    race?.play();
-  });
-
-  pauseBtn.addEventListener("click", () => {
-    race?.pause();
-    writeClockToUrl();
+  playPauseBtn.addEventListener("click", () => {
+    if (race === null) {
+      return;
+    }
+    if (race.clock.playing) {
+      race.pause();
+      writeClockToUrl();
+    } else {
+      race.play();
+    }
+    syncPlayPauseUi();
   });
 
   skipEndBtn.addEventListener("click", () => {
