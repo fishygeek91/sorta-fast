@@ -21,7 +21,7 @@ Sorta Fast v1.0 "The Race" (Dijkstra vs BMSSP). Issue #21.
 
 ## CI green
 
-- [x] Local gate: `npm run typecheck && npm test && npm run lint` before PR. Known GHA flake: issue #35 (1M-event budget on shared CPUs); not in scope for #21.
+- [x] Local gate: `npm run typecheck && npm test && npm run lint` before PR. CI Vitest 1M-event guard is 200ms with sequential files; the 100ms claim is `npm run bench:trace` (#35).
 
 ## Fairness panel accurate
 

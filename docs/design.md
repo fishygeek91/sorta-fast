@@ -219,7 +219,7 @@ Milestones: **M1 Foundation → M2 Dijkstra lane → M3 BMSSP lane → M4 Race U
 **M1 — Foundation**
 1. `infra` Scaffold Vite + TS strict + vitest + ESLint/Prettier; CI workflow (typecheck + test on PR). *AC: green CI on empty app.*
 2. `core` CSR graph representation on typed arrays + seeded PRNG (mulberry32) + graph generators (geometric/Delaunay city, grid maze, cluster ring, sparse random) with coordinates. *AC: generators deterministic per seed; property tests.*
-3. `core` TraceEvent schema, op-cost table, TraceWriter on typed-array ring buffers + chunked transfer protocol. *AC: 1M events written/replayed < 100ms in Node bench.*
+3. `core` TraceEvent schema, op-cost table, TraceWriter on typed-array ring buffers + chunked transfer protocol. *AC: 1M events written/replayed < 100ms in Node bench (`npm run bench:trace`); CI Vitest guard uses 200ms headroom on shared runners (#35).*
 4. `infra` GitHub Pages deploy workflow (build → deploy-pages, blocked on CI). *AC: hello-world live on Pages URL.*
 
 **M2 — Dijkstra lane**

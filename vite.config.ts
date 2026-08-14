@@ -19,7 +19,7 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     environment: "node",
-    // Shared GHA CPUs miss the 1M-event budget when files run in parallel (#35).
+    // Sequential files protect the 200ms CI Vitest guard on shared GHA CPUs (#35).
     fileParallelism: false,
   },
 });

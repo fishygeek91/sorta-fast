@@ -15,6 +15,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- `npm run bench:trace` now measures best-of-3 after warmup and exits non-zero if best ≥ 100ms, so the issue #3 Node-bench claim is enforced (#35).
 - Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
 - Wall-clock benchmark page (`/sorta-fast/bench/`) plus headless harness (`npm run bench:wall-clock`) with committed S–XL sparse timings and the work-clock vs milliseconds caveat (#21).
 - v1.0 launch checklist in `docs/launch-checklist.md` (#21).
@@ -56,6 +57,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- CI 1M-event Vitest guard stays at 200ms with sequential files; the 100ms number is no longer only a comment (#35).
 - Story beat table drops unused `focusLane`; story pace/drive tests share `test/helpers/story-traces.ts` (PR #57 nits, #60).
 - Export captions always use the canonical GitHub Pages origin (`https://fishygeek91.github.io/sorta-fast/`), so localhost preview URLs never bake into PNG/WebM (#21).
 - Re-recorded the README hero GIF through both-lane photo-finish (plus a 1.5s last-frame hold) and captioned it as Dijkstra's race-to-target on seed 4, not a BMSSP settle-all win (#21).
