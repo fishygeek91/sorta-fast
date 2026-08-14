@@ -391,6 +391,118 @@ describe("TraceBuffer live counters", () => {
   });
 });
 
+describe("TraceBuffer.applyCount", () => {
+  it("empty buffer: applyCount 0 and seekWork(0) noop", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const buf = new TraceBuffer(graph, []);
+
+    expect(buf.applyCount).toBe(0);
+    buf.seekWork(0);
+    expect(buf.applyCount).toBe(0);
+  });
+
+  it("non-empty constructor: applyCount equals totalEvents after keyframe pass", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    expect(buf.totalEvents).toBe(3);
+    expect(buf.applyCount).toBe(buf.totalEvents);
+    expect(buf.state.eventIndex).toBe(0);
+  });
+
+  it("seekWork(0) after constructor does not increment applyCount", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const afterCtor = buf.applyCount;
+
+    buf.seekWork(0);
+    expect(buf.applyCount).toBe(afterCtor);
+  });
+
+  it("forward seekWork increments applyCount by event delta", () => {
+    const graph = packCsr(3, [{ from: 0, to: 1, weight: 1 }], [0, 1, 2], [0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const beforeCount = buf.applyCount;
+    const beforeIndex = buf.state.eventIndex;
+
+    const midT = Math.floor(buf.totalWork / 2);
+    buf.seekWork(midT);
+
+    const deltaIndex = buf.state.eventIndex - beforeIndex;
+    expect(deltaIndex).toBeGreaterThan(0);
+    expect(buf.applyCount - beforeCount).toBe(deltaIndex);
+  });
+
+  it("repeated seekWork to same position increments applyCount by 0", () => {
+    const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(1);
+    const afterFirst = buf.applyCount;
+
+    buf.seekWork(1);
+    expect(buf.applyCount).toBe(afterFirst);
+  });
+
+  it("stepEvent increments applyCount by 1; at end returns false without increment", () => {
+    const graph = packCsr(2, [], [0, 0], [0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const afterCtor = buf.applyCount;
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.applyCount).toBe(afterCtor + 1);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.applyCount).toBe(afterCtor + 2);
+
+    expect(buf.stepEvent()).toBe(false);
+    expect(buf.applyCount).toBe(afterCtor + 2);
+  });
+
+  it("backward seekWork adds applies; applyCount survives copyFrom restore", () => {
+    const graph = packCsr(3, [{ from: 0, to: 1, weight: 1 }], [0, 1, 2], [0, 0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "relax", e: 0, improved: true, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const afterCtor = buf.applyCount;
+
+    buf.seekWork(buf.totalWork);
+    const afterFullSeek = buf.applyCount;
+    expect(afterFullSeek).toBe(afterCtor + buf.totalEvents);
+
+    const midT = Math.floor(buf.totalWork / 2);
+    buf.seekWork(midT);
+    expect(buf.applyCount).toBeGreaterThan(afterFullSeek);
+  });
+});
+
 describe("BMSSP overlay state", () => {
   it("recurse out with empty stack throws", () => {
     const graph = packCsr(3, [], [0, 0, 0], [0, 0, 0]);

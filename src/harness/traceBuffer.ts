@@ -50,10 +50,23 @@ export class TraceBuffer {
   private readonly indexState: LaneState;
   /** Last keyframe bucket `floor(work / KEYFRAME_OPS)` for append cadence. */
   private lastKeyframeK: number;
+  private _applyCount = 0;
 
   /** Number of keyframe snapshots (T=0, interval, trailing end). */
   get keyframeCount(): number {
     return this.keyframes.length;
+  }
+
+  /**
+   * Lifetime live-cursor apply count (#44).
+   *
+   * Counts successful {@link applyOne} calls on the live {@link state}
+   * (constructor keyframe pass when chunks are given to the constructor,
+   * {@link seekWork}, and {@link stepEvent}). Does not include
+   * {@link appendChunk}'s indexState pass, which uses applyOneTo directly.
+   */
+  get applyCount(): number {
+    return this._applyCount;
   }
 
   /**
@@ -349,6 +362,7 @@ export class TraceBuffer {
    */
   private applyOne(): void {
     this.applyOneTo(this.state);
+    this._applyCount += 1;
   }
 
   /**

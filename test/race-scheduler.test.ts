@@ -398,6 +398,10 @@ describe("RaceScheduler photo-finish freeze", () => {
     race.markLaneComplete(0);
     race.setFinishVertex(1);
 
+    expect(race.laneBuffer(0).applyCount).toBe(0);
+    expect(race.laneBuffer(1).applyCount).toBe(0);
+    const apply0BeforeFirst = race.laneBuffer(0).applyCount;
+
     race.seek(5);
     const frozenEventIndex = race.laneState(0).eventIndex;
     const frozenWork = race.laneState(0).work;
@@ -407,6 +411,14 @@ describe("RaceScheduler photo-finish freeze", () => {
     expect(frozenWork).toBe(2);
     expect(race.lanePhotoFrozen(0)).toBe(true);
     expect(race.lanePhotoFrozen(1)).toBe(false);
+    // Live settleWork is unset until the first crossing, so syncLanes may overshoot
+    // then recap — applyCount can exceed frozenEventIndex here. Later syncs add zero applies.
+    expect(race.laneBuffer(0).applyCount - apply0BeforeFirst).toBeGreaterThanOrEqual(
+      frozenEventIndex,
+    );
+    expect(race.laneBuffer(1).applyCount).toBeGreaterThan(0);
+    const apply0AfterFirst = race.laneBuffer(0).applyCount;
+    const apply1AfterFirst = race.laneBuffer(1).applyCount;
 
     race.seek(8);
 
@@ -415,6 +427,8 @@ describe("RaceScheduler photo-finish freeze", () => {
     expect(race.laneState(1).eventIndex).toBeGreaterThan(lane1EventIndexAfterFirst);
     expect(race.lanePhotoFrozen(0)).toBe(true);
     expect(race.lanePhotoFrozen(1)).toBe(false);
+    expect(race.laneBuffer(0).applyCount).toBe(apply0AfterFirst);
+    expect(race.laneBuffer(1).applyCount).toBeGreaterThan(apply1AfterFirst);
   });
 });
 
