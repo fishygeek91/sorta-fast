@@ -93,6 +93,8 @@ Do **not** use `M = 2^{l · t}`.
 
 **Gallery footnote-1 relaxation.** At every gallery `n` below, `⌊(1/4) · log₂ log₂ n⌋ ∈ {0, 1}` so implementation δ is either “skip” or **3**. With `k ∈ {2, 3}`, `log₂ k ≤ 1.58 < 3`, hence **δ > log k**. Correctness still holds (footnote 1). Do not claim the simplified `O((p + |Q|) k log k)` FindPivots bound that assumes `δ ≤ log k` at these sizes (DMSY-P04).
 
+**Representable-n clamp.** `⌊(1/4) · log₂ log₂ n⌋ ≥ 3` needs `n ≥ 2^{2^{12}}`, far beyond IEEE-754 finite range (`Number.MAX_VALUE ≈ 2^{1024}`). For every finite JS `n` where reduction runs, the min-clamp fires and **implementation δ is 3**. Demo δ never varies; do not look for a size where the formula yields 4.
+
 **#54** chooses demo defaults from a committed `scanCosts` sweep. Paper formulas stay selectable. Do not copy BMSSP demo `k = 4` (DMSY-P16, DMSY-P17).
 
 ### 1.3 Computed gallery table
@@ -504,6 +506,10 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P15 | §2.3; `trace.ts` | Encode `∞` / missing pred | `SENTINEL = -1`; source pred `SENTINEL`; `B_∞ = ⟨∞, 0, SENTINEL, SENTINEL⟩` | Vertex 0 is a real id |
 | DMSY-P16 | issue #54 | Demo vs paper params | **#54** owns the sweep; `paperDmsyParams` stays selectable | Parallel to BMSSP #52 |
 | DMSY-P17 | `demoBmsspParams` | Copy `k = 4` floor? | **No** | Different `k` formula; #54 decides |
+| DMSY-P18 | §2.1 | Δ_v=0 or \|C_v\|=1 | Δ_v=0 → one vertex, no cycle edges (DMSY-P09). \|C_v\|=1 → omit the self-loop (`packCsr` rejects self-loops); degrees still ≤ δ−2 < δ. | packCsr; §2.1; DMSY-P09 |
+| DMSY-P19 | §2.1 | Neighbor/id/coord order | Neighbors of v sorted by ascending id; slot k → cycle vertex floor(k/(δ−2)); reduced ids allocated v-major then cycle-index; split-copy (x,y) copy the original vertex. | Determinism (AGENTS.md); packCsr coords |
+| DMSY-P20 | §2.1; design §4.2 | How to un-map traces | Drop VIRTUAL_EDGE (cycle) relax/forest. First settle per original vertex wins; first pivot per original vertex wins (separate seen-sets). Pass through heap/batch/recurse/dstruct. Helpers only in degreeReduce.ts; harness/render unchanged. | Renderer sees original IDs; #26 wires the boundary |
+| DMSY-P21 | §2.1; `trace.ts` relax | Un-mapped `improved` flags | `createTraceUnmapper` preserves the reduced-graph `improved` bit. Two original edges can improve two different copies of `v` on G′; last-write replay on G is then wrong. Callers that replay on the original CSR (`TraceBuffer`, `auditDistancesFromTrace`) must recompute improvement. #26 does this at the emission boundary. | TraceBuffer last-write on `improved===1`; #23 tests rewrite in-test |
 
 ## 7. Lemma and cost-bound sanity checklist
 
