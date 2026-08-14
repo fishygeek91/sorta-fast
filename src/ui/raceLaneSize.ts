@@ -25,6 +25,27 @@ export function raceBackingStorePx(clientWidth: number, devicePixelRatio: number
 }
 
 /**
+ * Backing-store pixels per CSS pixel for a live Race lane (issue #79).
+ *
+ * Derived from the already-applied canvas size — does not recompute DPR.
+ * Renderer stays resolution-agnostic: pass this as `pixelScale`, do not hardcode 400.
+ *
+ * @param backingPx - `canvas.width` after {@link applyRaceCanvasBackingStore}.
+ * @param clientWidth - `canvas.clientWidth`. When <= 0, uses {@link RACE_LANE_CSS_PX}.
+ * @returns `backingPx / cssPx`.
+ * @throws If `backingPx` is non-finite or < 1.
+ */
+export function racePixelScale(backingPx: number, clientWidth: number): number {
+  if (!Number.isFinite(backingPx) || backingPx < 1) {
+    throw new Error(
+      `racePixelScale: backingPx must be a finite number >= 1, got ${String(backingPx)}`,
+    );
+  }
+  const cssPx = clientWidth > 0 ? clientWidth : RACE_LANE_CSS_PX;
+  return backingPx / cssPx;
+}
+
+/**
  * Set `canvas.width` and `canvas.height` to {@link raceBackingStorePx} of
  * `canvas.clientWidth` and `window.devicePixelRatio` (1 if window/dpr missing).
  * Assigns only when the edge differs (assigning width clears the bitmap).

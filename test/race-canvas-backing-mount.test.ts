@@ -66,3 +66,30 @@ describe("issue #77 race canvas backing mount wiring", () => {
     expect(body).not.toContain("syncLaneBackingStoresAndRenderers");
   });
 });
+
+describe("issue #79 race pixelScale wiring", () => {
+  const raceSource = readUiSource("race.ts");
+
+  it("imports racePixelScale", () => {
+    expect(raceSource).toContain("racePixelScale");
+    expect(raceSource).toContain("./raceLaneSize.ts");
+  });
+
+  it("passes pixelScale from canvas backing vs CSS into both Renderer constructions", () => {
+    expect(raceSource).toContain(
+      "pixelScale: racePixelScale(ui.canvas.width, ui.canvas.clientWidth)",
+    );
+    const matches = raceSource.match(
+      /pixelScale:\s*racePixelScale\(ui\.canvas\.width,\s*ui\.canvas\.clientWidth\)/g,
+    );
+    if (matches === null) {
+      throw new Error("expected two pixelScale: racePixelScale(...) sites");
+    }
+    expect(matches.length).toBe(2);
+  });
+
+  it("does not hardcode 400 as pixelScale", () => {
+    expect(raceSource).not.toContain("pixelScale: 400");
+    expect(raceSource).not.toContain("pixelScale: RACE_LANE_CSS_PX");
+  });
+});

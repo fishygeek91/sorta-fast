@@ -17,6 +17,7 @@ import {
   resetDirty,
   type DirtyRect,
 } from "./dirtyRect.ts";
+import { devicePx, devicePxInt } from "./devicePx.ts";
 import { cssColorForSettleOrder, rgbForSettleOrder } from "./palette.ts";
 import { type CanvasSurface, type DrawContext, type SurfaceFactory } from "./surface.ts";
 import { EMBER_RGB, PHOTO_FINISH_GOLD, THEMES, type ThemeTokens } from "./theme.ts";
@@ -26,16 +27,16 @@ export { EMBER_RGB, PHOTO_FINISH_GOLD };
 /** Vertex count at which the aggregated ImageData fill path activates (issue #20). */
 export const AGGREGATED_RENDER_MIN_N = SIZE_PRESETS.L;
 
-/** Aggregated node footprint in pixels (2×2 squares). */
+/** Aggregated node footprint in CSS pixels (2×2 squares; issue #79). Backing-store size is devicePxInt of this × pixelScale. */
 export const AGGREGATED_NODE_PX = 2;
 
-/** Edge line width in pixels. */
+/** Edge line width in CSS pixels (issue #79). Not scaled by pixelScale. */
 const EDGE_LINE_WIDTH = 1;
 
-/** Frontier ring line width in pixels. */
+/** Frontier ring line width in CSS pixels (issue #79). Not scaled by pixelScale. */
 const FRONTIER_LINE_WIDTH = 1.5;
 
-/** Ghost edge line width in pixels. */
+/** Ghost edge line width in CSS pixels (issue #79). Not scaled by pixelScale. */
 const GHOST_LINE_WIDTH = 1.5;
 
 /** Full circle arc in radians. */
@@ -91,14 +92,14 @@ const PIVOT_FLARE_INNER_SCALE = 1.35;
 /** Batch bloom fill alpha on the fx layer. */
 const BLOOM_FILL_ALPHA = 0.2;
 
-/** Schematic D-structure strip height in pixels along the canvas bottom. */
-const DSTRUCT_STRIP_HEIGHT = 16;
+/** Schematic D-structure strip height in CSS pixels along the canvas bottom (issue #79). Backing-store size is devicePxInt of this × pixelScale. */
+export const DSTRUCT_STRIP_HEIGHT = 16;
 
-/** Source/finish mark ring line width in pixels. */
-const MARK_LINE_WIDTH = 2;
+/** Source/finish mark ring line width in CSS pixels (issue #79). Backing-store size is devicePx of this × pixelScale. */
+export const MARK_LINE_WIDTH = 2;
 
-/** Photo-finish gold path line width in pixels. */
-const PHOTO_FINISH_LINE_WIDTH = 3;
+/** Photo-finish gold path line width in CSS pixels (issue #79). Backing-store size is devicePx of this × pixelScale. */
+export const PHOTO_FINISH_LINE_WIDTH = 3;
 
 /**
  * Obtain a 2D draw context from `surface`, throwing when unavailable.
@@ -319,13 +320,33 @@ export class Renderer {
   private finishMarkStroke: string;
   /** CPU settle-fill bitmap when {@link usesAggregated}; null below threshold. */
   private fillPixels: ImageData | null;
+  /** Cached source/finish mark stroke width in backing-store pixels (issue #79). */
+  private readonly markLineWidth: number;
+  /** Cached photo-finish gold path width in backing-store pixels (issue #79). */
+  private readonly photoFinishLineWidth: number;
+  /** Cached D-structure strip height in backing-store pixels (issue #79). */
+  private readonly dstructStripHeight: number;
+  /** Cached aggregated node footprint in backing-store pixels (issue #79). */
+  private readonly aggregatedNodePx: number;
 
   /**
    * @param opts.target - On-screen canvas surface.
    * @param opts.createSurface - Factory for offscreen layers (DOM or test fake).
    * @param opts.graph - Initial CSR graph with layout coordinates.
+   * @param opts.pixelScale - Backing pixels per CSS pixel (issue #79). Omitted defaults to 1 so Lens/Story/headless tests stay unchanged. Must be finite and > 0.
    */
-  constructor(opts: { target: CanvasSurface; createSurface: SurfaceFactory; graph: Graph }) {
+  constructor(opts: {
+    target: CanvasSurface;
+    createSurface: SurfaceFactory;
+    graph: Graph;
+    pixelScale?: number;
+  }) {
+    const pixelScale = opts.pixelScale ?? 1;
+    this.markLineWidth = devicePx(MARK_LINE_WIDTH, pixelScale);
+    this.photoFinishLineWidth = devicePx(PHOTO_FINISH_LINE_WIDTH, pixelScale);
+    this.dstructStripHeight = devicePxInt(DSTRUCT_STRIP_HEIGHT, pixelScale);
+    this.aggregatedNodePx = devicePxInt(AGGREGATED_NODE_PX, pixelScale);
+
     this.target = opts.target;
     this.graph = opts.graph;
     this.dirty = createDirtyRect();
@@ -553,7 +574,7 @@ export class Renderer {
     }
 
     if (flags.dstructStrip && (state.dBlockCount > 0 || this.lastDBlockCount > 0)) {
-      this.includeRectDirty(0, height - DSTRUCT_STRIP_HEIGHT, width - 1, height - 1);
+      this.includeRectDirty(0, height - this.dstructStripHeight, width - 1, height - 1);
     }
 
     this.includePhotoFinishDirty(state, flags);
@@ -657,10 +678,10 @@ export class Renderer {
   }
 
   /**
-   * Dirty-rect radius for one vertex: 2px squares above threshold, camera circle below.
+   * Dirty-rect radius for one vertex: cached aggregated footprint above threshold, camera circle below.
    */
   private nodeDirtyRadius(): number {
-    return this.usesAggregated() ? AGGREGATED_NODE_PX : this.camera.radius;
+    return this.usesAggregated() ? this.aggregatedNodePx : this.camera.radius;
   }
 
   /**
@@ -693,7 +714,7 @@ export class Renderer {
   }
 
   /**
-   * Write one 2×2 settled node into the CPU buffer and expand the dirty rect.
+   * Write one aggregated settled node (2 CSS px footprint) into the CPU buffer and expand the dirty rect.
    */
   private writeAggregatedNode(v: number, order: number, n: number): void {
     const pixels = this.fillPixels;
@@ -710,12 +731,12 @@ export class Renderer {
     const canvasWidth = pixels.width;
     const canvasHeight = pixels.height;
 
-    for (let dy = 0; dy < AGGREGATED_NODE_PX; dy += 1) {
+    for (let dy = 0; dy < this.aggregatedNodePx; dy += 1) {
       const py = cy + dy;
       if (py < 0 || py >= canvasHeight) {
         continue;
       }
-      for (let dx = 0; dx < AGGREGATED_NODE_PX; dx += 1) {
+      for (let dx = 0; dx < this.aggregatedNodePx; dx += 1) {
         const px = cx + dx;
         if (px < 0 || px >= canvasWidth) {
           continue;
@@ -730,9 +751,9 @@ export class Renderer {
 
     includeNode(
       this.dirty,
-      cx + AGGREGATED_NODE_PX * 0.5,
-      cy + AGGREGATED_NODE_PX * 0.5,
-      AGGREGATED_NODE_PX,
+      cx + this.aggregatedNodePx * 0.5,
+      cy + this.aggregatedNodePx * 0.5,
+      this.aggregatedNodePx,
       this.target.width,
       this.target.height,
     );
@@ -765,7 +786,7 @@ export class Renderer {
   }
 
   /**
-   * Draw a 2×2 overlay mark at the projected vertex center (aggregated mode).
+   * Draw an aggregated overlay mark (2 CSS px footprint) at the projected vertex center.
    */
   private drawAggregatedOverlayMark(
     ctx: DrawContext,
@@ -774,7 +795,7 @@ export class Renderer {
     fillStyle: string,
   ): void {
     ctx.fillStyle = fillStyle;
-    ctx.fillRect(Math.floor(cx), Math.floor(cy), AGGREGATED_NODE_PX, AGGREGATED_NODE_PX);
+    ctx.fillRect(Math.floor(cx), Math.floor(cy), this.aggregatedNodePx, this.aggregatedNodePx);
   }
 
   /**
@@ -1108,7 +1129,7 @@ export class Renderer {
         this.drawAggregatedOverlayMark(ctx, cx, cy, this.sourceMarkStroke);
       } else {
         ctx.strokeStyle = this.sourceMarkStroke;
-        ctx.lineWidth = MARK_LINE_WIDTH;
+        ctx.lineWidth = this.markLineWidth;
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, TAU);
         ctx.stroke();
@@ -1122,7 +1143,7 @@ export class Renderer {
         this.drawAggregatedOverlayMark(ctx, cx, cy, this.finishMarkStroke);
       } else {
         ctx.strokeStyle = this.finishMarkStroke;
-        ctx.lineWidth = MARK_LINE_WIDTH;
+        ctx.lineWidth = this.markLineWidth;
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, TAU);
         ctx.stroke();
@@ -1169,7 +1190,7 @@ export class Renderer {
         totalKeys += Math.max(0, size);
       }
 
-      const stripY = height - DSTRUCT_STRIP_HEIGHT;
+      const stripY = height - this.dstructStripHeight;
       let x = 0;
       for (let i = 0; i < blockCount; i += 1) {
         const size = state.dBlockSizes[i];
@@ -1184,7 +1205,7 @@ export class Renderer {
         const w = nextX - x;
         if (w > 0) {
           ctx.fillStyle = i % 2 === 0 ? `rgb(${this.emberRgb})` : this.stoneFill;
-          ctx.fillRect(x, stripY, w, DSTRUCT_STRIP_HEIGHT);
+          ctx.fillRect(x, stripY, w, this.dstructStripHeight);
         }
         x = nextX;
       }
@@ -1217,7 +1238,7 @@ export class Renderer {
     const camera = this.camera;
 
     ctx.strokeStyle = PHOTO_FINISH_GOLD;
-    ctx.lineWidth = PHOTO_FINISH_LINE_WIDTH;
+    ctx.lineWidth = this.photoFinishLineWidth;
     ctx.beginPath();
 
     for (let i = 0; i < path.length; i += 1) {

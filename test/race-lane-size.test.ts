@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { LANE_TILE } from "../src/ui/exportSheet.ts";
-import { RACE_LANE_CSS_PX, RACE_LANE_DPR_CAP, raceBackingStorePx } from "../src/ui/raceLaneSize.ts";
+import {
+  RACE_LANE_CSS_PX,
+  RACE_LANE_DPR_CAP,
+  raceBackingStorePx,
+  racePixelScale,
+} from "../src/ui/raceLaneSize.ts";
 
 describe("issue #77 race lane backing store", () => {
   it("matches CSS pixels at 1× DPR", () => {
@@ -33,5 +38,40 @@ describe("issue #77 race lane backing store", () => {
   it("treats non-finite DPR as 1", () => {
     expect(raceBackingStorePx(560, NaN)).toBe(560);
     expect(raceBackingStorePx(560, Infinity)).toBe(560);
+  });
+});
+
+describe("issue #79 racePixelScale", () => {
+  it("returns 1 when backing matches CSS width", () => {
+    expect(racePixelScale(560, 560)).toBe(1);
+  });
+
+  it("returns 2 when backing is 2× CSS width", () => {
+    expect(racePixelScale(1120, 560)).toBe(2);
+  });
+
+  it("falls back to RACE_LANE_CSS_PX when clientWidth is 0", () => {
+    expect(racePixelScale(800, 0)).toBe(800 / RACE_LANE_CSS_PX);
+    expect(racePixelScale(800, 0)).toBe(2);
+  });
+
+  it("falls back to RACE_LANE_CSS_PX when clientWidth is negative", () => {
+    expect(racePixelScale(400, -10)).toBe(400 / RACE_LANE_CSS_PX);
+    expect(racePixelScale(400, -10)).toBe(1);
+  });
+
+  it("throws when backingPx is 0, NaN, Infinity, or negative", () => {
+    expect(() => racePixelScale(0, 560)).toThrow(
+      "racePixelScale: backingPx must be a finite number >= 1, got 0",
+    );
+    expect(() => racePixelScale(NaN, 560)).toThrow(
+      "racePixelScale: backingPx must be a finite number >= 1, got NaN",
+    );
+    expect(() => racePixelScale(Infinity, 560)).toThrow(
+      "racePixelScale: backingPx must be a finite number >= 1, got Infinity",
+    );
+    expect(() => racePixelScale(-1, 560)).toThrow(
+      "racePixelScale: backingPx must be a finite number >= 1, got -1",
+    );
   });
 });

@@ -14,6 +14,7 @@ export type DrawCall = {
   args: readonly unknown[];
   fillStyle?: string;
   strokeStyle?: string;
+  lineWidth?: number;
 };
 
 /** RGBA sample at one canvas pixel. */
@@ -213,6 +214,7 @@ export function createFakeSurface(width: number, height: number): FakeCanvasSurf
     }
     if (op === "stroke" || op === "strokeRect") {
       call.strokeStyle = strokeStyle;
+      call.lineWidth = lineWidth;
     }
     calls.push(call);
   };
