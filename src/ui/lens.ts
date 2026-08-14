@@ -15,6 +15,7 @@ import {
 } from "../workers/protocol.ts";
 import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
+import { mountModeNav } from "./modeNav.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { DEFAULT_STORY_URL, serializeStoryUrl } from "./storyUrl.ts";
@@ -76,16 +77,16 @@ export function mountLens(): void {
   title.className = "lens-title";
   title.textContent = "Sorta Fast";
 
-  const subtitle = document.createElement("p");
-  subtitle.className = "lens-subtitle";
-  subtitle.textContent = "Lens";
+  header.append(title);
 
-  const modeNav = document.createElement("div");
-  modeNav.className = "lens-mode-nav";
+  const {
+    chrome,
+    race: raceModeBtn,
+    story: storyModeBtn,
+  } = mountModeNav(header, "lens", {
+    storyButtonId: "lens-story-button",
+  });
 
-  const raceModeBtn = document.createElement("button");
-  raceModeBtn.type = "button";
-  raceModeBtn.textContent = "Race";
   raceModeBtn.addEventListener("click", () => {
     const raceState = parseRaceUrl(window.location.search);
     history.replaceState(
@@ -96,21 +97,10 @@ export function mountLens(): void {
     window.location.reload();
   });
 
-  const lensModeBtn = document.createElement("button");
-  lensModeBtn.type = "button";
-  lensModeBtn.textContent = "Lens";
-  lensModeBtn.disabled = true;
-
-  const storyModeBtn = document.createElement("button");
-  storyModeBtn.type = "button";
-  storyModeBtn.textContent = "Story";
-  storyModeBtn.id = "lens-story-button";
   storyModeBtn.addEventListener("click", () => {
     history.replaceState(null, "", serializeStoryUrl(DEFAULT_STORY_URL) + window.location.hash);
     window.location.reload();
   });
-
-  modeNav.append(raceModeBtn, lensModeBtn, storyModeBtn);
 
   const canvas = document.createElement("canvas");
   canvas.className = "lens-canvas";
@@ -128,14 +118,12 @@ export function mountLens(): void {
 
   syncLensPersona(lensState.algo);
 
-  mountThemeToggle(modeNav, (mode: ThemeMode) => {
+  mountThemeToggle(chrome, (mode: ThemeMode) => {
     if (renderer !== null) {
       renderer.setChrome(THEMES[mode]);
       drawFrame();
     }
   });
-
-  header.append(title, subtitle, modeNav);
 
   const counters = document.createElement("div");
   counters.className = "lens-counters";
@@ -557,17 +545,11 @@ export function mountLens(): void {
   }
 
   /**
-   * Update subtitle, narration visibility, and BMSSP-only counter row for the active algo.
+   * Sync canvas persona and BMSSP-only counter row for the active algo.
    */
   function syncAlgoUi(): void {
     syncLensPersona(lensState.algo);
-    if (lensState.algo === "bmssp") {
-      subtitle.textContent = "Lens · BMSSP";
-      bmsspCounters.hidden = false;
-    } else {
-      subtitle.textContent = "Lens · Dijkstra";
-      bmsspCounters.hidden = true;
-    }
+    bmsspCounters.hidden = lensState.algo !== "bmssp";
   }
 
   /**

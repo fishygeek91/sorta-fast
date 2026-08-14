@@ -8,6 +8,7 @@ import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
+import { mountModeNav } from "./modeNav.ts";
 import { formatBmsspNarration } from "./narration.ts";
 import { raceCountersFromLane } from "./photoFinish.ts";
 import { DEFAULT_RACE_URL, serializeRaceUrl } from "./raceUrl.ts";
@@ -61,29 +62,15 @@ export function mountStory(): void {
   const title = document.createElement("h1");
   title.className = "lens-title";
   title.textContent = "Sorta Fast";
-  const subtitle = document.createElement("p");
-  subtitle.className = "lens-subtitle";
-  subtitle.textContent = "Story";
-  const modeNav = document.createElement("div");
-  modeNav.className = "lens-mode-nav";
-  const raceModeBtn = document.createElement("button");
-  raceModeBtn.type = "button";
-  raceModeBtn.textContent = "Race";
-  const lensModeBtn = document.createElement("button");
-  lensModeBtn.type = "button";
-  lensModeBtn.textContent = "Lens";
-  const storyModeBtn = document.createElement("button");
-  storyModeBtn.type = "button";
-  storyModeBtn.textContent = "Story";
-  storyModeBtn.disabled = true;
+  header.append(title);
+  const { chrome, race: raceModeBtn, lens: lensModeBtn } = mountModeNav(header, "story");
   const skipBtn = document.createElement("button");
   skipBtn.type = "button";
   skipBtn.id = "story-skip";
   skipBtn.className = "story-skip";
   skipBtn.textContent = "Skip";
   skipBtn.setAttribute("aria-label", "Skip story");
-  modeNav.append(raceModeBtn, lensModeBtn, storyModeBtn, skipBtn);
-  header.append(title, subtitle, modeNav);
+  chrome.append(skipBtn);
   const captionEl = document.createElement("p");
   captionEl.id = "story-caption";
   captionEl.className = "story-caption";
@@ -131,7 +118,7 @@ export function mountStory(): void {
   let lastWheelStepMs = 0;
   let pointerStartX = 0;
   let pointerTracking = false;
-  mountThemeToggle(modeNav, (mode: ThemeMode) => {
+  mountThemeToggle(chrome, (mode: ThemeMode) => {
     for (const ui of laneUis) {
       if (ui.renderer !== null) {
         ui.renderer.setChrome(THEMES[mode]);

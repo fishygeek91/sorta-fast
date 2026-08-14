@@ -220,3 +220,28 @@ describe("issue #63 race standing CSS", () => {
     expect(css).toMatch(/\.race-lane\s*\{[\s\S]*?display:\s*flex/);
   });
 });
+
+describe("issue #64 mode nav", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("defines lens header chrome class", () => {
+    expect(css).toContain(".lens-header-chrome");
+  });
+
+  it("defines mode nav button class", () => {
+    expect(css).toContain(".mode-nav-btn");
+  });
+
+  it("defines current mode nav button with aria-current page", () => {
+    expect(css).toContain(".mode-nav-btn-current");
+    expect(css).toContain('[aria-current="page"]');
+  });
+
+  it("defines lens header separator class", () => {
+    expect(css).toContain(".lens-header-sep");
+  });
+
+  it("does not define removed lens subtitle class", () => {
+    expect(css).not.toContain(".lens-subtitle");
+  });
+});

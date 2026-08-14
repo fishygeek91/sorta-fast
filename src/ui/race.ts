@@ -31,6 +31,7 @@ import {
 } from "./exportRecorder.ts";
 import { sheetSize, type ExportSheetSpec } from "./exportSheet.ts";
 import { mountLens } from "./lens.ts";
+import { mountModeNav } from "./modeNav.ts";
 import {
   bestInClassSecondary,
   formatRaceBanner,
@@ -150,21 +151,16 @@ export function mountRace(): void {
   title.className = "lens-title";
   title.textContent = "Sorta Fast";
 
-  const subtitle = document.createElement("p");
-  subtitle.className = "lens-subtitle";
-  subtitle.textContent = "Race";
+  header.append(title);
 
-  const modeNav = document.createElement("div");
-  modeNav.className = "lens-mode-nav";
+  const {
+    chrome,
+    lens: lensModeBtn,
+    story: storyModeBtn,
+  } = mountModeNav(header, "race", {
+    storyButtonId: "race-story-button",
+  });
 
-  const raceModeBtn = document.createElement("button");
-  raceModeBtn.type = "button";
-  raceModeBtn.textContent = "Race";
-  raceModeBtn.disabled = true;
-
-  const lensModeBtn = document.createElement("button");
-  lensModeBtn.type = "button";
-  lensModeBtn.textContent = "Lens";
   lensModeBtn.addEventListener("click", () => {
     const next: RaceUrlState = { ...raceState, mode: "lens" };
     history.replaceState(null, "", serializeRaceUrl(next) + window.location.hash);
@@ -172,17 +168,11 @@ export function mountRace(): void {
     mountLens();
   });
 
-  const storyModeBtn = document.createElement("button");
-  storyModeBtn.type = "button";
-  storyModeBtn.textContent = "Story";
-  storyModeBtn.id = "race-story-button";
   storyModeBtn.addEventListener("click", () => {
     history.replaceState(null, "", serializeStoryUrl(DEFAULT_STORY_URL) + window.location.hash);
     teardown();
     mountStory();
   });
-
-  modeNav.append(raceModeBtn, lensModeBtn, storyModeBtn);
 
   const graphControls = document.createElement("div");
   graphControls.className = "lens-graph-controls race-gallery";
@@ -267,7 +257,7 @@ export function mountRace(): void {
   bmsspLabel.append(bmsspSelect);
 
   graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel, bmsspLabel);
-  header.append(title, subtitle, modeNav, graphControls);
+  header.append(graphControls);
 
   const raceRoot = document.createElement("div");
   raceRoot.className = "race-root";
@@ -282,7 +272,7 @@ export function mountRace(): void {
     laneUis.push(buildLanePanel(lanesEl, config));
   }
 
-  mountThemeToggle(modeNav, (mode: ThemeMode) => {
+  mountThemeToggle(chrome, (mode: ThemeMode) => {
     for (const ui of laneUis) {
       if (ui.renderer !== null) {
         ui.renderer.setChrome(THEMES[mode]);

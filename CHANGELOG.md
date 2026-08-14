@@ -60,6 +60,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Mode nav marks the active Race/Lens/Story button as selected (`aria-current="page"`) instead of `disabled`, drops the duplicate mode subtitle, and separates the theme toggle behind a divider (#64).
 - CI 1M-event Vitest guard stays at 200ms with sequential files; the 100ms number is no longer only a comment (#35).
 - Story beat table drops unused `focusLane`; story pace/drive tests share `test/helpers/story-traces.ts` (PR #57 nits, #60).
 - Export captions always use the canonical GitHub Pages origin (`https://fishygeek91.github.io/sorta-fast/`), so localhost preview URLs never bake into PNG/WebM (#21).
