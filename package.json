@@ -1,9 +1,9 @@
 {
   "name": "sorta-fast",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "In-browser race of shortest-path algorithms: Dijkstra vs BMSSP vs DMSY",
+  "description": "In-browser race of shortest-path algorithms: Dijkstra vs BMSSP",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

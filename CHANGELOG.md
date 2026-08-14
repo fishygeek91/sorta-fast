@@ -3,9 +3,17 @@
 All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unreleased** until a version is tagged.
+Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unreleased** until the next tag.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-08-14
+
+v1.0 "The Race": Dijkstra vs BMSSP in the browser (Race, Lens, Story), with work-clock fairness, URL seeds, PNG/WebM export, and GitHub Pages. DMSY remains v2.0 (#22–#28).
+
+### Changed
+
+- README and `package.json` description no longer claim the DMSY lane ships; v1.0 is Dijkstra vs BMSSP, with DMSY planned for v2.0.
 
 ### Fixed
 
@@ -177,3 +185,6 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 - Renderer composites only the dirty rect after the first full frame so Canvas2D blit cost matches settle/frontier diffs (#6).
 - `decodeAt` rejects detached chunk buffers instead of reporting an unknown kind (#3).
 - Design doc §4.2 notes TraceWriter rotates SoA slabs rather than wrapping a true ring (#3).
+
+[Unreleased]: https://github.com/fishygeek91/sorta-fast/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fishygeek91/sorta-fast/releases/tag/v1.0.0
