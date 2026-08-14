@@ -209,6 +209,18 @@ describe("siteCopy", () => {
       expect(includesIgnoreCase(bmsspSelectTitle, "Paper")).toBe(true);
       expect(includesIgnoreCase(bmsspSelectTitle, "Fairness")).toBe(true);
     });
+
+    it('stepEventTitle is "advance one trace event"', () => {
+      expect(RACE_CHROME_COPY.stepEventTitle).toBe("advance one trace event");
+    });
+
+    it('stepOpTitle is "advance one billed op"', () => {
+      expect(RACE_CHROME_COPY.stepOpTitle).toBe("advance one billed op");
+    });
+
+    it('exportDisabledTitle is "Available after photo-finish."', () => {
+      expect(RACE_CHROME_COPY.exportDisabledTitle).toBe("Available after photo-finish.");
+    });
   });
 
   describe("explainerMeaning / personaTitle", () => {

@@ -213,6 +213,9 @@ export type RaceChromeCopy = {
   bmsspSelectTitle: string;
   settledLabel: string;
   stubPersonaTitle: string;
+  stepEventTitle: string;
+  stepOpTitle: string;
+  exportDisabledTitle: string;
 };
 
 /**
@@ -235,6 +238,9 @@ export const RACE_CHROME_COPY: RaceChromeCopy = {
   bmsspSelectTitle: "Demo uses browser-scale k; Paper uses the paper formula. See Fairness rules.",
   settledLabel: "settled",
   stubPersonaTitle: "Duplicate Dijkstra lane",
+  stepEventTitle: "advance one trace event",
+  stepOpTitle: "advance one billed op",
+  exportDisabledTitle: "Available after photo-finish.",
 };
 
 /**

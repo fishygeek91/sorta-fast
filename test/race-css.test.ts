@@ -331,3 +331,41 @@ describe("issue #65 race chrome CSS", () => {
     expect(afterMedia).toContain(".race-legend");
   });
 });
+
+describe("issue #66 transport groups CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  /**
+   * Slice of the stylesheet from the first 720px media query onward.
+   *
+   * @param stylesheet - Full `style.css` source.
+   * @returns Text from `@media (max-width: 720px)` to the end of the file.
+   */
+  function cssFromMedia720(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(index);
+  }
+
+  it("defines transport playback, export, and play group classes", () => {
+    expect(css).toContain(".transport-playback");
+    expect(css).toContain(".transport-export");
+    expect(css).toContain(".transport-play");
+  });
+
+  it("sets margin-left auto on transport-export in desktop rules", () => {
+    const marker = "@media (max-width: 720px)";
+    const index = css.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    const desktopCss = css.slice(0, index);
+    expect(desktopCss).toMatch(/\.transport-export\s*\{[\s\S]*?margin-left:\s*auto/);
+  });
+
+  it("reorders transport groups below 720px", () => {
+    const afterMedia = cssFromMedia720(css);
+    expect(afterMedia).toMatch(/\.transport-export\s*\{[\s\S]*?flex-basis:\s*100%/);
+    expect(afterMedia).toMatch(/\.transport-export\s*\{[\s\S]*?margin-left:\s*0/);
+    expect(afterMedia).toMatch(/\.transport-play\s*\{[\s\S]*?order:\s*-1/);
+  });
+});
