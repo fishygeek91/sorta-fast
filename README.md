@@ -6,13 +6,13 @@ The clip is a **photo-finish** (race to the marked target): on this seed Dijkstr
 
 *Shortest paths that only sorta sort. That's not a joke, that's the algorithm.*
 
-67 years of shortest-path history racing in the browser — Dijkstra (1959) vs BMSSP (STOC 2025) vs DMSY (Feb 2026, first public implementation).
+67 years of shortest-path history racing in the browser — Dijkstra (1959) vs BMSSP (STOC 2025). A DMSY (Feb 2026) lane is planned for v2.0.
 
 **[Play live →](https://fishygeek91.github.io/sorta-fast/)**
 
 ## What this is
 
-Sorta Fast is an in-browser visualization where three shortest-path algorithms run on the **same graph** and race to settle every vertex. Each lane emits a trace of operations; the renderer never imports algorithm code — it only replays those traces. Every race is seeded and URL-shareable, so you can reproduce a photo finish exactly.
+Sorta Fast is an in-browser visualization where Dijkstra and BMSSP run on the **same graph** and race to settle every vertex. Each lane emits a trace of operations; the renderer never imports algorithm code — it only replays those traces. Every race is seeded and URL-shareable, so you can reproduce a photo finish exactly.
 
 The headline metric is a **work clock** (total comparisons), not wall-clock milliseconds. That keeps the race honest about what each algorithm *does*, even when a binary heap would finish faster on your laptop at modest graph sizes.
 
@@ -39,7 +39,7 @@ At browser scale (roughly 10³–10⁵ nodes), Dijkstra with a binary heap often
 
 - [STOC 2025 (ACM)](https://dl.acm.org/doi/10.1145/3717823.3718179) — deterministic `O(m log^{2/3} n)` BMSSP.
 - [arXiv 2504.17033](https://arxiv.org/pdf/2504.17033) — BMSSP preprint (implementation reference).
-- [arXiv 2602.07868](https://arxiv.org/abs/2602.07868) — DMSY (Feb 2026); this repo includes the first public implementation.
+- [arXiv 2602.07868](https://arxiv.org/abs/2602.07868) — DMSY (Feb 2026); planned v2.0 lane (first public implementation when it ships).
 - [Quanta Magazine](https://www.quantamagazine.org/new-method-is-the-fastest-way-to-find-the-best-routes-20250806/) — accessible write-up of the 2025 breakthrough.
 
 ## Contributing
