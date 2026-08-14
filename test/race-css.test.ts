@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { PHOTO_FINISH_GOLD } from "../src/render/theme";
+
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const STYLE_CSS = join(TEST_DIR, "../src/style.css");
 
@@ -298,6 +300,14 @@ describe("issue #65 race chrome CSS", () => {
     expect(css).toContain("rgb(103, 170, 237)");
     expect(css).toContain("rgb(78, 188, 145)");
     expect(css).toContain("rgb(204, 156, 66)");
+  });
+
+  it("styles gold swatch with canvas PHOTO_FINISH_GOLD, not theme --gold", () => {
+    const goldBlock = css.match(/\.race-legend-swatch\[data-swatch="gold"\]\s*\{[\s\S]*?\}/);
+    expect(goldBlock).not.toBeNull();
+    const block = goldBlock?.[0] ?? "";
+    expect(block).toContain(PHOTO_FINISH_GOLD);
+    expect(block).not.toContain("var(--gold)");
   });
 
   it("defines lane label pseudo-element hook", () => {

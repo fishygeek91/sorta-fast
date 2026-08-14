@@ -178,6 +178,10 @@ describe("siteCopy", () => {
   });
 
   describe("RACE_CHROME_COPY", () => {
+    it('legendFrontier is "Frontier"', () => {
+      expect(RACE_CHROME_COPY.legendFrontier).toBe("Frontier");
+    });
+
     it("outOfOrder counter title cites BMSSP shortcut, zero for Dijkstra, and Dijkstra", () => {
       const { outOfOrder } = RACE_CHROME_COPY.counterTitles;
 

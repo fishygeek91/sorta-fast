@@ -54,6 +54,20 @@ describe("issue #65 race legend mount wiring", () => {
     expect(mountRaceLegendSource).toContain('"race-legend-swatch"');
   });
 
+  it("race.ts mountRaceLegend uses all four RACE_CHROME_COPY legend labels", () => {
+    const legendIdx = raceSource.indexOf("function mountRaceLegend");
+    expect(legendIdx).toBeGreaterThanOrEqual(0);
+
+    const legendBody = raceSource.slice(legendIdx);
+    const nextFn = legendBody.indexOf("\nfunction ", 1);
+    const mountRaceLegendSource = nextFn >= 0 ? legendBody.slice(0, nextFn) : legendBody;
+
+    expect(mountRaceLegendSource).toContain("RACE_CHROME_COPY.legendFrontier");
+    expect(mountRaceLegendSource).toContain("RACE_CHROME_COPY.legendSettled");
+    expect(mountRaceLegendSource).toContain("RACE_CHROME_COPY.legendUnreached");
+    expect(mountRaceLegendSource).toContain("RACE_CHROME_COPY.legendShortestPath");
+  });
+
   it("race.ts appends banner, lanes, legend, and transport to raceRoot", () => {
     expect(raceSource).toMatch(LEGEND_APPEND);
   });

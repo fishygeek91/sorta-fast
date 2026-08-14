@@ -441,7 +441,8 @@ body {
 }
 
 .race-legend-swatch[data-swatch="gold"] {
-  background: var(--gold);
+  /* Canvas photo-finish path: theme.ts PHOTO_FINISH_GOLD. Theme-independent. */
+  background: rgb(212, 168, 55);
 }
 
 @media (max-width: 720px) {
