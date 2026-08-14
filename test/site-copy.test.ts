@@ -5,9 +5,12 @@ import {
   COST_TABLE_SOURCE_URL,
   DISCLOSURE_LABELS,
   EXPLAINER_COPY,
+  explainerMeaning,
   FAIRNESS_COPY,
   FAIRNESS_COSTS,
   PAPER_LINKS,
+  personaTitle,
+  RACE_CHROME_COPY,
 } from "../src/ui/siteCopy.ts";
 
 /**
@@ -31,6 +34,17 @@ function joinFairnessCopy(): string {
  */
 function includesIgnoreCase(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+/**
+ * Look up the canonical vocabulary meaning from {@link EXPLAINER_COPY}.
+ */
+function vocabularyMeaning(term: string): string {
+  const entry = EXPLAINER_COPY.vocabulary.find((v) => v.term === term);
+  if (entry === undefined) {
+    throw new Error(`vocabularyMeaning: missing fixture term "${term}"`);
+  }
+  return entry.meaning;
 }
 
 describe("siteCopy", () => {
@@ -114,6 +128,7 @@ describe("siteCopy", () => {
       const requiredTerms = [
         "settle-order gradient",
         "Frontier",
+        "Unreached",
         "Relaxed edges (ghost trails)",
         "Recursion tint",
         "Pivot flares",
@@ -159,6 +174,78 @@ describe("siteCopy", () => {
         fairness: "Fairness rules",
         papers: "The papers",
       });
+    });
+  });
+
+  describe("RACE_CHROME_COPY", () => {
+    it("outOfOrder counter title cites BMSSP shortcut, zero for Dijkstra, and Dijkstra", () => {
+      const { outOfOrder } = RACE_CHROME_COPY.counterTitles;
+
+      expect(includesIgnoreCase(outOfOrder, "BMSSP")).toBe(true);
+      expect(outOfOrder).toContain("0");
+      expect(includesIgnoreCase(outOfOrder, "Dijkstra")).toBe(true);
+    });
+
+    it('diceTitle is "Roll a new random seed"', () => {
+      expect(RACE_CHROME_COPY.diceTitle).toBe("Roll a new random seed");
+    });
+
+    it('settledLabel is "settled"', () => {
+      expect(RACE_CHROME_COPY.settledLabel).toBe("settled");
+    });
+
+    it('stubPersonaTitle is "Duplicate Dijkstra lane"', () => {
+      expect(RACE_CHROME_COPY.stubPersonaTitle).toBe("Duplicate Dijkstra lane");
+    });
+
+    it("bmsspSelectTitle mentions Demo, Paper, and Fairness", () => {
+      const { bmsspSelectTitle } = RACE_CHROME_COPY;
+
+      expect(includesIgnoreCase(bmsspSelectTitle, "Demo")).toBe(true);
+      expect(includesIgnoreCase(bmsspSelectTitle, "Paper")).toBe(true);
+      expect(includesIgnoreCase(bmsspSelectTitle, "Fairness")).toBe(true);
+    });
+  });
+
+  describe("explainerMeaning / personaTitle", () => {
+    it('explainerMeaning("Frontier") matches EXPLAINER_COPY vocabulary', () => {
+      expect(explainerMeaning("Frontier")).toBe(vocabularyMeaning("Frontier"));
+    });
+
+    it('explainerMeaning("Unreached") matches EXPLAINER_COPY vocabulary', () => {
+      expect(explainerMeaning("Unreached")).toBe(vocabularyMeaning("Unreached"));
+    });
+
+    it('explainerMeaning("settle-order gradient") matches EXPLAINER_COPY vocabulary', () => {
+      expect(explainerMeaning("settle-order gradient")).toBe(
+        vocabularyMeaning("settle-order gradient"),
+      );
+    });
+
+    it('explainerMeaning("photo-finish gold path") matches EXPLAINER_COPY vocabulary', () => {
+      expect(explainerMeaning("photo-finish gold path")).toBe(
+        vocabularyMeaning("photo-finish gold path"),
+      );
+    });
+
+    it('explainerMeaning("not-a-term") throws for unknown vocabulary', () => {
+      expect(() => explainerMeaning("not-a-term")).toThrowError(/unknown vocabulary term/);
+    });
+
+    it('personaTitle("marble") is "The Perfectionist (marble)"', () => {
+      expect(personaTitle("marble")).toBe("The Perfectionist (marble)");
+    });
+
+    it('personaTitle("ember") is "The Batcher (ember)"', () => {
+      expect(personaTitle("ember")).toBe("The Batcher (ember)");
+    });
+
+    it('personaTitle("moss") is "The Forester (moss)"', () => {
+      expect(personaTitle("moss")).toBe("The Forester (moss)");
+    });
+
+    it('personaTitle("stub") throws for unknown accent', () => {
+      expect(() => personaTitle("stub")).toThrowError(/unknown accent/);
     });
   });
 });

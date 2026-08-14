@@ -245,3 +245,79 @@ describe("issue #64 mode nav", () => {
     expect(css).not.toContain(".lens-subtitle");
   });
 });
+
+describe("issue #65 race chrome CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  /**
+   * Slice of the stylesheet from the first 720px media query onward.
+   *
+   * @param stylesheet - Full `style.css` source.
+   * @returns Text from `@media (max-width: 720px)` to the end of the file.
+   */
+  function cssFromMedia720(stylesheet: string): string {
+    const marker = "@media (max-width: 720px)";
+    const index = stylesheet.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return stylesheet.slice(index);
+  }
+
+  it("defines --frontier design token", () => {
+    expect(css).toContain("--frontier:");
+  });
+
+  it("sets dark-theme frontier color on :root", () => {
+    expect(css).toMatch(/:root\s*\{[\s\S]*?--frontier:\s*rgb\(236,\s*230,\s*220\)/);
+  });
+
+  it("overrides frontier color in light theme", () => {
+    expect(css).toMatch(/\[data-theme="light"\]\s*\{[\s\S]*?--frontier:\s*rgb\(40,\s*40,\s*40\)/);
+  });
+
+  it("defines race legend with flex-wrap layout", () => {
+    expect(css).toContain(".race-legend");
+    expect(css).toMatch(/\.race-legend\s*\{[\s\S]*?flex-wrap:\s*wrap/);
+  });
+
+  it("defines race legend item and swatch classes", () => {
+    expect(css).toContain(".race-legend-item");
+    expect(css).toContain(".race-legend-swatch");
+  });
+
+  it("defines legend swatch data hooks", () => {
+    expect(css).toContain('[data-swatch="frontier"]');
+    expect(css).toContain('[data-swatch="settled"]');
+    expect(css).toContain('[data-swatch="unreached"]');
+    expect(css).toContain('[data-swatch="gold"]');
+  });
+
+  it("styles settled swatch with canvas palette ramp", () => {
+    expect(css).toMatch(
+      /\.race-legend-swatch\[data-swatch="settled"\]\s*\{[\s\S]*?linear-gradient/,
+    );
+    expect(css).toContain("rgb(103, 170, 237)");
+    expect(css).toContain("rgb(78, 188, 145)");
+    expect(css).toContain("rgb(204, 156, 66)");
+  });
+
+  it("defines lane label pseudo-element hook", () => {
+    expect(css).toContain(".race-lane-label::before");
+  });
+
+  it("defines persona lane label pseudo-element hooks", () => {
+    expect(css).toContain('.race-lane[data-persona="marble"] .race-lane-label::before');
+    expect(css).toContain('.race-lane[data-persona="ember"] .race-lane-label::before');
+    expect(css).toContain('.race-lane[data-persona="moss"] .race-lane-label::before');
+    expect(css).toContain('.race-lane[data-persona="stub"] .race-lane-label::before');
+  });
+
+  it("defines settled bar wrapper and label classes", () => {
+    expect(css).toContain(".race-settled-wrap");
+    expect(css).toContain(".race-settled-label");
+  });
+
+  it("includes race legend in 720px mobile region", () => {
+    const afterMedia = cssFromMedia720(css);
+    expect(afterMedia).toContain(".race-legend");
+  });
+});

@@ -42,6 +42,7 @@ import {
 } from "./photoFinish.ts";
 import { mountStory } from "./story.ts";
 import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
+import { RACE_CHROME_COPY, explainerMeaning, personaTitle } from "./siteCopy.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
@@ -91,6 +92,9 @@ const WINNER_CHIP_TEXT = "Winner — lowest work";
 /** Visually-hidden suffix appended to a best-in-class secondary counter (issue #63). */
 const BEST_IN_CLASS_NOTE = " — lowest on this race";
 
+/** Next suffix for unique `race-counter-desc-*` element ids. */
+let raceCounterDescSeq = 0;
+
 /** DOM handles for one race lane panel. */
 type LaneUi = {
   laneEl: HTMLDivElement;
@@ -106,6 +110,7 @@ type LaneUi = {
   outOfOrderBlock: HTMLDivElement;
   outOfOrderValue: HTMLSpanElement;
   progress: HTMLProgressElement;
+  settledLabel: HTMLSpanElement;
   canvas: HTMLCanvasElement;
   renderer: Renderer | null;
 };
@@ -224,6 +229,7 @@ export function mountRace(): void {
   diceButton.id = "race-dice-button";
   diceButton.textContent = "Dice";
   diceButton.setAttribute("aria-label", "Roll a new seed");
+  diceButton.title = RACE_CHROME_COPY.diceTitle;
 
   const lanesLabel = document.createElement("label");
   lanesLabel.className = "lens-graph-field";
@@ -254,6 +260,7 @@ export function mountRace(): void {
   paperOption.value = "paper";
   paperOption.textContent = "Paper (asymptotic)";
   bmsspSelect.append(demoOption, paperOption);
+  bmsspSelect.title = RACE_CHROME_COPY.bmsspSelectTitle;
   bmsspLabel.append(bmsspSelect);
 
   graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel, bmsspLabel);
@@ -399,7 +406,9 @@ export function mountRace(): void {
   statusEl.hidden = true;
 
   transport.append(transportButtons, speedLabel, scrubLabel, genProgressWrap, statusEl);
-  raceRoot.append(bannerEl, lanesEl, transport);
+
+  const legendEl = mountRaceLegend();
+  raceRoot.append(bannerEl, lanesEl, legendEl, transport);
   mountDisclosures(raceRoot);
   root.append(header, raceRoot);
 
@@ -1034,8 +1043,12 @@ export function mountRace(): void {
       ui.dstructValue.textContent = String(counters.dstructOps);
       ui.relaxValue.textContent = String(counters.relaxations);
       ui.outOfOrderValue.textContent = String(counters.outOfOrderSettles);
-      ui.progress.value =
+      const settledPct =
         counters.n === 0 ? 0 : Math.round((100 * counters.settledCount) / counters.n);
+      ui.progress.value = settledPct;
+      const settledText = `${String(settledPct)}% ${RACE_CHROME_COPY.settledLabel}`;
+      ui.settledLabel.textContent = settledText;
+      ui.progress.setAttribute("aria-label", settledText);
     }
 
     syncScrubberUi();
@@ -1494,6 +1507,11 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
   const labelEl = document.createElement("span");
   labelEl.className = "race-lane-label";
   labelEl.textContent = config.label;
+  if (config.persona === "stub") {
+    labelEl.title = RACE_CHROME_COPY.stubPersonaTitle;
+  } else {
+    labelEl.title = personaTitle(config.persona);
+  }
 
   const winnerEl = document.createElement("span");
   winnerEl.className = "race-lane-winner";
@@ -1514,11 +1532,31 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
   const counters = document.createElement("div");
   counters.className = "race-counters";
 
-  const comparisonsBlock = createCounterBlock("Comparisons", "race-counter-headline");
-  const heapBlock = createCounterBlock("Heap ops", "race-counter-secondary");
-  const dstructBlock = createCounterBlock("D ops", "race-counter-secondary");
-  const relaxBlock = createCounterBlock("Relaxations", "race-counter-secondary");
-  const outOfOrderBlock = createCounterBlock("Out of order", "race-counter-secondary");
+  const comparisonsBlock = createCounterBlock(
+    "Comparisons",
+    "race-counter-headline",
+    RACE_CHROME_COPY.counterTitles.comparisons,
+  );
+  const heapBlock = createCounterBlock(
+    "Heap ops",
+    "race-counter-secondary",
+    RACE_CHROME_COPY.counterTitles.heapOps,
+  );
+  const dstructBlock = createCounterBlock(
+    "D ops",
+    "race-counter-secondary",
+    RACE_CHROME_COPY.counterTitles.dOps,
+  );
+  const relaxBlock = createCounterBlock(
+    "Relaxations",
+    "race-counter-secondary",
+    RACE_CHROME_COPY.counterTitles.relaxations,
+  );
+  const outOfOrderBlock = createCounterBlock(
+    "Out of order",
+    "race-counter-secondary",
+    RACE_CHROME_COPY.counterTitles.outOfOrder,
+  );
 
   const secondaryRow = document.createElement("div");
   secondaryRow.className = "lens-counter-row";
@@ -1526,12 +1564,23 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
 
   counters.append(comparisonsBlock.block, secondaryRow);
 
+  const settledWrap = document.createElement("div");
+  settledWrap.className = "race-settled-wrap";
+
+  const settledLabel = document.createElement("span");
+  settledLabel.className = "race-settled-label";
+  const initialSettledText = `0% ${RACE_CHROME_COPY.settledLabel}`;
+  settledLabel.textContent = initialSettledText;
+
   const progress = document.createElement("progress");
   progress.className = "race-progress";
   progress.max = 100;
   progress.value = 0;
+  progress.setAttribute("aria-label", initialSettledText);
 
-  laneEl.append(heading, canvas, counters, progress);
+  settledWrap.append(settledLabel, progress);
+
+  laneEl.append(heading, canvas, counters, settledWrap);
   parent.append(laneEl);
 
   return {
@@ -1548,21 +1597,70 @@ function buildLanePanel(parent: HTMLElement, config: RaceLaneConfig): LaneUi {
     outOfOrderBlock: outOfOrderBlock.block,
     outOfOrderValue: outOfOrderBlock.value,
     progress,
+    settledLabel,
     canvas,
     renderer: null,
   };
 }
 
 /**
+ * Mount shared race legend row with swatches and explainer tooltips.
+ *
+ * @returns Legend container for `.race-root`.
+ */
+function mountRaceLegend(): HTMLDivElement {
+  const legend = document.createElement("div");
+  legend.className = "race-legend";
+
+  const items: ReadonlyArray<{ swatch: string; label: string; term: string }> = [
+    { swatch: "frontier", label: "Frontier", term: "Frontier" },
+    {
+      swatch: "settled",
+      label: RACE_CHROME_COPY.legendSettled,
+      term: "settle-order gradient",
+    },
+    {
+      swatch: "unreached",
+      label: RACE_CHROME_COPY.legendUnreached,
+      term: "Unreached",
+    },
+    {
+      swatch: "gold",
+      label: RACE_CHROME_COPY.legendShortestPath,
+      term: "photo-finish gold path",
+    },
+  ];
+
+  for (const item of items) {
+    const itemEl = document.createElement("span");
+    itemEl.className = "race-legend-item";
+    itemEl.title = explainerMeaning(item.term);
+
+    const swatchEl = document.createElement("span");
+    swatchEl.className = "race-legend-swatch";
+    swatchEl.dataset.swatch = item.swatch;
+    swatchEl.setAttribute("aria-hidden", "true");
+
+    itemEl.append(swatchEl, document.createTextNode(item.label));
+    legend.append(itemEl);
+  }
+
+  return legend;
+}
+
+/**
  * @param labelText - Counter label shown beside the value.
  * @param className - Additional class on the counter block.
+ * @param titleText - Tooltip and visually-hidden description for the counter.
  */
 function createCounterBlock(
   labelText: string,
   className: string,
+  titleText: string,
 ): { block: HTMLDivElement; value: HTMLSpanElement } {
   const block = document.createElement("div");
   block.className = `lens-counter ${className}`;
+  block.title = titleText;
 
   const label = document.createElement("span");
   label.className = "lens-counter-label";
@@ -1577,7 +1675,14 @@ function createCounterBlock(
   bestNote.textContent = BEST_IN_CLASS_NOTE;
   bestNote.hidden = true;
 
-  block.append(label, value, bestNote);
+  const desc = document.createElement("span");
+  desc.className = "visually-hidden race-counter-desc";
+  desc.id = `race-counter-desc-${String(raceCounterDescSeq)}`;
+  raceCounterDescSeq += 1;
+  desc.textContent = titleText;
+  block.setAttribute("aria-describedby", desc.id);
+
+  block.append(label, value, bestNote, desc);
   return { block, value };
 }
 
