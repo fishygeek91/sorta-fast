@@ -1,9 +1,9 @@
 /**
- * Chrome and lane-persona accent tokens for Sorta Fast.
+ * Chrome, lane-persona accent, and settle-diff fill tokens for Sorta Fast.
  *
  * The perceptually-uniform settle gradient lives in {@link ./palette.ts};
- * this module supplies UI chrome (paper, ink, panels) and lane accents
- * (marble, ember, moss) per design.md section 3.6.
+ * this module supplies UI chrome (paper, ink, panels), lane accents
+ * (marble, ember, moss), and settle-diff vertex fills (#68) per design.md section 3.6.
  */
 
 /** Light or dark chrome palette. */
@@ -45,6 +45,12 @@ export type ThemeTokens = {
   finishMark: string;
   /** D-structure schematic block fill (stone). */
   stoneFill: string;
+  /** Settle-diff fill when only Dijkstra has settled the vertex. */
+  diffMarble: string;
+  /** Settle-diff fill when only BMSSP has settled the vertex. */
+  diffEmber: string;
+  /** Settle-diff fill when both lanes have settled the vertex. */
+  diffBoth: string;
 };
 
 /** `localStorage` key for persisting the user's theme preference. */
@@ -68,6 +74,9 @@ export const THEMES: Record<ThemeMode, ThemeTokens> = {
     sourceMark: "rgb(255, 255, 255)",
     finishMark: "rgb(212, 168, 55)",
     stoneFill: "rgb(90, 86, 80)",
+    diffMarble: "rgb(180, 176, 168)",
+    diffEmber: "rgb(180, 70, 40)",
+    diffBoth: "rgb(160, 153, 140)",
   },
   light: {
     paper: "rgb(246, 244, 239)",
@@ -85,6 +94,9 @@ export const THEMES: Record<ThemeMode, ThemeTokens> = {
     sourceMark: "rgb(255, 255, 255)",
     finishMark: "rgb(60, 56, 48)",
     stoneFill: "rgb(180, 176, 168)",
+    diffMarble: "rgb(90, 86, 80)",
+    diffEmber: "rgb(180, 70, 40)",
+    diffBoth: "rgb(120, 112, 100)",
   },
 };
 

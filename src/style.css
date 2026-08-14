@@ -11,6 +11,9 @@
   --moss: rgb(56, 128, 118);
   --gold: rgb(212, 168, 55);
   --frontier: rgb(236, 230, 220);
+  --diff-marble: rgb(180, 176, 168);
+  --diff-ember: rgb(180, 70, 40);
+  --diff-both: rgb(160, 153, 140);
   --text-title: 1.75rem;
   --text-subtitle: 1rem;
   --text-body: 1rem;
@@ -42,6 +45,9 @@
   --hover: rgb(255, 248, 236);
   --gold: rgb(148, 108, 20);
   --frontier: rgb(40, 40, 40);
+  --diff-marble: rgb(90, 86, 80);
+  --diff-ember: rgb(180, 70, 40);
+  --diff-both: rgb(120, 112, 100);
 }
 
 * {
@@ -460,6 +466,44 @@ body {
 .race-legend-swatch[data-swatch="gold"] {
   /* Canvas photo-finish path: theme.ts PHOTO_FINISH_GOLD. Theme-independent. */
   background: rgb(212, 168, 55);
+}
+
+.race-legend-swatch[data-swatch="diff-left"] {
+  background: var(--diff-marble);
+}
+
+.race-legend-swatch[data-swatch="diff-right"] {
+  background: var(--diff-ember);
+}
+
+.race-legend-swatch[data-swatch="diff-both"] {
+  background: var(--diff-both);
+}
+
+.race-legend-swatch[data-swatch="diff-ooo"] {
+  background: var(--ink);
+  border-radius: 1px;
+  width: 0.15em;
+  height: 0.7em;
+}
+
+.race-diff-wrap {
+  display: none;
+  width: 100%;
+}
+
+.race-root[data-view="diff"] .race-diff-wrap {
+  display: block;
+}
+
+.race-diff {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--paper);
 }
 
 @media (max-width: 720px) {

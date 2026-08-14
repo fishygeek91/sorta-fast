@@ -445,3 +445,38 @@ describe("issue #67 race wide layout CSS", () => {
     expect(css).toMatch(/\.story-root\s*\{[\s\S]*?align-self:\s*stretch/);
   });
 });
+
+describe("issue #68 diff view CSS", () => {
+  const css = readFileSync(STYLE_CSS, "utf8");
+
+  it("defines dark-theme diff color tokens on :root", () => {
+    expect(css).toMatch(/:root\s*\{[\s\S]*?--diff-marble:\s*rgb\(180,\s*176,\s*168\)/);
+    expect(css).toMatch(/:root\s*\{[\s\S]*?--diff-ember:\s*rgb\(180,\s*70,\s*40\)/);
+    expect(css).toMatch(/:root\s*\{[\s\S]*?--diff-both:\s*rgb\(160,\s*153,\s*140\)/);
+  });
+
+  it("overrides diff color tokens in light theme", () => {
+    expect(css).toMatch(
+      /\[data-theme="light"\]\s*\{[\s\S]*?--diff-marble:\s*rgb\(90,\s*86,\s*80\)/,
+    );
+    expect(css).toMatch(
+      /\[data-theme="light"\]\s*\{[\s\S]*?--diff-ember:\s*rgb\(180,\s*70,\s*40\)/,
+    );
+    expect(css).toMatch(
+      /\[data-theme="light"\]\s*\{[\s\S]*?--diff-both:\s*rgb\(120,\s*112,\s*100\)/,
+    );
+  });
+
+  it("defines diff view layout hooks", () => {
+    expect(css).toContain(".race-diff-wrap");
+    expect(css).toContain('.race-root[data-view="diff"]');
+    expect(css).toContain(".race-diff");
+  });
+
+  it("defines diff legend swatch data hooks", () => {
+    expect(css).toContain('[data-swatch="diff-left"]');
+    expect(css).toContain('[data-swatch="diff-right"]');
+    expect(css).toContain('[data-swatch="diff-both"]');
+    expect(css).toContain('[data-swatch="diff-ooo"]');
+  });
+});

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { bmsspParams } from "../src/core/bmssp/params.ts";
+import { bmsspParams, paperBmsspParams } from "../src/core/bmssp/params.ts";
 import { generateGraph, packCsr } from "../src/core/graph.ts";
 import { type TraceChunk, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import { D_BLOCK_CAP, LaneState, UNSETTLED } from "../src/harness/laneState.ts";
 import { KEYFRAME_OPS, TraceBuffer } from "../src/harness/traceBuffer.ts";
 import { drainRun } from "./dijkstra-helpers.ts";
+import { drainBmsspRun } from "./bmssp-helpers.ts";
 
 /** Assert two lane snapshots are identical (scrub-safe fields + live counters). */
 function compareLane(a: LaneState, b: LaneState): void {
@@ -64,6 +65,8 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aBloom = a.bloomVertex[v];
     const bBloom = b.bloomVertex[v];
     expect(aBloom).toBe(bBloom);
+
+    expect(a.outOfOrder[v]).toBe(b.outOfOrder[v]);
   }
 
   for (let i = 0; i < D_BLOCK_CAP; i += 1) {
@@ -77,6 +80,44 @@ function compareLane(a: LaneState, b: LaneState): void {
     const bRelaxWork = b.lastRelaxWork[e];
     expect(aRelaxWork).toBe(bRelaxWork);
   }
+}
+
+/** Sum per-vertex outOfOrder bits (must equal {@link LaneState.outOfOrderSettles}). */
+function sumOutOfOrderBits(state: LaneState): number {
+  let sum = 0;
+  for (let v = 0; v < state.n; v += 1) {
+    sum += state.outOfOrder[v];
+  }
+  return sum;
+}
+
+/** Assert outOfOrder bitset is consistent with the scalar counter. */
+function expectOutOfOrderBitsetConsistent(state: LaneState): void {
+  const bitSum = sumOutOfOrderBits(state);
+  expect(bitSum).toBe(state.outOfOrderSettles);
+  if (state.outOfOrderSettles > 0) {
+    let anyBit = false;
+    for (let v = 0; v < state.n; v += 1) {
+      if (state.outOfOrder[v] === 1) {
+        anyBit = true;
+        break;
+      }
+    }
+    expect(anyBit).toBe(true);
+  }
+}
+
+/** Replay a BMSSP maze trace to completion and return lane state. */
+function bmsspMazeLaneState(
+  n: number,
+  seed: number,
+  params?: ReturnType<typeof paperBmsspParams>,
+): LaneState {
+  const graph = generateGraph("maze", n, seed);
+  const { events } = drainBmsspRun(graph, 0, params);
+  const buf = new TraceBuffer(graph, chunksFromEvents(events), 0);
+  buf.seekWork(buf.totalWork);
+  return buf.state;
 }
 
 /** Read keyframe table length for appendChunk cadence tests. */
@@ -651,5 +692,61 @@ describe("TraceBuffer photo-finish path reconstruction", () => {
     const buf = new TraceBuffer(graph, chunks, source);
     buf.seekWork(buf.totalWork);
     expect(buf.state.outOfOrderSettles).toBe(0);
+    for (let v = 0; v < graph.n; v += 1) {
+      expect(buf.state.outOfOrder[v]).toBe(0);
+    }
+    expect(sumOutOfOrderBits(buf.state)).toBe(0);
+  });
+
+  it("BMSSP demo maze trace outOfOrder bitset matches counter", () => {
+    const primary = bmsspMazeLaneState(40, 1);
+    expectOutOfOrderBitsetConsistent(primary);
+
+    const fallbacks: { n: number; seed: number }[] = [
+      { n: 40, seed: 2 },
+      { n: 80, seed: 1 },
+      { n: 40, seed: 3 },
+    ];
+    let sawOutOfOrder = primary.outOfOrderSettles > 0;
+    for (const { n, seed } of fallbacks) {
+      const state = bmsspMazeLaneState(n, seed);
+      expectOutOfOrderBitsetConsistent(state);
+      if (state.outOfOrderSettles > 0) {
+        sawOutOfOrder = true;
+      }
+    }
+    expect(sawOutOfOrder).toBe(true);
+  });
+
+  it("BMSSP paper-params maze trace outOfOrder bitset matches counter", () => {
+    const graph = generateGraph("maze", 40, 1);
+    const state = bmsspMazeLaneState(graph.n, 1, paperBmsspParams(graph.n));
+    expectOutOfOrderBitsetConsistent(state);
+  });
+
+  it("LaneState clone and copyFrom preserve outOfOrder bitset; reset clears bits", () => {
+    const lane = new LaneState(4, 0);
+    lane.outOfOrder[1] = 1;
+    lane.outOfOrder[3] = 1;
+    lane.outOfOrderSettles = 2;
+
+    const cloned = lane.clone();
+    for (let v = 0; v < lane.n; v += 1) {
+      expect(cloned.outOfOrder[v]).toBe(lane.outOfOrder[v]);
+    }
+    expect(cloned.outOfOrderSettles).toBe(lane.outOfOrderSettles);
+
+    const copied = new LaneState(4, 0);
+    copied.copyFrom(lane);
+    for (let v = 0; v < lane.n; v += 1) {
+      expect(copied.outOfOrder[v]).toBe(lane.outOfOrder[v]);
+    }
+    expect(copied.outOfOrderSettles).toBe(lane.outOfOrderSettles);
+
+    copied.reset();
+    for (let v = 0; v < lane.n; v += 1) {
+      expect(copied.outOfOrder[v]).toBe(0);
+    }
+    expect(copied.outOfOrderSettles).toBe(0);
   });
 });

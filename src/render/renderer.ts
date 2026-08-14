@@ -1,6 +1,6 @@
 /**
  * Layered Canvas2D renderer: static edges, dirty-rect settle fills, frontier overlay (issue #6),
- * and BMSSP FX overlays (issue #12).
+ * BMSSP FX overlays (issue #12), and settle-diff dual-lane fills (issue #68).
  *
  * Four offscreen layers: edge, fill, overlay, fx. Consumes {@link LaneState} only — no algorithm
  * or trace imports.
@@ -19,8 +19,15 @@ import {
 } from "./dirtyRect.ts";
 import { devicePx, devicePxInt } from "./devicePx.ts";
 import { cssColorForSettleOrder, rgbForSettleOrder } from "./palette.ts";
+import {
+  fillSettleDiff,
+  SETTLE_DIFF_BOTH,
+  SETTLE_DIFF_LEFT,
+  SETTLE_DIFF_NEITHER,
+  SETTLE_DIFF_RIGHT,
+} from "./settleDiff.ts";
 import { type CanvasSurface, type DrawContext, type SurfaceFactory } from "./surface.ts";
-import { EMBER_RGB, PHOTO_FINISH_GOLD, THEMES, type ThemeTokens } from "./theme.ts";
+import { EMBER_RGB, PHOTO_FINISH_GOLD, parseRgb, THEMES, type ThemeTokens } from "./theme.ts";
 
 export { EMBER_RGB, PHOTO_FINISH_GOLD };
 
@@ -47,6 +54,17 @@ export const GHOST_WINDOW_OPS = 10_000;
 
 /** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
+
+/** Lane persona accent for settle-diff fills (issue #68). */
+export type DiffPersona = "marble" | "ember" | "stub";
+
+/** Options for {@link Renderer.drawDiff} settle-diff overlay (issue #68). */
+export type DiffOverlayOpts = {
+  source?: number;
+  finish?: number;
+  leftPersona: DiffPersona;
+  rightPersona: DiffPersona;
+};
 
 /** Optional overlay toggles for frontier, ghosts, BMSSP narration FX, and photo-finish. */
 export type OverlayFlags = {
@@ -328,6 +346,22 @@ export class Renderer {
   private readonly dstructStripHeight: number;
   /** Cached aggregated node footprint in backing-store pixels (issue #79). */
   private readonly aggregatedNodePx: number;
+  /** Last drawn settle-diff bucket per vertex (issue #68); 0 = {@link SETTLE_DIFF_NEITHER}. */
+  private lastDiff: Uint8Array;
+  /** Last drawn out-of-order tick flag per vertex (issue #68). */
+  private lastOoo: Uint8Array;
+  /** Scratch buffer for {@link fillSettleDiff} (issue #68). */
+  private diffBuckets: Uint8Array;
+  /** True when chrome tokens changed and settle-diff fills must be fully redrawn. */
+  private diffChromeDirty: boolean;
+  /** Marble persona settle-diff fill (issue #68). */
+  private diffMarbleFill: string;
+  /** Ember persona settle-diff fill (issue #68). */
+  private diffEmberFill: string;
+  /** Both-lanes settle-diff fill (issue #68). */
+  private diffBothFill: string;
+  /** Ink stroke for OOO ticks and labels (issue #68). */
+  private inkStroke: string;
 
   /**
    * @param opts.target - On-screen canvas surface.
@@ -352,6 +386,10 @@ export class Renderer {
     this.dirty = createDirtyRect();
     this.lastSettle = new Int32Array(opts.graph.n);
     this.lastSettle.fill(UNSETTLED);
+    this.lastDiff = new Uint8Array(opts.graph.n);
+    this.lastOoo = new Uint8Array(opts.graph.n);
+    this.diffBuckets = new Uint8Array(opts.graph.n);
+    this.diffChromeDirty = false;
     this.lastFrontier = new Uint8Array(opts.graph.n);
     this.srcOfEdge = buildSrcOfEdge(opts.graph);
     this.lastGhost = new Uint8Array(opts.graph.m);
@@ -387,6 +425,10 @@ export class Renderer {
     this.stoneFill = dark.stoneFill;
     this.sourceMarkStroke = dark.sourceMark;
     this.finishMarkStroke = dark.finishMark;
+    this.diffMarbleFill = dark.diffMarble;
+    this.diffEmberFill = dark.diffEmber;
+    this.diffBothFill = dark.diffBoth;
+    this.inkStroke = dark.ink;
     this.fillPixels = null;
 
     this.syncFillPixels();
@@ -411,6 +453,11 @@ export class Renderer {
     this.stoneFill = tokens.stoneFill;
     this.sourceMarkStroke = tokens.sourceMark;
     this.finishMarkStroke = tokens.finishMark;
+    this.diffMarbleFill = tokens.diffMarble;
+    this.diffEmberFill = tokens.diffEmber;
+    this.diffBothFill = tokens.diffBoth;
+    this.inkStroke = tokens.ink;
+    this.diffChromeDirty = true;
     this.drawEdgeLayer();
     this.needsFullComposite = true;
   }
@@ -423,6 +470,10 @@ export class Renderer {
     this.camera = fitCamera(graph, this.target.width, this.target.height);
     this.lastSettle = new Int32Array(graph.n);
     this.lastSettle.fill(UNSETTLED);
+    this.lastDiff = new Uint8Array(graph.n);
+    this.lastOoo = new Uint8Array(graph.n);
+    this.diffBuckets = new Uint8Array(graph.n);
+    this.diffChromeDirty = true;
     this.lastFrontier = new Uint8Array(graph.n);
     this.srcOfEdge = buildSrcOfEdge(graph);
     this.lastGhost = new Uint8Array(graph.m);
@@ -616,6 +667,171 @@ export class Renderer {
     this.lastBloomActive = state.bloomActive;
     this.lastDBlockCount = state.dBlockCount;
 
+    resetDirty(this.dirty);
+  }
+
+  /**
+   * Draw settle-diff fills for two lane snapshots (issue #68).
+   *
+   * Dedicated instance path — does not update {@link draw} last-settle bookkeeping.
+   * Fills vertices by left-only / right-only / both settle buckets; optional OOO ticks
+   * and source/finish rings on the overlay layer; fx layer cleared.
+   */
+  drawDiff(left: LaneState, right: LaneState, opts: DiffOverlayOpts): void {
+    if (left.n !== this.graph.n) {
+      throw new Error(
+        `left lane vertex count ${String(left.n)} does not match graph n ${String(this.graph.n)}`,
+      );
+    }
+    if (right.n !== this.graph.n) {
+      throw new Error(
+        `right lane vertex count ${String(right.n)} does not match graph n ${String(this.graph.n)}`,
+      );
+    }
+    if (left.m !== this.graph.m) {
+      throw new Error(
+        `left lane edge count ${String(left.m)} does not match graph m ${String(this.graph.m)}`,
+      );
+    }
+    if (right.m !== this.graph.m) {
+      throw new Error(
+        `right lane edge count ${String(right.m)} does not match graph m ${String(this.graph.m)}`,
+      );
+    }
+
+    const n = left.n;
+    const width = this.target.width;
+    const height = this.target.height;
+
+    fillSettleDiff(this.diffBuckets, left, right);
+
+    let hadUnsettle = this.diffChromeDirty;
+    if (!hadUnsettle) {
+      for (let v = 0; v < n; v += 1) {
+        const prev = this.lastDiff[v];
+        const cur = this.diffBuckets[v];
+        if (prev === undefined || cur === undefined) {
+          throw new Error(`diff bucket[${String(v)}] is missing`);
+        }
+        if (prev !== SETTLE_DIFF_NEITHER && cur === SETTLE_DIFF_NEITHER) {
+          hadUnsettle = true;
+          break;
+        }
+      }
+    }
+
+    const fillCtx = requireContext(this.fillLayer, "fillLayer");
+    let fillChanged = false;
+
+    if (hadUnsettle) {
+      this.clearFillLayer();
+      markFull(this.dirty, width, height);
+      fillChanged = true;
+      for (let v = 0; v < n; v += 1) {
+        const bucket = this.diffBuckets[v];
+        if (bucket === undefined) {
+          throw new Error(`diffBuckets[${String(v)}] is missing`);
+        }
+        if (bucket !== SETTLE_DIFF_NEITHER) {
+          const fill = this.bucketFillColor(bucket, opts);
+          if (fill !== null) {
+            this.drawDiffNode(fillCtx, v, fill);
+          }
+        }
+      }
+    } else {
+      for (let v = 0; v < n; v += 1) {
+        const prev = this.lastDiff[v];
+        const bucket = this.diffBuckets[v];
+        if (prev === undefined || bucket === undefined) {
+          throw new Error(`diff bucket[${String(v)}] is missing`);
+        }
+        if (prev !== bucket && bucket !== SETTLE_DIFF_NEITHER) {
+          const fill = this.bucketFillColor(bucket, opts);
+          if (fill !== null) {
+            this.drawDiffNode(fillCtx, v, fill);
+            fillChanged = true;
+          }
+        }
+      }
+    }
+
+    if (this.usesAggregated() && fillChanged) {
+      this.blitFillPixels(fillCtx);
+    }
+
+    for (let v = 0; v < n; v += 1) {
+      const leftOoo = left.outOfOrder[v];
+      const rightOoo = right.outOfOrder[v];
+      if (leftOoo === undefined || rightOoo === undefined) {
+        throw new Error(`outOfOrder[${String(v)}] is missing`);
+      }
+      const curOoo = leftOoo === 1 || rightOoo === 1 ? 1 : 0;
+      const prevOoo = this.lastOoo[v];
+      if (prevOoo === undefined) {
+        throw new Error(`lastOoo[${String(v)}] is missing`);
+      }
+      if (prevOoo !== curOoo) {
+        this.includeVertexDirty(v);
+      }
+    }
+
+    const overlayCtx = requireContext(this.overlayLayer, "overlayLayer");
+    overlayCtx.clearRect(0, 0, this.overlayLayer.width, this.overlayLayer.height);
+
+    const aggregated = this.usesAggregated();
+    if (!aggregated) {
+      const graph = this.graph;
+      const camera = this.camera;
+      overlayCtx.strokeStyle = this.inkStroke;
+      overlayCtx.lineWidth = this.markLineWidth;
+
+      for (let v = 0; v < n; v += 1) {
+        const leftOoo = left.outOfOrder[v];
+        const rightOoo = right.outOfOrder[v];
+        if (leftOoo === undefined || rightOoo === undefined) {
+          throw new Error(`outOfOrder[${String(v)}] is missing`);
+        }
+        if (leftOoo !== 1 && rightOoo !== 1) {
+          continue;
+        }
+        const cx = projectX(camera, vertexX(graph, v));
+        const cy = projectY(camera, vertexY(graph, v));
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(cx, cy - camera.radius);
+        overlayCtx.lineTo(cx, cy + camera.radius);
+        overlayCtx.stroke();
+      }
+    }
+
+    const diffOverlayFlags: ResolvedOverlayFlags = {
+      frontier: false,
+      relaxedEdges: false,
+      recursionTint: false,
+      pivotFlares: false,
+      batchBlooms: false,
+      dstructStrip: false,
+      source: opts.source ?? 0,
+      finish: opts.finish,
+      photoFinish: false,
+    };
+    this.drawSourceFinishMarks(overlayCtx, left, diffOverlayFlags);
+
+    const fxCtx = requireContext(this.fxLayer, "fxLayer");
+    fxCtx.clearRect(0, 0, this.fxLayer.width, this.fxLayer.height);
+
+    this.compositeToTarget();
+
+    this.lastDiff.set(this.diffBuckets);
+    for (let v = 0; v < n; v += 1) {
+      const leftOoo = left.outOfOrder[v];
+      const rightOoo = right.outOfOrder[v];
+      if (leftOoo === undefined || rightOoo === undefined) {
+        throw new Error(`outOfOrder[${String(v)}] is missing`);
+      }
+      this.lastOoo[v] = leftOoo === 1 || rightOoo === 1 ? 1 : 0;
+    }
+    this.diffChromeDirty = false;
     resetDirty(this.dirty);
   }
 
@@ -819,6 +1035,101 @@ export class Renderer {
     ctx.fill();
 
     includeNode(this.dirty, cx, cy, radius, this.target.width, this.target.height);
+  }
+
+  /**
+   * Resolve settle-diff bucket to a CSS fill color (issue #68).
+   */
+  private bucketFillColor(bucket: number, opts: DiffOverlayOpts): string | null {
+    if (bucket === SETTLE_DIFF_LEFT) {
+      return this.personaFill(opts.leftPersona);
+    }
+    if (bucket === SETTLE_DIFF_RIGHT) {
+      return this.personaFill(opts.rightPersona);
+    }
+    if (bucket === SETTLE_DIFF_BOTH) {
+      return this.diffBothFill;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve lane persona to settle-diff fill; stub uses marble (issue #68).
+   */
+  private personaFill(persona: DiffPersona): string {
+    if (persona === "ember") {
+      return this.diffEmberFill;
+    }
+    return this.diffMarbleFill;
+  }
+
+  /**
+   * Fill one settle-diff vertex on the fill layer and expand the dirty rect (issue #68).
+   */
+  private drawDiffNode(ctx: DrawContext, v: number, cssColor: string): void {
+    if (this.usesAggregated()) {
+      this.writeAggregatedCssColor(v, cssColor);
+      return;
+    }
+
+    const graph = this.graph;
+    const camera = this.camera;
+    const cx = projectX(camera, vertexX(graph, v));
+    const cy = projectY(camera, vertexY(graph, v));
+    const radius = camera.radius;
+
+    ctx.fillStyle = cssColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, TAU);
+    ctx.fill();
+
+    includeNode(this.dirty, cx, cy, radius, this.target.width, this.target.height);
+  }
+
+  /**
+   * Write one aggregated settle-diff node (2 CSS px footprint) via CSS color (issue #68).
+   */
+  private writeAggregatedCssColor(v: number, cssColor: string): void {
+    const pixels = this.fillPixels;
+    if (pixels === null) {
+      throw new Error("writeAggregatedCssColor: fillPixels is null");
+    }
+
+    const graph = this.graph;
+    const camera = this.camera;
+    const cx = Math.floor(projectX(camera, vertexX(graph, v)));
+    const cy = Math.floor(projectY(camera, vertexY(graph, v)));
+    const { r, g, b } = parseRgb(cssColor);
+    const data = pixels.data;
+    const canvasWidth = pixels.width;
+    const canvasHeight = pixels.height;
+
+    for (let dy = 0; dy < this.aggregatedNodePx; dy += 1) {
+      const py = cy + dy;
+      if (py < 0 || py >= canvasHeight) {
+        continue;
+      }
+      for (let dx = 0; dx < this.aggregatedNodePx; dx += 1) {
+        const px = cx + dx;
+        if (px < 0 || px >= canvasWidth) {
+          continue;
+        }
+        const offset = (py * canvasWidth + px) * 4;
+        data[offset] = r;
+        data[offset + 1] = g;
+        data[offset + 2] = b;
+        data[offset + 3] = 255;
+      }
+    }
+
+    includeNode(
+      this.dirty,
+      cx + this.aggregatedNodePx * 0.5,
+      cy + this.aggregatedNodePx * 0.5,
+      this.aggregatedNodePx,
+      this.target.width,
+      this.target.height,
+    );
   }
 
   /**

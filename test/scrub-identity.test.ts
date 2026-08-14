@@ -65,6 +65,8 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aBloom = a.bloomVertex[v];
     const bBloom = b.bloomVertex[v];
     expect(aBloom).toBe(bBloom);
+
+    expect(a.outOfOrder[v]).toBe(b.outOfOrder[v]);
   }
 
   for (let i = 0; i < D_BLOCK_CAP; i += 1) {

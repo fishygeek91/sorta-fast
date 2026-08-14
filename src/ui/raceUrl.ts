@@ -1,7 +1,7 @@
 /**
  * Race URL codec for graph gallery + race mode state (issue #14, #15).
  *
- * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&target=&t=&bmssp=&bk=&bt=` — no DOM.
+ * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&target=&t=&bmssp=&bk=&bt=&view=` — no DOM.
  * Legacy `lane3=dijkstra` is parsed when `race=` is absent (issue #15).
  * Graph kind / size / seed parsing mirrors Lens (`src/ui/urlState.ts`).
  *
@@ -20,6 +20,9 @@ export type { BmsspUrlMode };
 
 /** View mode encoded in the `mode` query param. */
 export type RaceMode = "race" | "lens";
+
+/** Race canvas layout encoded in the `view` query param. */
+export type RaceView = "lanes" | "diff";
 
 /** Canonical race-algorithm slug allowed in the `race=` param (after filtering). */
 export type RaceAlgoSlug = "dijkstra" | "bmssp";
@@ -42,6 +45,8 @@ export type RaceUrlState = {
   bk: number | null;
   /** BMSSP block count `t`; `null` when omitted (demo or paper mode default). */
   bt: number | null;
+  /** Race canvas layout; `lanes` is side-by-side default, `diff` is the settle-diff overlay. */
+  view: RaceView;
 };
 
 /** Defaults match the sweep-winning race preset (sparse / 25000 / 4, two lanes). */
@@ -56,6 +61,7 @@ export const DEFAULT_RACE_URL: RaceUrlState = {
   bmssp: "demo",
   bk: null,
   bt: null,
+  view: "lanes",
 };
 
 const DEFAULT_RACE_LIST: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp"];
@@ -152,6 +158,17 @@ function parseRaceMode(raw: string | null): RaceMode {
 }
 
 /**
+ * @param raw - `view` query value, or null when absent.
+ * @returns `diff` only when `raw` is exactly `diff`; otherwise `lanes`.
+ */
+function parseRaceView(raw: string | null): RaceView {
+  if (raw === "diff") {
+    return "diff";
+  }
+  return "lanes";
+}
+
+/**
  * @param raw - `target` query value, or null when absent.
  * @returns A non-negative integer finish vertex, or `null` when unset/invalid.
  */
@@ -239,6 +256,7 @@ export function parseRaceUrl(search: string | URLSearchParams): RaceUrlState {
     bmssp: parseBmsspMode(params.get("bmssp")),
     bk: parseOptionalBlockParam(params.get("bk")),
     bt: parseOptionalBlockParam(params.get("bt")),
+    view: parseRaceView(params.get("view")),
   };
 }
 
@@ -288,6 +306,9 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
       throw new Error(`bt must be a positive integer or null, got ${String(state.bt)}`);
     }
   }
+  if (state.view !== "lanes" && state.view !== "diff") {
+    throw new Error(`Invalid race view: ${state.view}`);
+  }
 }
 
 /**
@@ -296,6 +317,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
  * The result always starts with `?` and contains `g`, `n`, `seed`, `mode`, and `race`.
  * `target` is included only when non-null; `t` only when greater than zero.
  * `bmssp` is included only when `paper`; `bk` and `bt` only when non-null.
+ * `view` is included only when `diff`; omitted when `lanes`.
  * Legacy `lane3=` is never written.
  *
  * @param state - Valid race URL state.
@@ -323,6 +345,9 @@ export function serializeRaceUrl(state: RaceUrlState): string {
   }
   if (state.bt !== null) {
     params.set("bt", String(state.bt));
+  }
+  if (state.view === "diff") {
+    params.set("view", "diff");
   }
   return `?${params.toString()}`;
 }

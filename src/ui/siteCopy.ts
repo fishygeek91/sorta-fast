@@ -187,6 +187,11 @@ export const EXPLAINER_COPY: ExplainerCopy = {
         "When a lane's source-to-target path is fully settled, that lane freezes and draws the shortest path in gold while its comparison counter locks.",
     },
     {
+      term: "settle-diff tint",
+      meaning:
+        "In Diff view, vertices settled only in the left lane fill with that lane's persona (marble or ember), only in the right lane with the other persona, both-settled a neutral stone, and unreached stay paper. A short ink tick marks a vertex settled out of distance order — BMSSP's allowed shortcut; always 0 for Dijkstra.",
+    },
+    {
       term: "forest grow/cut (DMSY, forthcoming)",
       meaning:
         "Spanning-forest edges sprout from the frontier and partition into Θ(k)-size subtrees; only pivot representatives enter the sorted lane. Overlay ships with the DMSY lane (#27).",
@@ -216,6 +221,12 @@ export type RaceChromeCopy = {
   stepEventTitle: string;
   stepOpTitle: string;
   exportDisabledTitle: string;
+  diffToggleLabel: string;
+  diffToggleTitle: string;
+  legendDiffLeft: string;
+  legendDiffRight: string;
+  legendDiffBoth: string;
+  legendDiffOutOfOrder: string;
 };
 
 /**
@@ -241,6 +252,12 @@ export const RACE_CHROME_COPY: RaceChromeCopy = {
   stepEventTitle: "advance one trace event",
   stepOpTitle: "advance one billed op",
   exportDisabledTitle: "Available after photo-finish.",
+  diffToggleLabel: "Diff",
+  diffToggleTitle: "Show where the lanes differ at equal billed work",
+  legendDiffLeft: "Left only",
+  legendDiffRight: "Right only",
+  legendDiffBoth: "Both settled",
+  legendDiffOutOfOrder: "Out of order",
 };
 
 /**

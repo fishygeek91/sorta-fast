@@ -28,6 +28,9 @@ const THEME_TOKEN_KEYS: (keyof ThemeTokens)[] = [
   "sourceMark",
   "finishMark",
   "stoneFill",
+  "diffMarble",
+  "diffEmber",
+  "diffBoth",
 ];
 
 /** Matches `rgb(r, g, b)` and `rgba(r, g, b, a)` CSS literals. */

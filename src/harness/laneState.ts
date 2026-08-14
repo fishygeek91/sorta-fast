@@ -23,7 +23,8 @@ export const D_BLOCK_CAP = 64;
  * then the billed work after that relax event. `pred[v]` and `dist[v]` mirror
  * shortest-path tree state from relax events; `settleWork[v]` records billed
  * work after the settle on `v`. Scalars track playback progress and out-of-order
- * settle detection via `maxSettledDist`. BMSSP fields hold visual/narration state
+ * settle detection via `maxSettledDist` and the per-vertex `outOfOrder` bitset.
+ * BMSSP fields hold visual/narration state
  * for recurse depth, FindPivots batches, bloom regions, and schematic D blocks.
  */
 export class LaneState {
@@ -61,6 +62,12 @@ export class LaneState {
    * Dijkstra order). Incremented by TraceBuffer on each such settle.
    */
   outOfOrderSettles: number;
+  /**
+   * 1 if vertex `v` settled out-of-order (its settle incremented
+   * {@link outOfOrderSettles}); else 0. Later relax events can overwrite
+   * `dist[v]`, so OOO cannot be reconstructed from current distance alone.
+   */
+  readonly outOfOrder: Uint8Array;
   /**
    * Maximum `dist[v]` among settled vertices so far; `-Infinity` when none
    * settled. Lets TraceBuffer detect out-of-order settles without scanning.
@@ -144,6 +151,7 @@ export class LaneState {
     this.dist = new Float64Array(n);
     this.settleWork = new Int32Array(n);
     this.frontier = new Uint8Array(n);
+    this.outOfOrder = new Uint8Array(n);
     this.lastRelaxWork = new Int32Array(m);
     this.pivotFlareWork = new Int32Array(n);
     this.bloomVertex = new Uint8Array(n);
@@ -183,6 +191,7 @@ export class LaneState {
     this.dist.fill(Infinity);
     this.settleWork.fill(UNSETTLED);
     this.frontier.fill(0);
+    this.outOfOrder.fill(0);
     this.lastRelaxWork.fill(UNSETTLED);
     this.pivotFlareWork.fill(UNSETTLED);
     this.bloomVertex.fill(0);
@@ -245,6 +254,7 @@ export class LaneState {
     this.dist.set(other.dist);
     this.settleWork.set(other.settleWork);
     this.frontier.set(other.frontier);
+    this.outOfOrder.set(other.outOfOrder);
     this.lastRelaxWork.set(other.lastRelaxWork);
     this.pivotFlareWork.set(other.pivotFlareWork);
     this.bloomVertex.set(other.bloomVertex);
