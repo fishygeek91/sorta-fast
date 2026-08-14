@@ -21,6 +21,7 @@ import {
   type StoryStepId,
 } from "./storyScript.ts";
 import { parseStoryUrl, serializeStoryUrl, type StoryUrlState } from "./storyUrl.ts";
+import { decideStoryWheel } from "./storyWheel.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 import { serializeLensUrl } from "./urlState.ts";
 
@@ -127,6 +128,7 @@ export function mountStory(): void {
   let lastUrlWriteMs = 0;
   let lastFrameMs = performance.now();
   let wheelAccumulator = 0;
+  let lastWheelStepMs = 0;
   let pointerStartX = 0;
   let pointerTracking = false;
   mountThemeToggle(modeNav, (mode: ThemeMode) => {
@@ -227,6 +229,8 @@ export function mountStory(): void {
     }
   }
   function goToStep(step: StoryStepId): void {
+    wheelAccumulator = 0;
+    lastWheelStepMs = performance.now();
     race?.pause();
     storyState = { ...storyState, step, t: 0 };
     writeStoryUrl();
@@ -333,20 +337,32 @@ export function mountStory(): void {
     lanesEl.removeEventListener("pointerup", onPointerUp);
     lanesEl.removeEventListener("pointercancel", onPointerCancel);
   }
+  // Wheel steps via decideStoryWheel — never goNext() (#60).
   function onWheel(event: WheelEvent): void {
     if (race === null || !race.allComplete) {
       return;
     }
-    wheelAccumulator += event.deltaY;
-    if (Math.abs(wheelAccumulator) < STORY_SCROLL_THRESHOLD_PX) {
-      return;
+    const decision = decideStoryWheel({
+      accumulator: wheelAccumulator,
+      lastStepMs: lastWheelStepMs,
+      deltaY: event.deltaY,
+      nowMs: performance.now(),
+      allowNext: nextStoryStepId(storyState.step) !== null,
+      allowBack: prevStoryStepId(storyState.step) !== null,
+    });
+    wheelAccumulator = decision.accumulator;
+    lastWheelStepMs = decision.lastStepMs;
+    if (decision.action === "next") {
+      const nextId = nextStoryStepId(storyState.step);
+      if (nextId !== null) {
+        goToStep(nextId);
+      }
+    } else if (decision.action === "back") {
+      const prevId = prevStoryStepId(storyState.step);
+      if (prevId !== null) {
+        goToStep(prevId);
+      }
     }
-    if (wheelAccumulator > 0) {
-      goNext();
-    } else {
-      goBack();
-    }
-    wheelAccumulator = 0;
   }
   function onPointerDown(event: PointerEvent): void {
     if (event.target instanceof Element && event.target.closest("button") !== null) {

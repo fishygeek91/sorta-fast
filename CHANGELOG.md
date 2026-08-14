@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- `.race-lane[hidden]` now sets `display: none`, so Story single-lane beats actually hide the unused algorithm (author `display: flex` was defeating the `hidden` attribute) (#60).
+- Story wheel navigation uses a 600ms cooldown and never exits to Race free play from scroll, so one flick cannot skip the whole tour (#60).
 - WebM export holds ~1.5s after both lanes photo-freeze so the winner banner is captured, and the rAF loop keeps painting while the clock is paused (MediaRecorder was stopping on the freeze frame, then the hold never elapsed) (#21).
 
 ### Added

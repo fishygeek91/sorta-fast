@@ -180,4 +180,8 @@ describe("story mode CSS", () => {
     const block = mobileBlock?.[1] ?? "";
     expect(block).toContain(".story-lanes");
   });
+
+  it("hides race lanes that have the hidden attribute", () => {
+    expect(css).toMatch(/\.race-lane\[hidden\]\s*\{[\s\S]*?display:\s*none/);
+  });
 });
