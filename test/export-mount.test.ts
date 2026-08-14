@@ -49,6 +49,19 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("canExportPhotoFinish");
   });
 
+  it("race.ts gates export-sheet banner on allPhotoFrozen in buildExportSheetSpec", () => {
+    const buildExportIdx = raceSource.indexOf("function buildExportSheetSpec");
+    expect(buildExportIdx).toBeGreaterThanOrEqual(0);
+
+    const buildExportBody = raceSource.slice(buildExportIdx);
+    const bannerIdx = buildExportBody.indexOf("banner:");
+    expect(bannerIdx).toBeGreaterThanOrEqual(0);
+
+    const bannerSlice = buildExportBody.slice(bannerIdx, bannerIdx + 400);
+    expect(bannerSlice).toContain("allPhotoFrozen()");
+    expect(bannerSlice).toContain("formatRaceBanner");
+  });
+
   it("race.ts shows a fallback status when video export is unsupported", () => {
     expect(raceSource).toContain(
       "Video export is not supported in this browser; PNG export still works.",
@@ -62,6 +75,23 @@ describe("issue #18 export mount wiring", () => {
 
   it("race.ts seeks to the start before WebM replay export", () => {
     expect(raceSource).toContain("seek(0)");
+  });
+
+  it("race.ts uses shareUrlForExport for export captions", () => {
+    expect(raceSource).toContain("shareUrlForExport");
+  });
+
+  it("race.ts holds WebM capture after photo-freeze before stopping recorder", () => {
+    expect(raceSource).toContain("EXPORT_BANNER_HOLD_MS");
+    expect(raceSource).toContain("recordingHoldUntilMs");
+  });
+
+  it("race.ts keeps drawing while recording after the photo-finish pause", () => {
+    expect(raceSource).toContain("} else if (recording) {");
+  });
+
+  it("race.ts does not bake window.location into export share URLs", () => {
+    expect(raceSource).not.toContain("shareUrlFromLocation(raceState, window.location)");
   });
 
   it("race.ts stops an in-flight recorder when startRun aborts recording", () => {

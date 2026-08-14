@@ -7,8 +7,15 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ## [Unreleased]
 
+### Fixed
+
+- WebM export holds ~1.5s after both lanes photo-freeze so the winner banner is captured, and the rAF loop keeps painting while the clock is paused (MediaRecorder was stopping on the freeze frame, then the hold never elapsed) (#21).
+
 ### Added
 
+- Launch README with hero GIF, live Pages link, seed challenge, paper links, and a pointer at the differential-test suite (#21).
+- Wall-clock benchmark page (`/sorta-fast/bench/`) plus headless harness (`npm run bench:wall-clock`) with committed S–XL sparse timings and the work-clock vs milliseconds caveat (#21).
+- v1.0 launch checklist in `docs/launch-checklist.md` (#21).
 - Adversarial gallery kind (`g=adversarial`): Θ(√n) chain + wide fans, seeded, property-tested (#20).
 - City graphs reject n > L (25000); Race/Lens disable XL for city with #32 tooltip and clamp on kind switch (#20, #32).
 - Aggregated render at ≥25k nodes: 2px ImageData settle squares, undirected-once edge prerender, simplified overlays (#20).
@@ -47,6 +54,10 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Export captions always use the canonical GitHub Pages origin (`https://fishygeek91.github.io/sorta-fast/`), so localhost preview URLs never bake into PNG/WebM (#21).
+- Re-recorded the README hero GIF through both-lane photo-finish (plus a 1.5s last-frame hold) and captioned it as Dijkstra's race-to-target on seed 4, not a BMSSP settle-all win (#21).
+- README hero caption distinguishes photo-finish (Dijkstra on seed 4) from settle-all work-clock (BMSSP) (#21).
+- `npm run bench:wall-clock -- --quick` no longer overwrites committed `bench/wall-clock-results.json` (#21).
 - `docs/design.md` §3.4 city XL cap and aggregated-render xref §4.4 (#20).
 - Pre-#52 share URLs without `bmssp=` now replay under demo k/t (`k = max(4, paper k)`); append `&bmssp=paper` to reproduce the old paper-asymptotic run (#52).
 - BMSSP workers and `RaceSpec` accept optional `mode` (`demo`|`paper`); omitted k/t now resolve through demo `bmsspParams`, not the paper formula (#52).
@@ -118,6 +129,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Export-sheet WebM/PNG banner is empty until every lane is photo-frozen, so replay no longer paints a winner at clock 0 (#21).
 - Aborting a WebM recording (e.g. `startRun` mid-capture) best-effort `stop()`s the canvas recorder instead of leaking a native `MediaRecorder` (#18).
 - PNG export no longer downloads a blank sheet when compositing fails; `exportPhotoFinishWhenPainted` skips capture unless the sheet painted (#18).
 - Race video export uses `createStreamRecorder` → `wrapMediaRecorder` so MediaRecorder errors keep their `ev.error` message (#18).

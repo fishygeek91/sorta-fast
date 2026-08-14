@@ -7,6 +7,12 @@
 
 import { serializeRaceUrl, type RaceUrlState } from "./raceUrl.ts";
 
+/** Canonical GitHub Pages origin (matches index.html og:url). */
+export const CANONICAL_PAGES_ORIGIN = "https://fishygeek91.github.io";
+
+/** Canonical project-pages pathname (matches Vite base / og:url). */
+export const CANONICAL_PAGES_PATHNAME = "/sorta-fast/";
+
 /** Raster or video export format. */
 export type ExportKind = "png" | "webm" | "mp4";
 
@@ -48,6 +54,21 @@ export function shareUrlFromLocation(
   location: { origin: string; pathname: string },
 ): string {
   return location.origin + location.pathname + serializeRaceUrl(state);
+}
+
+/**
+ * Canonical share URL for PNG/WebM export overlays.
+ *
+ * Always uses the GitHub Pages origin and pathname (never `window.location`)
+ * and omits mid-race scrub position (`t` forced to 0).
+ *
+ * @param state - Race gallery state to serialize into the query string.
+ */
+export function shareUrlForExport(state: RaceUrlState): string {
+  return shareUrlFromLocation(
+    { ...state, t: 0 },
+    { origin: CANONICAL_PAGES_ORIGIN, pathname: CANONICAL_PAGES_PATHNAME },
+  );
 }
 
 /**

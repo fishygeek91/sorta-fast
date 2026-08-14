@@ -20,7 +20,7 @@ import {
   canExportPhotoFinish,
   exportCaption,
   exportFilename,
-  shareUrlFromLocation,
+  shareUrlForExport,
 } from "./exportMeta.ts";
 import { paintRaceExportSheet } from "./exportPaint.ts";
 import {
@@ -70,6 +70,12 @@ const THREE_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dijkstra
 
 /** Minimum interval between URL `t` writes while playback is running. */
 const URL_WRITE_THROTTLE_MS = 250;
+
+/**
+ * Milliseconds to keep painting the export sheet after photo-freeze before stopping WebM capture.
+ * Ensures MediaRecorder encodes the winner banner frame (captureStream often misses same-turn paints).
+ */
+const EXPORT_BANNER_HOLD_MS = 1500;
 
 /** DOM handles for one race lane panel. */
 type LaneUi = {
@@ -416,6 +422,9 @@ export function mountRace(): void {
   /** Active canvas recorder during WebM export, or null when idle. */
   let activeCanvasRecorder: ReturnType<typeof createCanvasRecorder> | null = null;
 
+  /** Wall-clock deadline for banner hold before {@link finishVideoRecording}, or null when idle. */
+  let recordingHoldUntilMs: number | null = null;
+
   /** Offscreen sheet canvas reused for PNG and WebM export compositing. */
   let exportSheet: HTMLCanvasElement | null = null;
 
@@ -682,6 +691,7 @@ export function mountRace(): void {
     recording = false;
     recordingAwaitingReplay = false;
     recordingMimeType = "";
+    recordingHoldUntilMs = null;
     activeCanvasRecorder = null;
     exportWebmBtn.textContent = "WebM";
     syncRecordingControls();
@@ -720,7 +730,7 @@ export function mountRace(): void {
     }
 
     const theme = THEMES[readStoredTheme()];
-    const shareUrl = shareUrlFromLocation(raceState, window.location);
+    const shareUrl = shareUrlForExport(raceState);
     const caption = exportCaption(raceState, shareUrl);
 
     const lanes = configs.map((config, lane) => {
@@ -738,12 +748,14 @@ export function mountRace(): void {
 
     return {
       lanes,
-      banner: formatRaceBanner(
-        configs.map((config, lane) => ({
-          label: config.label,
-          work: activeRace.laneState(lane).work,
-        })),
-      ),
+      banner: activeRace.allPhotoFrozen()
+        ? formatRaceBanner(
+            configs.map((config, lane) => ({
+              label: config.label,
+              work: activeRace.laneState(lane).work,
+            })),
+          )
+        : "",
       seedLine: caption.seedLine,
       urlLine: caption.urlLine,
       chrome: {
@@ -786,6 +798,7 @@ export function mountRace(): void {
       return;
     }
 
+    recordingHoldUntilMs = null;
     finishingVideo = true;
     recordingAwaitingReplay = false;
     race?.pause();
@@ -850,7 +863,12 @@ export function mountRace(): void {
     if (recording) {
       if (paintExportSheet()) {
         if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
-          void finishVideoRecording();
+          if (recordingHoldUntilMs === null) {
+            recordingHoldUntilMs = performance.now() + EXPORT_BANNER_HOLD_MS;
+          }
+          if (performance.now() >= recordingHoldUntilMs) {
+            void finishVideoRecording();
+          }
         }
       }
     }
@@ -1250,6 +1268,10 @@ export function mountRace(): void {
         writeClockToUrl();
         lastUrlWriteMs = nowMs;
       }
+    } else if (recording) {
+      // Photo-finish pauses the clock; keep painting so the banner hold can
+      // elapse and MediaRecorder encodes the frozen export sheet.
+      drawFrame();
     }
 
     rafId = requestAnimationFrame(frame);

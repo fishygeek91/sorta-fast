@@ -1,14 +1,48 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
+  CANONICAL_PAGES_ORIGIN,
+  CANONICAL_PAGES_PATHNAME,
   canExportPhotoFinish,
   exportCaption,
   exportFilename,
+  shareUrlForExport,
   shareUrlFromLocation,
 } from "../src/ui/exportMeta.ts";
 import { DEFAULT_RACE_URL, serializeRaceUrl } from "../src/ui/raceUrl.ts";
 
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const INDEX_HTML = join(TEST_DIR, "../index.html");
+
 describe("issue #18 export meta", () => {
+  describe("canonical Pages constants", () => {
+    it("match index.html og:url", () => {
+      const html = readFileSync(INDEX_HTML, "utf8");
+      const ogUrl = "https://fishygeek91.github.io/sorta-fast/";
+      expect(html).toContain(ogUrl);
+      expect(CANONICAL_PAGES_ORIGIN + CANONICAL_PAGES_PATHNAME).toBe(ogUrl);
+    });
+  });
+
+  describe("shareUrlForExport", () => {
+    it("uses canonical Pages origin and omits localhost", () => {
+      const url = shareUrlForExport(DEFAULT_RACE_URL);
+      expect(url.startsWith("https://fishygeek91.github.io/sorta-fast/")).toBe(true);
+      expect(url).not.toContain("127.0.0.1");
+      expect(url).not.toContain("localhost");
+    });
+
+    it("omits t even when state has mid-race scrub position", () => {
+      const url = shareUrlForExport({ ...DEFAULT_RACE_URL, t: 999 });
+      expect(url).not.toContain("t=");
+      expect(url).toContain(serializeRaceUrl({ ...DEFAULT_RACE_URL, t: 0 }));
+    });
+  });
+
   describe("shareUrlFromLocation", () => {
     it("concatenates origin, pathname, and serialized query", () => {
       const location = {
