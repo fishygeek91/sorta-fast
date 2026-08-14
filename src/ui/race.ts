@@ -1,5 +1,5 @@
 /**
- * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18, #52).
+ * Race mode UI: multi-lane playback with worker-streamed traces (issue #14, #15, #16, #18, #52, #68).
  */
 
 import {
@@ -13,7 +13,7 @@ import { resolveBmsspRunParams } from "../harness/bmsspRunParams.ts";
 import { RaceWorkerPool, type RaceSpec } from "../harness/racePool.ts";
 import { RaceScheduler } from "../harness/raceScheduler.ts";
 import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
-import { Renderer } from "../render/renderer.ts";
+import { Renderer, type DiffPersona } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
@@ -51,7 +51,13 @@ import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.
 import { RACE_CHROME_COPY, explainerMeaning, personaTitle } from "./siteCopy.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
-import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
+import {
+  parseRaceUrl,
+  serializeRaceUrl,
+  type RaceAlgoSlug,
+  type RaceUrlState,
+  type RaceView,
+} from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
 import { applyRaceCanvasBackingStore, RACE_LANE_CSS_PX, racePixelScale } from "./raceLaneSize.ts";
@@ -267,7 +273,22 @@ export function mountRace(): void {
   bmsspSelect.title = RACE_CHROME_COPY.bmsspSelectTitle;
   bmsspLabel.append(bmsspSelect);
 
-  graphControls.append(kindLabel, sizeLabel, seedLabel, diceButton, lanesLabel, bmsspLabel);
+  const diffButton = document.createElement("button");
+  diffButton.type = "button";
+  diffButton.id = "race-diff-toggle";
+  diffButton.textContent = RACE_CHROME_COPY.diffToggleLabel;
+  diffButton.title = RACE_CHROME_COPY.diffToggleTitle;
+  diffButton.setAttribute("aria-label", RACE_CHROME_COPY.diffToggleTitle);
+
+  graphControls.append(
+    kindLabel,
+    sizeLabel,
+    seedLabel,
+    diceButton,
+    lanesLabel,
+    bmsspLabel,
+    diffButton,
+  );
   header.append(graphControls);
 
   const raceRoot = document.createElement("div");
@@ -287,12 +308,16 @@ export function mountRace(): void {
   let laneResizeObserver: ResizeObserver | null = null;
   let resizeRafId = 0;
   let pendingBackingRebuild = false;
+  let diffRenderer: Renderer | null = null;
 
   mountThemeToggle(chrome, (mode: ThemeMode) => {
     for (const ui of laneUis) {
       if (ui.renderer !== null) {
         ui.renderer.setChrome(THEMES[mode]);
       }
+    }
+    if (diffRenderer !== null) {
+      diffRenderer.setChrome(THEMES[mode]);
     }
     drawFrame();
   });
@@ -423,16 +448,44 @@ export function mountRace(): void {
 
   transport.append(transportButtons, speedLabel, scrubLabel, genProgressWrap, statusEl);
 
+  const diffWrap = document.createElement("div");
+  diffWrap.className = "race-diff-wrap";
+
+  const diffCanvas = document.createElement("canvas");
+  diffCanvas.className = "race-diff";
+  diffCanvas.width = RACE_LANE_CSS_PX;
+  diffCanvas.height = RACE_LANE_CSS_PX;
+  diffWrap.append(diffCanvas);
+
   const legendEl = mountRaceLegend();
   raceRoot.append(bannerEl, lanesEl, legendEl, transport);
+  raceRoot.insertBefore(diffWrap, lanesEl);
+  raceRoot.dataset.view = raceState.view;
   mountDisclosures(raceRoot);
   root.append(header, raceRoot);
+
+  /**
+   * Sync lanes vs diff layout, legend, and aria state without remounting workers.
+   */
+  function syncViewLayout(): void {
+    raceRoot.dataset.view = raceState.view;
+    diffWrap.hidden = raceState.view !== "diff";
+    diffCanvas.hidden = raceState.view !== "diff";
+    for (const ui of laneUis) {
+      ui.canvas.hidden = raceState.view === "diff";
+    }
+    diffButton.setAttribute("aria-pressed", raceState.view === "diff" ? "true" : "false");
+    syncRaceLegend(legendEl, raceState.view, configs);
+  }
+
+  syncViewLayout();
 
   applyAllLaneBackingStores();
   laneResizeObserver = new ResizeObserver(() => {
     onLanesResized();
   });
   laneResizeObserver.observe(lanesEl);
+  laneResizeObserver.observe(diffWrap);
 
   const pool = new RaceWorkerPool();
   let race: RaceScheduler | null = null;
@@ -1096,6 +1149,27 @@ export function mountRace(): void {
     syncExportButtons();
     syncPlayPauseUi();
 
+    if (diffRenderer !== null && raceState.view === "diff" && configs.length >= 2) {
+      const leftConfig = configs[0];
+      const rightConfig = configs[1];
+      if (leftConfig !== undefined && rightConfig !== undefined) {
+        const diffOpts: {
+          source: number;
+          leftPersona: DiffPersona;
+          rightPersona: DiffPersona;
+          finish?: number;
+        } = {
+          source: SOURCE_VERTEX,
+          leftPersona: leftConfig.persona,
+          rightPersona: rightConfig.persona,
+        };
+        if (finishVertex !== null) {
+          diffOpts.finish = finishVertex;
+        }
+        diffRenderer.drawDiff(race.laneState(0), race.laneState(1), diffOpts);
+      }
+    }
+
     if (recording) {
       if (paintExportSheet()) {
         if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
@@ -1118,7 +1192,15 @@ export function mountRace(): void {
   function applyAllLaneBackingStores(): boolean {
     let changed = false;
     for (const ui of laneUis) {
+      if (ui.canvas.hidden) {
+        continue;
+      }
       if (applyRaceCanvasBackingStore(ui.canvas)) {
+        changed = true;
+      }
+    }
+    if (!diffCanvas.hidden) {
+      if (applyRaceCanvasBackingStore(diffCanvas)) {
         changed = true;
       }
     }
@@ -1142,6 +1224,13 @@ export function mountRace(): void {
       });
       ui.renderer.setChrome(THEMES[readStoredTheme()]);
     }
+    diffRenderer = new Renderer({
+      target: wrapDomCanvas(diffCanvas),
+      createSurface: createDomSurface,
+      graph,
+      pixelScale: racePixelScale(diffCanvas.width, diffCanvas.clientWidth),
+    });
+    diffRenderer.setChrome(THEMES[readStoredTheme()]);
   }
 
   /**
@@ -1225,6 +1314,7 @@ export function mountRace(): void {
       applyBestMark(ui.relaxBlock, false);
       applyBestMark(ui.outOfOrderBlock, false);
     }
+    diffRenderer = null;
 
     clearStatus();
     showGenProgress(0);
@@ -1289,6 +1379,14 @@ export function mountRace(): void {
           });
           ui.renderer.setChrome(THEMES[readStoredTheme()]);
         }
+
+        diffRenderer = new Renderer({
+          target: wrapDomCanvas(diffCanvas),
+          createSurface: createDomSurface,
+          graph,
+          pixelScale: racePixelScale(diffCanvas.width, diffCanvas.clientWidth),
+        });
+        diffRenderer.setChrome(THEMES[readStoredTheme()]);
 
         applyPendingSeek();
         drawFrame();
@@ -1559,6 +1657,15 @@ export function mountRace(): void {
     applyRaceState({ ...raceState, bmssp: raw });
   });
 
+  diffButton.addEventListener("click", () => {
+    const nextView: RaceView = raceState.view === "diff" ? "lanes" : "diff";
+    raceState = { ...raceState, view: nextView };
+    history.replaceState(null, "", serializeRaceUrl(raceState) + window.location.hash);
+    syncViewLayout();
+    syncLaneBackingStoresAndRenderers();
+    drawFrame();
+  });
+
   let lastFrameMs = performance.now();
 
   /**
@@ -1772,6 +1879,89 @@ function mountRaceLegend(): HTMLDivElement {
   }
 
   return legend;
+}
+
+/**
+ * Replace legend children for lanes or settle-diff view (issue #68).
+ *
+ * @param legend - `.race-legend` container mounted under `.race-root`.
+ * @param view - Current race canvas layout from URL state.
+ * @param laneConfigs - Lane personas used to map diff swatch colors to left/right.
+ */
+function syncRaceLegend(
+  legend: HTMLDivElement,
+  view: RaceView,
+  laneConfigs: readonly RaceLaneConfig[],
+): void {
+  legend.replaceChildren();
+
+  const items: ReadonlyArray<{ swatch: string; label: string; term: string }> =
+    view === "lanes"
+      ? [
+          { swatch: "frontier", label: RACE_CHROME_COPY.legendFrontier, term: "Frontier" },
+          {
+            swatch: "settled",
+            label: RACE_CHROME_COPY.legendSettled,
+            term: "settle-order gradient",
+          },
+          {
+            swatch: "unreached",
+            label: RACE_CHROME_COPY.legendUnreached,
+            term: "Unreached",
+          },
+          {
+            swatch: "gold",
+            label: RACE_CHROME_COPY.legendShortestPath,
+            term: "photo-finish gold path",
+          },
+        ]
+      : (() => {
+          const leftConfig = laneConfigs[0];
+          const emberOnLeft = leftConfig !== undefined && leftConfig.persona === "ember";
+          const leftSwatch = emberOnLeft ? "diff-right" : "diff-left";
+          const rightSwatch = emberOnLeft ? "diff-left" : "diff-right";
+          return [
+            {
+              swatch: leftSwatch,
+              label: RACE_CHROME_COPY.legendDiffLeft,
+              term: "settle-diff tint",
+            },
+            {
+              swatch: rightSwatch,
+              label: RACE_CHROME_COPY.legendDiffRight,
+              term: "settle-diff tint",
+            },
+            {
+              swatch: "diff-both",
+              label: RACE_CHROME_COPY.legendDiffBoth,
+              term: "settle-diff tint",
+            },
+            {
+              swatch: "diff-ooo",
+              label: RACE_CHROME_COPY.legendDiffOutOfOrder,
+              term: "settle-diff tint",
+            },
+            {
+              swatch: "unreached",
+              label: RACE_CHROME_COPY.legendUnreached,
+              term: "Unreached",
+            },
+          ];
+        })();
+
+  for (const item of items) {
+    const itemEl = document.createElement("span");
+    itemEl.className = "race-legend-item";
+    itemEl.title = explainerMeaning(item.term);
+
+    const swatchEl = document.createElement("span");
+    swatchEl.className = "race-legend-swatch";
+    swatchEl.dataset.swatch = item.swatch;
+    swatchEl.setAttribute("aria-hidden", "true");
+
+    itemEl.append(swatchEl, document.createTextNode(item.label));
+    legend.append(itemEl);
+  }
 }
 
 /**

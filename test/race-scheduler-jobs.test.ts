@@ -75,6 +75,8 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aSettleWork = a.settleWork[v];
     const bSettleWork = b.settleWork[v];
     expect(aSettleWork).toBe(bSettleWork);
+
+    expect(a.outOfOrder[v]).toBe(b.outOfOrder[v]);
   }
 }
 

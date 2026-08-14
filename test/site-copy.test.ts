@@ -135,6 +135,7 @@ describe("siteCopy", () => {
         "Batch blooms",
         "D-structure strip",
         "photo-finish gold path",
+        "settle-diff tint",
       ];
 
       for (const term of requiredTerms) {
@@ -220,6 +221,11 @@ describe("siteCopy", () => {
 
     it('exportDisabledTitle is "Available after photo-finish."', () => {
       expect(RACE_CHROME_COPY.exportDisabledTitle).toBe("Available after photo-finish.");
+    });
+
+    it("diff toggle label and title describe Diff view", () => {
+      expect(RACE_CHROME_COPY.diffToggleLabel).toBe("Diff");
+      expect(includesIgnoreCase(RACE_CHROME_COPY.diffToggleTitle, "differ")).toBe(true);
     });
   });
 

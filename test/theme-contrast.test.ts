@@ -17,6 +17,9 @@ const MUTED_ON_PAPER_MIN = 3;
 /** Minimum contrast for gold highlights on paper. */
 const GOLD_ON_PAPER_MIN = 3;
 
+/** Minimum contrast for settle-diff fills on paper. */
+const DIFF_FILL_ON_PAPER_MIN = 3;
+
 /** Minimum contrast for ink on raised panels. */
 const INK_ON_PANEL_MIN = 4.5;
 
@@ -53,6 +56,18 @@ describe("theme contrast", () => {
         expect(contrastRatio(tokens.gold, tokens.paper)).toBeGreaterThanOrEqual(GOLD_ON_PAPER_MIN);
       });
 
+      it("settle-diff fills on paper meet fill contrast floor", () => {
+        expect(contrastRatio(tokens.diffMarble, tokens.paper)).toBeGreaterThanOrEqual(
+          DIFF_FILL_ON_PAPER_MIN,
+        );
+        expect(contrastRatio(tokens.diffEmber, tokens.paper)).toBeGreaterThanOrEqual(
+          DIFF_FILL_ON_PAPER_MIN,
+        );
+        expect(contrastRatio(tokens.diffBoth, tokens.paper)).toBeGreaterThanOrEqual(
+          DIFF_FILL_ON_PAPER_MIN,
+        );
+      });
+
       it("ink on panel meets WCAG AA body text contrast", () => {
         expect(contrastRatio(tokens.ink, tokens.panel)).toBeGreaterThanOrEqual(INK_ON_PANEL_MIN);
       });
@@ -63,6 +78,21 @@ describe("theme contrast", () => {
     it("marble, ember, and moss remain pairwise distinct after CVD simulation", () => {
       const accents = ["marble", "ember", "moss"] as const;
       const simulated = accents.map((key) => channelsToRgb(simulateDeuteranopia(THEMES.dark[key])));
+
+      expect(rgbDistance(simulated[0], simulated[1])).toBeGreaterThanOrEqual(
+        CVD_PAIRWISE_MIN_DISTANCE,
+      );
+      expect(rgbDistance(simulated[0], simulated[2])).toBeGreaterThanOrEqual(
+        CVD_PAIRWISE_MIN_DISTANCE,
+      );
+      expect(rgbDistance(simulated[1], simulated[2])).toBeGreaterThanOrEqual(
+        CVD_PAIRWISE_MIN_DISTANCE,
+      );
+    });
+
+    it("dark settle-diff fills remain pairwise distinct after CVD simulation", () => {
+      const fills = ["diffMarble", "diffEmber", "diffBoth"] as const;
+      const simulated = fills.map((key) => channelsToRgb(simulateDeuteranopia(THEMES.dark[key])));
 
       expect(rgbDistance(simulated[0], simulated[1])).toBeGreaterThanOrEqual(
         CVD_PAIRWISE_MIN_DISTANCE,

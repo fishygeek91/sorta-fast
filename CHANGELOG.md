@@ -22,6 +22,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- M-size `drawDiff` replay-perf budget test (best-of-3 stub canvas, 50ms CI ceiling) for settle-diff dual-lane fills (#68).
+- Race Diff view (`view=diff`) tints who-settled-where at equal billed work and marks out-of-order settles with ink ticks, with a shareable URL, glossary entry, and both-theme fills (#68).
 - Race mode surfaces a shared canvas legend (frontier, settled gradient, unreached, gold path), persona identity dots, and hover tooltips on counters plus Dice/BMSSP controls, and labels the per-lane bar as percent settled so it is not mistaken for playback (#65).
 - Race mode marks the photo-finish winner on the lane panels, highlights each lane's best-in-class secondary counters, shows a live settle-count lead until the first freeze, and hoists the existing verdict banner above the lanes so it stays visible at 1440×900 (#63).
 - Chromium Playwright smoke (`npm run test:e2e`) mounts Story and asserts computed-style single-lane beats plus one wheel burst per step with no scroll exit to Race (#61).

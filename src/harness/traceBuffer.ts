@@ -389,6 +389,7 @@ export class TraceBuffer {
           const dv = target.dist[vertex];
           if (dv < target.maxSettledDist) {
             target.outOfOrderSettles += 1;
+            target.outOfOrder[vertex] = 1;
           }
           if (dv > target.maxSettledDist) {
             target.maxSettledDist = dv;

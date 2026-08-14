@@ -4,6 +4,7 @@ import { runReplay5kBench, type Replay5kBenchResult } from "../bench/replay-5k.t
 import { run } from "../src/core/dijkstra.ts";
 import { generateGraph, SIZE_PRESETS, type Graph } from "../src/core/graph.ts";
 import { TraceWriter, type TraceChunk } from "../src/core/trace.ts";
+import { LaneState } from "../src/harness/laneState.ts";
 import { Playback } from "../src/harness/playback.ts";
 import { TraceBuffer } from "../src/harness/traceBuffer.ts";
 import { Renderer } from "../src/render/renderer.ts";
@@ -227,5 +228,49 @@ describe("5k maze BMSSP replay budgets", () => {
       bestFrame,
       `frameMs=[${frameTimes.map((t) => t.toFixed(2)).join(", ")}] best=${bestFrame.toFixed(2)}`,
     ).toBeLessThan(FRAME_BUDGET_MS);
+  });
+});
+
+describe("M-size settle-diff draw budgets", () => {
+  it("stub-canvas drawDiff of a fully settled M-size pair stays under the CI budget", () => {
+    const { graph, chunks, n } = bmsspReplayFixture();
+    const buffer = new TraceBuffer(graph, chunks);
+    buffer.seekWork(buffer.totalWork);
+
+    expect(buffer.totalWork).toBeGreaterThan(0);
+    expect(buffer.state.work).toBeGreaterThan(0);
+
+    const left = new LaneState(graph.n, graph.m);
+    for (let v = 0; v < graph.n; v += 1) {
+      left.settleOrder[v] = v;
+    }
+    left.settledCount = graph.n;
+
+    const right = buffer.state.clone();
+
+    const target = createFakeSurface(CANVAS_SIZE, CANVAS_SIZE);
+    const renderer = new Renderer({
+      target,
+      createSurface: createFakeSurface,
+      graph,
+    });
+
+    const { best, times } = bestOfTimed(() => {
+      const t0 = performance.now();
+      renderer.drawDiff(left, right, {
+        leftPersona: "marble",
+        rightPersona: "ember",
+      });
+      return performance.now() - t0;
+    });
+
+    console.log(
+      `drawDiff-n${String(n)} drawMs=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
+    );
+
+    expect(
+      best,
+      `drawDiffMs=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
+    ).toBeLessThan(DRAW_BUDGET_MS);
   });
 });
