@@ -23,8 +23,6 @@ export type StoryCallout = "comparisons" | null;
 export type StoryStep = {
   id: StoryStepId;
   layout: StoryLayout;
-  /** 0 = Dijkstra, 1 = BMSSP. For layout "both", focusLane is unused for seek (use max work). */
-  focusLane: 0 | 1;
   startFrac: number;
   endFrac: number;
   callout: StoryCallout;
@@ -48,7 +46,6 @@ const STORY_STEPS_TABLE: readonly StoryStep[] = [
   {
     id: "wavefront",
     layout: "dijkstra",
-    focusLane: 0,
     startFrac: 0,
     endFrac: 0.85,
     callout: null,
@@ -58,7 +55,6 @@ const STORY_STEPS_TABLE: readonly StoryStep[] = [
   {
     id: "sorting",
     layout: "dijkstra",
-    focusLane: 0,
     startFrac: 1,
     endFrac: 1,
     callout: "comparisons",
@@ -68,7 +64,6 @@ const STORY_STEPS_TABLE: readonly StoryStep[] = [
   {
     id: "pivots",
     layout: "bmssp",
-    focusLane: 1,
     startFrac: 0,
     endFrac: 0.7,
     callout: null,
@@ -78,7 +73,6 @@ const STORY_STEPS_TABLE: readonly StoryStep[] = [
   {
     id: "race",
     layout: "both",
-    focusLane: 0,
     startFrac: 0,
     endFrac: 0.6,
     callout: null,
