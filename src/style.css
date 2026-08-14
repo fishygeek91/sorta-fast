@@ -398,6 +398,10 @@ body {
   background: var(--panel);
 }
 
+.race-lane[hidden] {
+  display: none;
+}
+
 .race-lane-label {
   font-size: var(--text-label);
   letter-spacing: 0.04em;

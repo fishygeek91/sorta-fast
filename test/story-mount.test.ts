@@ -10,7 +10,13 @@ const UI_DIR = join(TEST_DIR, "../src/ui");
 const TRACE_IMPORT =
   /(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+["'][^"']*trace(?:\.ts)?["']/;
 
-const STORY_UI_FILES = ["story.ts", "storyScript.ts", "storyUrl.ts", "storyDrive.ts"];
+const STORY_UI_FILES = [
+  "story.ts",
+  "storyScript.ts",
+  "storyUrl.ts",
+  "storyDrive.ts",
+  "storyWheel.ts",
+];
 
 /**
  * Read a UI module source file as UTF-8 text.
@@ -57,6 +63,11 @@ describe("story mount wiring", () => {
   it("story.ts source contains STORY_SCROLL_THRESHOLD_PX for wheel and swipe", () => {
     const source = readUiSource("story.ts");
     expect(source).toContain("STORY_SCROLL_THRESHOLD_PX");
+  });
+
+  it("story.ts source uses decideStoryWheel for wheel navigation", () => {
+    const source = readUiSource("story.ts");
+    expect(source).toContain("decideStoryWheel");
   });
 
   for (const filename of STORY_UI_FILES) {

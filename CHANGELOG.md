@@ -9,6 +9,8 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- `.race-lane[hidden]` now sets `display: none`, so Story single-lane beats actually hide the unused algorithm (author `display: flex` was defeating the `hidden` attribute) (#60).
+- Story wheel navigation uses a 600ms cooldown and never exits to Race free play from scroll, so one flick cannot skip the whole tour (#60).
 - WebM export holds ~1.5s after both lanes photo-freeze so the winner banner is captured, and the rAF loop keeps painting while the clock is paused (MediaRecorder was stopping on the freeze frame, then the hold never elapsed) (#21).
 
 ### Added
@@ -54,6 +56,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
+- Story beat table drops unused `focusLane`; story pace/drive tests share `test/helpers/story-traces.ts` (PR #57 nits, #60).
 - Export captions always use the canonical GitHub Pages origin (`https://fishygeek91.github.io/sorta-fast/`), so localhost preview URLs never bake into PNG/WebM (#21).
 - Re-recorded the README hero GIF through both-lane photo-finish (plus a 1.5s last-frame hold) and captioned it as Dijkstra's race-to-target on seed 4, not a BMSSP settle-all win (#21).
 - README hero caption distinguishes photo-finish (Dijkstra on seed 4) from settle-all work-clock (BMSSP) (#21).
