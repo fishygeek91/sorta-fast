@@ -5,9 +5,13 @@ import { LaneState } from "../src/harness/laneState.ts";
 import { fitCamera, projectX, projectY } from "../src/render/camera.ts";
 import { rgbForSettleOrder } from "../src/render/palette.ts";
 import {
+  AGGREGATED_NODE_PX,
   AGGREGATED_RENDER_MIN_N,
+  DSTRUCT_STRIP_HEIGHT,
   GHOST_WINDOW_OPS,
+  MARK_LINE_WIDTH,
   PHOTO_FINISH_GOLD,
+  PHOTO_FINISH_LINE_WIDTH,
   Renderer,
 } from "../src/render/renderer.ts";
 import { EMBER_RGB, THEMES } from "../src/render/theme.ts";
@@ -26,9 +30,6 @@ const RECURSION_TINT_DEPTH_3_ALPHA = Math.min(1, 3 / 5) * 0.08;
 
 /** Batch bloom fill alpha — must match renderer.ts. */
 const BLOOM_FILL_ALPHA = 0.2;
-
-/** D-structure strip height in pixels — must match renderer.ts. */
-const DSTRUCT_STRIP_HEIGHT = 16;
 
 const CANVAS_SIZE = 200;
 
@@ -60,7 +61,10 @@ function drawImageCount(surface: FakeCanvasSurface): number {
   return ctx.calls.filter((call) => call.op === "drawImage").length;
 }
 
-function createRendererWithLayers(graph: Graph): {
+function createRendererWithLayers(
+  graph: Graph,
+  opts?: { pixelScale?: number },
+): {
   renderer: Renderer;
   target: FakeCanvasSurface;
   edge: FakeCanvasSurface;
@@ -75,11 +79,20 @@ function createRendererWithLayers(graph: Graph): {
     layers.push(s);
     return s;
   };
-  const renderer = new Renderer({
+  const rendererOpts: {
+    target: FakeCanvasSurface;
+    createSurface: (w: number, h: number) => FakeCanvasSurface;
+    graph: Graph;
+    pixelScale?: number;
+  } = {
     target,
     createSurface,
     graph,
-  });
+  };
+  if (opts?.pixelScale !== undefined) {
+    rendererOpts.pixelScale = opts.pixelScale;
+  }
+  const renderer = new Renderer(rendererOpts);
   if (layers.length < 4) {
     throw new Error(`expected 4 offscreen layers, got ${String(layers.length)}`);
   }
@@ -145,10 +158,18 @@ function hasBloomFill(fx: FakeCanvasSurface): boolean {
   return fxFillRects(fx).some((call) => call.fillStyle === expected);
 }
 
-function dstructStripFillRects(fx: FakeCanvasSurface): DrawCall[] {
-  const stripY = CANVAS_SIZE - DSTRUCT_STRIP_HEIGHT;
-  return fxFillRects(fx).filter(
-    (call) => call.args[1] === stripY && call.args[3] === DSTRUCT_STRIP_HEIGHT,
+function dstructStripFillRects(
+  fx: FakeCanvasSurface,
+  stripHeight: number = DSTRUCT_STRIP_HEIGHT,
+): DrawCall[] {
+  const stripY = CANVAS_SIZE - stripHeight;
+  return fxFillRects(fx).filter((call) => call.args[1] === stripY && call.args[3] === stripHeight);
+}
+
+function sourceFinishMarkStrokes(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayStrokeCalls(overlay).filter(
+    (call) =>
+      call.strokeStyle === THEMES.dark.sourceMark || call.strokeStyle === THEMES.dark.finishMark,
   );
 }
 
@@ -557,5 +578,178 @@ describe("Renderer", () => {
     expect(
       overlayOps.some((call) => call.op === "fillRect" && call.fillStyle === THEMES.dark.frontier),
     ).toBe(true);
+  });
+
+  it("rejects non-finite or non-positive pixelScale", () => {
+    const graph = tinyGraph();
+    const target = createFakeSurface(CANVAS_SIZE, CANVAS_SIZE);
+    const make = (pixelScale: number) =>
+      new Renderer({ target, createSurface: createFakeSurface, graph, pixelScale });
+    expect(() => make(0)).toThrow(/pixelScale/);
+    expect(() => make(-1)).toThrow(/pixelScale/);
+    expect(() => make(NaN)).toThrow(/pixelScale/);
+    expect(() => make(Infinity)).toThrow(/pixelScale/);
+  });
+
+  it("scales photo-finish gold lineWidth with pixelScale", () => {
+    const drawPhotoFinish = (pixelScale?: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, fx } =
+        pixelScale === undefined
+          ? createRendererWithLayers(graph)
+          : createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      state.pred[1] = 0;
+      state.settleOrder[0] = 0;
+      state.settleOrder[1] = 1;
+
+      renderer.draw(state, {
+        frontier: false,
+        relaxedEdges: false,
+        recursionTint: false,
+        pivotFlares: false,
+        batchBlooms: false,
+        dstructStrip: false,
+        photoFinish: true,
+        finish: 1,
+      });
+
+      return fx;
+    };
+
+    const fxDefault = drawPhotoFinish();
+    const goldDefault = fxGoldStrokeCalls(fxDefault);
+    expect(goldDefault.length).toBeGreaterThan(0);
+    for (const call of goldDefault) {
+      expect(call.lineWidth).toBe(PHOTO_FINISH_LINE_WIDTH);
+    }
+
+    const fxScale1 = drawPhotoFinish(1);
+    const goldScale1 = fxGoldStrokeCalls(fxScale1);
+    expect(goldScale1.length).toBeGreaterThan(0);
+    for (const call of goldScale1) {
+      expect(call.lineWidth).toBe(PHOTO_FINISH_LINE_WIDTH);
+    }
+
+    const fxScale2 = drawPhotoFinish(2);
+    const goldScale2 = fxGoldStrokeCalls(fxScale2);
+    expect(goldScale2.length).toBeGreaterThan(0);
+    for (const call of goldScale2) {
+      expect(call.lineWidth).toBe(PHOTO_FINISH_LINE_WIDTH * 2);
+    }
+  });
+
+  it("scales source and finish mark lineWidth with pixelScale", () => {
+    const drawSourceFinishMarks = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+
+      renderer.draw(state, {
+        frontier: false,
+        relaxedEdges: false,
+        pivotFlares: false,
+        source: 0,
+        finish: 1,
+      });
+
+      return overlay;
+    };
+
+    const overlayScale1 = drawSourceFinishMarks(1);
+    const marksScale1 = sourceFinishMarkStrokes(overlayScale1);
+    expect(marksScale1.length).toBeGreaterThan(0);
+    for (const call of marksScale1) {
+      expect(call.lineWidth).toBe(MARK_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawSourceFinishMarks(2);
+    const marksScale2 = sourceFinishMarkStrokes(overlayScale2);
+    expect(marksScale2.length).toBeGreaterThan(0);
+    for (const call of marksScale2) {
+      expect(call.lineWidth).toBe(MARK_LINE_WIDTH * 2);
+    }
+  });
+
+  it("scales D-structure strip height with pixelScale", () => {
+    const drawDstructStrip = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, fx } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      state.dBlockCount = 2;
+      state.dBlockSizes[0] = 3;
+      state.dBlockSizes[1] = 1;
+
+      renderer.draw(state);
+
+      return fx;
+    };
+
+    const fxScale1 = drawDstructStrip(1);
+    const stripScale1 = dstructStripFillRects(fxScale1);
+    expect(stripScale1.length).toBeGreaterThan(0);
+    for (const call of stripScale1) {
+      expect(call.args[3]).toBe(DSTRUCT_STRIP_HEIGHT);
+    }
+
+    const stripHeightScale2 = DSTRUCT_STRIP_HEIGHT * 2;
+    const fxScale2 = drawDstructStrip(2);
+    const stripScale2 = dstructStripFillRects(fxScale2, stripHeightScale2);
+    expect(stripScale2.length).toBeGreaterThan(0);
+    for (const call of stripScale2) {
+      expect(call.args[3]).toBe(stripHeightScale2);
+    }
+  });
+
+  it("aggregated node footprint is 2×2 at pixelScale 1 and 4×4 at pixelScale 2", () => {
+    const n = AGGREGATED_RENDER_MIN_N;
+
+    const assertFootprint = (fill: FakeCanvasSurface, graph: Graph, footprintPx: number): void => {
+      const camera = fitCamera(graph, CANVAS_SIZE, CANVAS_SIZE);
+      const x0 = graph.x[0];
+      const y0 = graph.y[0];
+      if (x0 === undefined || y0 === undefined) {
+        throw new Error("chain graph missing vertex 0 coordinates");
+      }
+      const px = Math.floor(projectX(camera, x0));
+      const py = Math.floor(projectY(camera, y0));
+      const expected = rgbForSettleOrder(0, n);
+
+      const corner = pixelAt(fill, px, py);
+      expect(corner.a).toBe(255);
+      expect(corner.r).toBe(expected.r);
+      expect(corner.g).toBe(expected.g);
+      expect(corner.b).toBe(expected.b);
+
+      const inner = pixelAt(fill, px + footprintPx - 1, py + footprintPx - 1);
+      expect(inner.a).toBe(255);
+      expect(inner.r).toBe(expected.r);
+      expect(inner.g).toBe(expected.g);
+      expect(inner.b).toBe(expected.b);
+
+      if (px + footprintPx < CANVAS_SIZE) {
+        const beyond = pixelAt(fill, px + footprintPx, py);
+        expect(beyond.a).toBe(0);
+      }
+    };
+
+    const graph = chainGraph(n);
+
+    const { renderer: renderer1, fill: fill1 } = createRendererWithLayers(graph);
+    const state1 = new LaneState(n, graph.m);
+    state1.settleOrder[0] = 0;
+    renderer1.draw(state1);
+    assertFootprint(fill1, graph, AGGREGATED_NODE_PX);
+
+    const { renderer: renderer2, fill: fill2 } = createRendererWithLayers(graph, {
+      pixelScale: 2,
+    });
+    const state2 = new LaneState(n, graph.m);
+    state2.settleOrder[0] = 0;
+    renderer2.draw(state2);
+    assertFootprint(fill2, graph, AGGREGATED_NODE_PX * 2);
   });
 });

@@ -9,6 +9,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Fixed
 
+- Race lane photo-finish gold, source/finish marks, D-structure strip, and aggregated XL nodes keep their CSS-pixel weight on HiDPI backing stores (#79).
 - Race defers lane backing-store resizes until WebM recording ends, so a mid-export window resize no longer clears the live canvases (#77).
 - Race lane canvases size the backing store to CSS size × device pixel ratio so wide viewports no longer upscale a 400px bitmap (#77).
 - Race header and lane column share a centered 1200px axis, so wide viewports no longer leave a left-anchored dead zone (#67).

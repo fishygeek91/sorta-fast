@@ -54,7 +54,7 @@ import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
 import { parseRaceUrl, serializeRaceUrl, type RaceAlgoSlug, type RaceUrlState } from "./raceUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
 import { mountThemeToggle, readStoredTheme } from "./themeToggle.ts";
-import { applyRaceCanvasBackingStore, RACE_LANE_CSS_PX } from "./raceLaneSize.ts";
+import { applyRaceCanvasBackingStore, RACE_LANE_CSS_PX, racePixelScale } from "./raceLaneSize.ts";
 
 /** Default play-speed multiplier. */
 const DEFAULT_SPEED = 8;
@@ -1138,6 +1138,7 @@ export function mountRace(): void {
         target: wrapDomCanvas(ui.canvas),
         createSurface: createDomSurface,
         graph,
+        pixelScale: racePixelScale(ui.canvas.width, ui.canvas.clientWidth),
       });
       ui.renderer.setChrome(THEMES[readStoredTheme()]);
     }
@@ -1284,6 +1285,7 @@ export function mountRace(): void {
             target: wrapDomCanvas(ui.canvas),
             createSurface: createDomSurface,
             graph,
+            pixelScale: racePixelScale(ui.canvas.width, ui.canvas.clientWidth),
           });
           ui.renderer.setChrome(THEMES[readStoredTheme()]);
         }
