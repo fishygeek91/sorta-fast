@@ -163,6 +163,10 @@ export class RaceWorkerPool {
           this.graphN = message.n;
           this.graphM = message.m;
           const graph = graphFromTraceMessage(message);
+          // First graph wins so playback can start before every lane finishes
+          // generate. A later BMSSP echo is not retrofitted — Race/Story then
+          // fall back to findPivotsKFromEcho(graph.n). Correct while generators
+          // preserve n; do not drop this comment if a kind starts rounding n.
           if (typeof message.k === "number" && typeof message.t === "number") {
             handlers.onGraph(graph, { k: message.k, t: message.t });
           } else {

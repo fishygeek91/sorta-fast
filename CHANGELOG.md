@@ -22,6 +22,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Added
 
+- M-size `drawDiff` replay-perf budget test (best-of-3 stub canvas, 50ms CI ceiling) for settle-diff dual-lane fills (#68).
 - Race Diff view (`view=diff`) tints who-settled-where at equal billed work and marks out-of-order settles with ink ticks, with a shareable URL, glossary entry, and both-theme fills (#68).
 - Race mode surfaces a shared canvas legend (frontier, settled gradient, unreached, gold path), persona identity dots, and hover tooltips on counters plus Dice/BMSSP controls, and labels the per-lane bar as percent settled so it is not mistaken for playback (#65).
 - Race mode marks the photo-finish winner on the lane panels, highlights each lane's best-in-class secondary counters, shows a live settle-count lead until the first freeze, and hoists the existing verdict banner above the lanes so it stays visible at 1440×900 (#63).
@@ -68,7 +69,7 @@ Sorta Fast is pre-v1.0 (`package.json` is `0.0.0`); entries land under **Unrelea
 
 ### Changed
 
-- BMSSP worker `graph` messages echo resolved `{k, t}`; Race/Lens/Story narrate FindPivots k from that echo (or `graph.n` fallback), not URL `n` (#56).
+- BMSSP worker `graph` messages echo resolved `{k, t}`; Race/Lens/Story narrate FindPivots k from that echo (or `graph.n` fallback), not URL `n`. Parser rejects a half pair (`k` XOR `t`) so a malformed echo cannot silently fall back (#56).
 - Race and Lens merge Play/Pause into one toggle, separate PNG/WebM from the playback cluster, and tooltip Step event, Step op, and disabled exports (#66).
 - Mode nav marks the active Race/Lens/Story button as selected (`aria-current="page"`) instead of `disabled`, drops the duplicate mode subtitle, and separates the theme toggle behind a divider (#64).
 - CI 1M-event Vitest guard stays at 200ms with sequential files; the 100ms number is no longer only a comment (#35).

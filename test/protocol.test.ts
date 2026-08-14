@@ -91,6 +91,12 @@ describe("parseWorkerToMain", () => {
     expect(parseWorkerToMain({ ...base, t: 2.5 })).toBeNull();
     expect(parseWorkerToMain({ ...base, t: "3" })).toBeNull();
   });
+
+  it("rejects a half pair of k and t", () => {
+    const base = sampleGraphMessage();
+    expect(parseWorkerToMain({ ...base, k: 4 })).toBeNull();
+    expect(parseWorkerToMain({ ...base, t: 2 })).toBeNull();
+  });
 });
 
 describe("graphFromTraceMessage", () => {

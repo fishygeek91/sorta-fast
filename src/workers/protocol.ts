@@ -39,9 +39,9 @@ export type TraceGraphMessage = {
   weights: Float64Array;
   x: Float64Array;
   y: Float64Array;
-  /** BMSSP only: resolved FindPivots/level k. Dijkstra omits. */
+  /** BMSSP only: resolved FindPivots/level k. Must arrive with `t`; Dijkstra omits both. */
   k?: number;
-  /** BMSSP only: resolved block parameter t. Dijkstra omits. */
+  /** BMSSP only: resolved block parameter t. Must arrive with `k`; Dijkstra omits both. */
   t?: number;
 };
 
@@ -111,6 +111,10 @@ export function parseWorkerToMain(data: unknown): WorkerToMain | null {
       }
       const t = parseOptionalBmsspInt(record["t"]);
       if (t === null) {
+        return null;
+      }
+      // BMSSP always sends both; Dijkstra omits both. A half pair is malformed.
+      if ((k === undefined) !== (t === undefined)) {
         return null;
       }
       const message: TraceGraphMessage = {
