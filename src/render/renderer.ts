@@ -7,7 +7,7 @@
  */
 
 import { SIZE_PRESETS, type Graph } from "../core/graph.ts";
-import { LaneState, UNSETTLED } from "../harness/laneState.ts";
+import { FOREST_EDGE_CUT, FOREST_EDGE_GROW, LaneState, UNSETTLED } from "../harness/laneState.ts";
 import { fitCamera, projectX, projectY, type Camera } from "./camera.ts";
 import {
   createDirtyRect,
@@ -18,7 +18,7 @@ import {
   type DirtyRect,
 } from "./dirtyRect.ts";
 import { devicePx, devicePxInt } from "./devicePx.ts";
-import { cssColorForSettleOrder, rgbForSettleOrder } from "./palette.ts";
+import { rgbForSettleOrder, rgbForSubtree } from "./palette.ts";
 import {
   fillSettleDiff,
   SETTLE_DIFF_BOTH,
@@ -46,11 +46,20 @@ const FRONTIER_LINE_WIDTH = 1.5;
 /** Ghost edge line width in CSS pixels (issue #79). Not scaled by pixelScale. */
 const GHOST_LINE_WIDTH = 1.5;
 
+/** Forest grow edge line width in CSS pixels (issue #27). Not scaled by pixelScale. */
+const FOREST_GROW_LINE_WIDTH = 1.5;
+
+/** Forest cut edge line width in CSS pixels (issue #27). Not scaled by pixelScale. */
+const FOREST_CUT_LINE_WIDTH = 2.5;
+
 /** Full circle arc in radians. */
 const TAU = Math.PI * 2;
 
 /** Ghost trail window in billed ops (scrub-safe; not wall-clock). */
 export const GHOST_WINDOW_OPS = 10_000;
+
+/** Forest grow/cut pulse window in billed ops (scrub-safe; not wall-clock). */
+export const FOREST_GROW_WINDOW_OPS = GHOST_WINDOW_OPS;
 
 /** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
@@ -80,6 +89,12 @@ export type OverlayFlags = {
   finish?: number;
   /** Gold pred-walk path on the fx layer when true and finish is in range with path length >= 2. */
   photoFinish?: boolean;
+  /** DMSY spanning-forest grow edges on the overlay layer (issue #27). */
+  forestGrow?: boolean;
+  /** DMSY partition cut edges on the overlay layer (issue #27). */
+  forestCut?: boolean;
+  /** DMSY subtree patchwork settle fills keyed by `forestTree` (issue #27). */
+  subtreePatchwork?: boolean;
 };
 
 /** Resolved overlay toggles — omitted keys default to enabled; photo-finish marks resolved separately. */
@@ -93,6 +108,9 @@ type ResolvedOverlayFlags = {
   source: number;
   finish: number | undefined;
   photoFinish: boolean;
+  forestGrow: boolean;
+  forestCut: boolean;
+  subtreePatchwork: boolean;
 };
 
 /** Recursion-depth tint alpha scale (full canvas on fx layer). */
@@ -229,6 +247,9 @@ function resolveOverlayFlags(overlays?: OverlayFlags): ResolvedOverlayFlags {
     source: overlays?.source ?? 0,
     finish: overlays?.finish,
     photoFinish: overlays?.photoFinish === true,
+    forestGrow: overlays?.forestGrow !== false,
+    forestCut: overlays?.forestCut !== false,
+    subtreePatchwork: overlays?.subtreePatchwork !== false,
   };
 }
 
@@ -305,12 +326,18 @@ export class Renderer {
   private lastFrontier: Uint8Array;
   private srcOfEdge: Uint32Array;
   private lastGhost: Uint8Array;
+  private lastForestGrow: Uint8Array;
+  private lastForestCut: Uint8Array;
+  private lastForestTree: Int32Array;
   private lastFrontierOverlay: boolean;
   private lastRelaxedEdgesOverlay: boolean;
   private lastRecursionTintOverlay: boolean;
   private lastPivotFlaresOverlay: boolean;
   private lastBatchBloomsOverlay: boolean;
   private lastDstructStripOverlay: boolean;
+  private lastForestGrowOverlay: boolean;
+  private lastForestCutOverlay: boolean;
+  private lastSubtreePatchworkOverlay: boolean;
   private lastSource: number;
   private lastFinish: number | undefined;
   private lastPhotoFinish: boolean;
@@ -328,6 +355,8 @@ export class Renderer {
   private frontierStroke: string;
   /** Ghost relaxed-edge stroke color. */
   private ghostStroke: string;
+  /** DMSY forest grow/cut overlay stroke (moss accent). */
+  private mossStroke: string;
   /** BMSSP ember accent channels for `rgba()` templates. */
   private emberRgb: string;
   /** D-structure schematic stone fill. */
@@ -395,12 +424,19 @@ export class Renderer {
     this.lastFrontier = new Uint8Array(opts.graph.n);
     this.srcOfEdge = buildSrcOfEdge(opts.graph);
     this.lastGhost = new Uint8Array(opts.graph.m);
+    this.lastForestGrow = new Uint8Array(opts.graph.m);
+    this.lastForestCut = new Uint8Array(opts.graph.m);
+    this.lastForestTree = new Int32Array(opts.graph.n);
+    this.lastForestTree.fill(UNSETTLED);
     this.lastFrontierOverlay = true;
     this.lastRelaxedEdgesOverlay = true;
     this.lastRecursionTintOverlay = true;
     this.lastPivotFlaresOverlay = true;
     this.lastBatchBloomsOverlay = true;
     this.lastDstructStripOverlay = true;
+    this.lastForestGrowOverlay = true;
+    this.lastForestCutOverlay = true;
+    this.lastSubtreePatchworkOverlay = true;
     this.lastSource = 0;
     this.lastFinish = undefined;
     this.lastPhotoFinish = false;
@@ -423,6 +459,7 @@ export class Renderer {
     this.edgeStroke = dark.hairline;
     this.frontierStroke = dark.frontier;
     this.ghostStroke = dark.ghost;
+    this.mossStroke = dark.moss;
     this.emberRgb = EMBER_RGB;
     this.stoneFill = dark.stoneFill;
     this.sourceMarkStroke = dark.sourceMark;
@@ -452,6 +489,7 @@ export class Renderer {
     this.edgeStroke = tokens.hairline;
     this.frontierStroke = tokens.frontier;
     this.ghostStroke = tokens.ghost;
+    this.mossStroke = tokens.moss;
     this.emberRgb = EMBER_RGB;
     this.stoneFill = tokens.stoneFill;
     this.sourceMarkStroke = tokens.sourceMark;
@@ -481,6 +519,10 @@ export class Renderer {
     this.lastFrontier = new Uint8Array(graph.n);
     this.srcOfEdge = buildSrcOfEdge(graph);
     this.lastGhost = new Uint8Array(graph.m);
+    this.lastForestGrow = new Uint8Array(graph.m);
+    this.lastForestCut = new Uint8Array(graph.m);
+    this.lastForestTree = new Int32Array(graph.n);
+    this.lastForestTree.fill(UNSETTLED);
     this.needsFullComposite = true;
     this.lastRecursionDepth = 0;
     this.lastBloomActive = 0;
@@ -530,6 +572,9 @@ export class Renderer {
       flags.pivotFlares !== this.lastPivotFlaresOverlay ||
       flags.batchBlooms !== this.lastBatchBloomsOverlay ||
       flags.dstructStrip !== this.lastDstructStripOverlay ||
+      flags.forestGrow !== this.lastForestGrowOverlay ||
+      flags.forestCut !== this.lastForestCutOverlay ||
+      flags.subtreePatchwork !== this.lastSubtreePatchworkOverlay ||
       flags.source !== this.lastSource ||
       flags.finish !== this.lastFinish ||
       flags.photoFinish !== this.lastPhotoFinish
@@ -537,6 +582,8 @@ export class Renderer {
       markFull(this.dirty, width, height);
       this.needsFullComposite = true;
     }
+
+    const patchworkToggled = flags.subtreePatchwork !== this.lastSubtreePatchworkOverlay;
 
     let hadUnsettle = false;
     for (let v = 0; v < n; v += 1) {
@@ -564,7 +611,18 @@ export class Renderer {
           throw new Error(`settleOrder[${String(v)}] is missing`);
         }
         if (order !== UNSETTLED) {
-          this.drawSettledNode(fillCtx, v, order, n);
+          this.drawSettledNode(fillCtx, v, order, n, state, flags);
+        }
+      }
+    } else if (patchworkToggled) {
+      for (let v = 0; v < n; v += 1) {
+        const order = state.settleOrder[v];
+        if (order === undefined) {
+          throw new Error(`settleOrder[${String(v)}] is missing`);
+        }
+        if (order !== UNSETTLED) {
+          this.drawSettledNode(fillCtx, v, order, n, state, flags);
+          fillChanged = true;
         }
       }
     } else {
@@ -575,7 +633,14 @@ export class Renderer {
           throw new Error(`settleOrder[${String(v)}] is missing`);
         }
         if (prev === UNSETTLED && order !== UNSETTLED) {
-          this.drawSettledNode(fillCtx, v, order, n);
+          this.drawSettledNode(fillCtx, v, order, n, state, flags);
+          fillChanged = true;
+        } else if (
+          flags.subtreePatchwork &&
+          order !== UNSETTLED &&
+          state.forestTree[v] !== this.lastForestTree[v]
+        ) {
+          this.drawSettledNode(fillCtx, v, order, n, state, flags);
           fillChanged = true;
         }
       }
@@ -608,6 +673,38 @@ export class Renderer {
           }
           this.includeVertexDirty(src);
           this.includeVertexDirty(targetAt(targets, e));
+        }
+      }
+    }
+
+    if (!this.usesAggregated()) {
+      const targets = this.graph.targets;
+      if (flags.forestGrow) {
+        for (let e = 0; e < m; e += 1) {
+          const shouldDraw = this.shouldDrawForestGrow(e, state);
+          const wasDrawn = this.lastForestGrow[e] === 1;
+          if (shouldDraw !== wasDrawn) {
+            const src = this.srcOfEdge[e];
+            if (src === undefined) {
+              throw new Error(`srcOfEdge[${String(e)}] is missing`);
+            }
+            this.includeVertexDirty(src);
+            this.includeVertexDirty(targetAt(targets, e));
+          }
+        }
+      }
+      if (flags.forestCut) {
+        for (let e = 0; e < m; e += 1) {
+          const shouldDraw = this.shouldDrawForestCut(e, state);
+          const wasDrawn = this.lastForestCut[e] === 1;
+          if (shouldDraw !== wasDrawn) {
+            const src = this.srcOfEdge[e];
+            if (src === undefined) {
+              throw new Error(`srcOfEdge[${String(e)}] is missing`);
+            }
+            this.includeVertexDirty(src);
+            this.includeVertexDirty(targetAt(targets, e));
+          }
         }
       }
     }
@@ -650,12 +747,23 @@ export class Renderer {
         throw new Error(`frontier[${String(v)}] is missing`);
       }
       this.lastFrontier[v] = curFrontier;
+      const curTree = state.forestTree[v];
+      if (curTree === undefined) {
+        throw new Error(`forestTree[${String(v)}] is missing`);
+      }
+      this.lastForestTree[v] = curTree;
     }
 
     for (let e = 0; e < m; e += 1) {
       const drawn =
         flags.relaxedEdges && !this.usesAggregated() && this.shouldDrawGhost(e, state) ? 1 : 0;
       this.lastGhost[e] = drawn;
+      const growDrawn =
+        flags.forestGrow && !this.usesAggregated() && this.shouldDrawForestGrow(e, state) ? 1 : 0;
+      this.lastForestGrow[e] = growDrawn;
+      const cutDrawn =
+        flags.forestCut && !this.usesAggregated() && this.shouldDrawForestCut(e, state) ? 1 : 0;
+      this.lastForestCut[e] = cutDrawn;
     }
 
     this.lastFrontierOverlay = flags.frontier;
@@ -664,6 +772,9 @@ export class Renderer {
     this.lastPivotFlaresOverlay = flags.pivotFlares;
     this.lastBatchBloomsOverlay = flags.batchBlooms;
     this.lastDstructStripOverlay = flags.dstructStrip;
+    this.lastForestGrowOverlay = flags.forestGrow;
+    this.lastForestCutOverlay = flags.forestCut;
+    this.lastSubtreePatchworkOverlay = flags.subtreePatchwork;
     this.lastSource = flags.source;
     this.lastFinish = flags.finish;
     this.lastPhotoFinish = flags.photoFinish;
@@ -815,6 +926,9 @@ export class Renderer {
       pivotFlares: false,
       batchBlooms: false,
       dstructStrip: false,
+      forestGrow: false,
+      forestCut: false,
+      subtreePatchwork: false,
       source: opts.source ?? 0,
       finish: opts.finish,
       photoFinish: false,
@@ -934,9 +1048,51 @@ export class Renderer {
   }
 
   /**
+   * Resolve settled-node fill RGB from settle order or DMSY subtree patchwork (issue #27).
+   */
+  private settledFillRgb(
+    v: number,
+    order: number,
+    n: number,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): { r: number; g: number; b: number } {
+    if (flags.subtreePatchwork) {
+      const tree = state.forestTree[v];
+      if (tree === undefined) {
+        throw new Error(`forestTree[${String(v)}] is missing`);
+      }
+      if (tree !== UNSETTLED) {
+        return rgbForSubtree(tree);
+      }
+    }
+    return rgbForSettleOrder(order, n);
+  }
+
+  /**
+   * Resolve settled-node fill CSS color from settle order or DMSY subtree patchwork (issue #27).
+   */
+  private settledFillCss(
+    v: number,
+    order: number,
+    n: number,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): string {
+    const { r, g, b } = this.settledFillRgb(v, order, n, state, flags);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  /**
    * Write one aggregated settled node (2 CSS px footprint) into the CPU buffer and expand the dirty rect.
    */
-  private writeAggregatedNode(v: number, order: number, n: number): void {
+  private writeAggregatedNode(
+    v: number,
+    order: number,
+    n: number,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): void {
     const pixels = this.fillPixels;
     if (pixels === null) {
       throw new Error("writeAggregatedNode: fillPixels is null");
@@ -946,7 +1102,7 @@ export class Renderer {
     const camera = this.camera;
     const cx = Math.floor(projectX(camera, vertexX(graph, v)));
     const cy = Math.floor(projectY(camera, vertexY(graph, v)));
-    const { r, g, b } = rgbForSettleOrder(order, n);
+    const { r, g, b } = this.settledFillRgb(v, order, n, state, flags);
     const data = pixels.data;
     const canvasWidth = pixels.width;
     const canvasHeight = pixels.height;
@@ -1021,9 +1177,16 @@ export class Renderer {
   /**
    * Fill one settled vertex circle on the fill layer and expand the dirty rect.
    */
-  private drawSettledNode(ctx: DrawContext, v: number, order: number, n: number): void {
+  private drawSettledNode(
+    ctx: DrawContext,
+    v: number,
+    order: number,
+    n: number,
+    state: LaneState,
+    flags: ResolvedOverlayFlags,
+  ): void {
     if (this.usesAggregated()) {
-      this.writeAggregatedNode(v, order, n);
+      this.writeAggregatedNode(v, order, n, state, flags);
       return;
     }
 
@@ -1033,7 +1196,7 @@ export class Renderer {
     const cy = projectY(camera, vertexY(graph, v));
     const radius = camera.radius;
 
-    ctx.fillStyle = cssColorForSettleOrder(order, n);
+    ctx.fillStyle = this.settledFillCss(v, order, n, state, flags);
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, TAU);
     ctx.fill();
@@ -1296,6 +1459,42 @@ export class Renderer {
   }
 
   /**
+   * Whether edge `e` should show a DMSY forest grow stroke at the current work cursor.
+   */
+  private shouldDrawForestGrow(e: number, state: LaneState): boolean {
+    const op = state.forestEdgeOp[e];
+    if (op === undefined) {
+      throw new Error(`forestEdgeOp[${String(e)}] is missing`);
+    }
+    if (op === FOREST_EDGE_GROW) {
+      return true;
+    }
+    if (op === FOREST_EDGE_CUT) {
+      return false;
+    }
+    const work = state.forestEdgeWork[e];
+    if (work === undefined) {
+      throw new Error(`forestEdgeWork[${String(e)}] is missing`);
+    }
+    if (work === UNSETTLED) {
+      return false;
+    }
+    const age = state.work - work;
+    return age >= 0 && age < FOREST_GROW_WINDOW_OPS;
+  }
+
+  /**
+   * Whether edge `e` should show a DMSY forest cut stroke at the current work cursor.
+   */
+  private shouldDrawForestCut(e: number, state: LaneState): boolean {
+    const op = state.forestEdgeOp[e];
+    if (op === undefined) {
+      throw new Error(`forestEdgeOp[${String(e)}] is missing`);
+    }
+    return op === FOREST_EDGE_CUT;
+  }
+
+  /**
    * Redraw the overlay layer: frontier rings, ghost trails, and pivot flare rings.
    */
   private drawOverlay(state: LaneState, flags: ResolvedOverlayFlags): void {
@@ -1379,6 +1578,74 @@ export class Renderer {
       }
 
       if (drewGhost) {
+        ctx.stroke();
+      }
+    }
+
+    if (flags.forestGrow && !aggregated) {
+      const m = state.m;
+      const targets = graph.targets;
+      const srcOfEdge = this.srcOfEdge;
+
+      ctx.strokeStyle = this.mossStroke;
+      ctx.lineWidth = FOREST_GROW_LINE_WIDTH;
+      ctx.beginPath();
+
+      let drewGrow = false;
+      for (let e = 0; e < m; e += 1) {
+        if (!this.shouldDrawForestGrow(e, state)) {
+          continue;
+        }
+
+        const src = srcOfEdge[e];
+        if (src === undefined) {
+          throw new Error(`srcOfEdge[${String(e)}] is missing`);
+        }
+        const tgt = targetAt(targets, e);
+        const x0 = projectX(camera, vertexX(graph, src));
+        const y0 = projectY(camera, vertexY(graph, src));
+        const x1 = projectX(camera, vertexX(graph, tgt));
+        const y1 = projectY(camera, vertexY(graph, tgt));
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        drewGrow = true;
+      }
+
+      if (drewGrow) {
+        ctx.stroke();
+      }
+    }
+
+    if (flags.forestCut && !aggregated) {
+      const m = state.m;
+      const targets = graph.targets;
+      const srcOfEdge = this.srcOfEdge;
+
+      ctx.strokeStyle = this.mossStroke;
+      ctx.lineWidth = FOREST_CUT_LINE_WIDTH;
+      ctx.beginPath();
+
+      let drewCut = false;
+      for (let e = 0; e < m; e += 1) {
+        if (!this.shouldDrawForestCut(e, state)) {
+          continue;
+        }
+
+        const src = srcOfEdge[e];
+        if (src === undefined) {
+          throw new Error(`srcOfEdge[${String(e)}] is missing`);
+        }
+        const tgt = targetAt(targets, e);
+        const x0 = projectX(camera, vertexX(graph, src));
+        const y0 = projectY(camera, vertexY(graph, src));
+        const x1 = projectX(camera, vertexX(graph, tgt));
+        const y1 = projectY(camera, vertexY(graph, tgt));
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        drewCut = true;
+      }
+
+      if (drewCut) {
         ctx.stroke();
       }
     }

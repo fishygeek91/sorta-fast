@@ -181,3 +181,43 @@ export function rgbForSettleOrder(order: number, n: number): { r: number; g: num
   const t = settleGradientT(order, n);
   return unpackRgb(rgbAt(t));
 }
+
+/** Deterministic integer mix for subtree id → LUT index (issue #27). */
+const SUBTREE_MIX = 2654435761;
+
+/**
+ * Map a DMSY forest subtree id to a LUT index in `[0, PALETTE_STOPS)`.
+ *
+ * @param tree - Non-negative integer subtree / search id.
+ * @throws {RangeError} when `tree` is not a non-negative integer.
+ */
+function subtreeLutIndex(tree: number): number {
+  if (!Number.isInteger(tree) || tree < 0) {
+    throw new RangeError(`tree must be a non-negative integer, got ${tree}`);
+  }
+  return ((tree * SUBTREE_MIX) >>> 0) % PALETTE_STOPS;
+}
+
+/**
+ * Patchwork fill color for a DMSY subtree id — same LUT as settle order, keyed by tree.
+ *
+ * @param tree - Non-negative integer subtree / search id.
+ * @returns CSS `rgb(r, g, b)` string with integer channels.
+ * @throws {RangeError} when `tree` is not a non-negative integer.
+ */
+export function cssColorForSubtree(tree: number): string {
+  const { r, g, b } = rgbForSubtree(tree);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Same mapping as {@link cssColorForSubtree}, returns `{ r, g, b }` each `0..255`.
+ *
+ * @param tree - Non-negative integer subtree / search id.
+ * @throws {RangeError} when `tree` is not a non-negative integer.
+ */
+export function rgbForSubtree(tree: number): { r: number; g: number; b: number } {
+  const index = subtreeLutIndex(tree);
+  const t = index / (PALETTE_STOPS - 1);
+  return unpackRgb(rgbAt(t));
+}

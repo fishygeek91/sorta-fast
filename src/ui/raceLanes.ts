@@ -68,9 +68,8 @@ export function lanesFromRaceList(race: readonly RaceAlgoSlug[]): RaceLaneConfig
 /**
  * Build the lane list for a race from URL search params.
  *
- * Derives lanes from {@link parseRaceUrl}: default two lanes (Dijkstra + BMSSP),
- * three when `lane3=1` (DMSY), legacy `lane3=dijkstra` (stub), or explicit `race=`.
- * `dmsy` tokens in `race=` are still ignored until issue #27.
+ * Derives lanes from {@link parseRaceUrl}: default three lanes (Dijkstra + BMSSP + DMSY),
+ * legacy `lane3=1` (DMSY alias), `lane3=dijkstra` (Dijkstra B stub), or explicit `race=`.
  *
  * @param search - Query string or parsed {@link URLSearchParams}.
  */

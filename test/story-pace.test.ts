@@ -16,7 +16,8 @@ describe("storyNominalSeconds — pedagogical seed", () => {
   it("nominal tour duration is about 90 seconds on city/500/1729", () => {
     const dijkstra = collectTraceJob("dijkstra", STORY_TRACE_SPEC);
     const bmssp = collectTraceJob("bmssp", STORY_TRACE_SPEC);
-    const totals = totalsFromTraces(dijkstra, bmssp);
+    const dmsy = collectTraceJob("dmsy", STORY_TRACE_SPEC);
+    const totals = totalsFromTraces(dijkstra, bmssp, dmsy);
     const seconds = storyNominalSeconds(totals);
 
     expect(Number.isFinite(seconds)).toBe(true);

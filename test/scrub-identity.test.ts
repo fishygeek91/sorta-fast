@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { run } from "../src/core/dijkstra.ts";
 import { generateGraph, packCsr } from "../src/core/graph.ts";
 import { costOf, type TraceChunk, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
-import { D_BLOCK_CAP, type LaneState } from "../src/harness/laneState.ts";
+import { D_BLOCK_CAP, FOREST_SUBTREE_CAP, type LaneState } from "../src/harness/laneState.ts";
 import { Playback } from "../src/harness/playback.ts";
 import { TraceBuffer } from "../src/harness/traceBuffer.ts";
 import { drainBmsspRun } from "./bmssp-helpers.ts";
+import { drainDmsyRun } from "./dmsy-helpers.ts";
 
 /** Assert two lane snapshots are identical for scrub-safe playback. */
 function compareLane(a: LaneState, b: LaneState): void {
@@ -36,6 +37,10 @@ function compareLane(a: LaneState, b: LaneState): void {
   expect(a.bloomMaxY).toBe(b.bloomMaxY);
   expect(a.bloomActive).toBe(b.bloomActive);
   expect(a.dBlockCount).toBe(b.dBlockCount);
+  expect(a.forestGrowCount).toBe(b.forestGrowCount);
+  expect(a.forestCutCount).toBe(b.forestCutCount);
+  expect(a.subtreeCount).toBe(b.subtreeCount);
+  expect(a.sortedRegionSize).toBe(b.sortedRegionSize);
 
   for (let v = 0; v < a.n; v += 1) {
     const aOrder = a.settleOrder[v];
@@ -67,6 +72,9 @@ function compareLane(a: LaneState, b: LaneState): void {
     expect(aBloom).toBe(bBloom);
 
     expect(a.outOfOrder[v]).toBe(b.outOfOrder[v]);
+
+    expect(a.forestTree[v]).toBe(b.forestTree[v]);
+    expect(a.forestHeadEdge[v]).toBe(b.forestHeadEdge[v]);
   }
 
   for (let i = 0; i < D_BLOCK_CAP; i += 1) {
@@ -79,6 +87,14 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aRelaxWork = a.lastRelaxWork[e];
     const bRelaxWork = b.lastRelaxWork[e];
     expect(aRelaxWork).toBe(bRelaxWork);
+
+    expect(a.forestEdgeOp[e]).toBe(b.forestEdgeOp[e]);
+    expect(a.forestEdgeWork[e]).toBe(b.forestEdgeWork[e]);
+    expect(a.forestEdgeTree[e]).toBe(b.forestEdgeTree[e]);
+  }
+
+  for (let i = 0; i < FOREST_SUBTREE_CAP; i += 1) {
+    expect(a.subtreeIds[i]).toBe(b.subtreeIds[i]);
   }
 }
 
@@ -220,6 +236,44 @@ describe("scrub identity BMSSP maze trace", () => {
     });
 
     it(`BMSSP maze: Playback.seek matches fresh at T=${String(t)}`, () => {
+      const fresh = new TraceBuffer(graph, chunks);
+      fresh.seekWork(t);
+
+      const playback = new Playback(graph, chunks);
+      playback.seek(t);
+
+      compareLane(fresh.state, playback.state);
+    });
+  }
+});
+
+describe("scrub identity DMSY maze trace", () => {
+  const graph = generateGraph("maze", 40, 1);
+  const { events } = drainDmsyRun(graph, 0);
+  const chunks = chunksFromEvents(events);
+
+  const probe = new TraceBuffer(graph, chunks);
+  const totalWork = probe.totalWork;
+  const mid = Math.floor(totalWork / 2);
+
+  /** Event-boundary tick: cumulative work after the first quarter of events. */
+  const eventBoundaryT = workAtEventIndex(events, Math.floor(events.length / 4));
+
+  const targets = [0, mid, eventBoundaryT, totalWork];
+
+  for (const t of targets) {
+    it(`DMSY maze: scrub identity at T=${String(t)}`, () => {
+      const fresh = new TraceBuffer(graph, chunks);
+      fresh.seekWork(t);
+
+      const scrub = new TraceBuffer(graph, chunks);
+      scrub.seekWork(scrub.totalWork);
+      scrub.seekWork(t);
+
+      compareLane(fresh.state, scrub.state);
+    });
+
+    it(`DMSY maze: Playback.seek matches fresh at T=${String(t)}`, () => {
       const fresh = new TraceBuffer(graph, chunks);
       fresh.seekWork(t);
 

@@ -11,11 +11,20 @@ import { type Graph } from "../core/graph.ts";
 import {
   BATCH_PHASE,
   DSTRUCT_OP,
+  FOREST_OP,
   RECURSE_DIR,
   TRACE_KIND,
   type TraceChunk,
 } from "../core/trace.ts";
-import { D_BLOCK_CAP, LaneState, UNSETTLED } from "./laneState.ts";
+import {
+  D_BLOCK_CAP,
+  FOREST_EDGE_CUT,
+  FOREST_EDGE_GROW,
+  FOREST_EDGE_NONE,
+  FOREST_SUBTREE_CAP,
+  LaneState,
+  UNSETTLED,
+} from "./laneState.ts";
 
 /** Keyframe interval in billed ops for backward scrub restores (design.md §4.3). */
 export const KEYFRAME_OPS = 250_000;
@@ -523,6 +532,7 @@ export class TraceBuffer {
           target.currentBound = bound;
           target.findPivotsK = this.findPivotsKParam;
           target.pivotsFoundThisCall = 0;
+          target.subtreeCount = 0;
           target.batchRound = 0;
           target.lastPullN = 0;
         } else if (dir === RECURSE_DIR.out) {
@@ -539,8 +549,24 @@ export class TraceBuffer {
         break;
       }
 
-      case TRACE_KIND.forest:
+      case TRACE_KIND.forest: {
+        const op = chunk.aux0[row];
+        const edge = chunk.edge[row];
+        const treeRaw = chunk.aux1[row];
+        if (op === undefined || edge === undefined) {
+          throw new Error(`missing forest fields at event ${String(eventIndex)}`);
+        }
+        const tree = this.validateForestTree(treeRaw, eventIndex);
+        const workStamp = target.work + cost;
+        if (op === FOREST_OP.grow) {
+          this.applyForestGrow(target, edge, tree, workStamp, eventIndex);
+        } else if (op === FOREST_OP.cut) {
+          this.applyForestCut(target, edge, tree, workStamp, eventIndex);
+        } else {
+          throw new Error(`invalid forest op ${String(op)} at event ${String(eventIndex)}`);
+        }
         break;
+      }
 
       case TRACE_KIND.dstruct: {
         target.batchRound = 0;
@@ -552,11 +578,13 @@ export class TraceBuffer {
         target.dstructOps += 1;
         if (op === DSTRUCT_OP.insert || op === DSTRUCT_OP.merge) {
           this.appendDBlock(target, n);
+          target.sortedRegionSize += n;
         } else if (op === DSTRUCT_OP.batchPrepend) {
           this.prependDBlock(target, n);
         } else if (op === DSTRUCT_OP.pull) {
           target.lastPullN = n;
           this.pullDBlockKeys(target, n);
+          target.sortedRegionSize = Math.max(0, target.sortedRegionSize - n);
         } else {
           throw new Error(`invalid dstruct op ${String(op)} at event ${String(eventIndex)}`);
         }
@@ -569,6 +597,159 @@ export class TraceBuffer {
 
     target.work += cost;
     target.eventIndex += 1;
+  }
+
+  /**
+   * Validate forest `tree` id is a non-negative integer.
+   *
+   * @param tree - Raw `aux1` column value.
+   * @param eventIndex - Global event index for error messages.
+   * @returns Validated tree id.
+   * @throws If `tree` is missing or not a non-negative integer.
+   */
+  private validateForestTree(tree: number | undefined, eventIndex: number): number {
+    if (tree === undefined) {
+      throw new Error(`missing forest tree at event ${String(eventIndex)}`);
+    }
+    if (!Number.isInteger(tree) || tree < 0) {
+      throw new Error(
+        `forest tree ${String(tree)} must be a non-negative integer at event ${String(eventIndex)}`,
+      );
+    }
+    return tree;
+  }
+
+  /**
+   * Resolve CSR tail/head for forest edge `e`, validating range.
+   *
+   * @param target - Lane state supplying `n` and `m`.
+   * @param e - CSR edge index.
+   * @param eventIndex - Global event index for error messages.
+   * @returns Tail and head vertex indices.
+   * @throws If `e` or resolved endpoints are out of range.
+   */
+  private resolveForestEndpoints(
+    target: LaneState,
+    e: number,
+    eventIndex: number,
+  ): { from: number; to: number } {
+    if (!Number.isInteger(e) || e < 0 || e >= target.m) {
+      throw new Error(
+        `forest edge ${String(e)} out of range [0, ${String(target.m)}) at event ${String(eventIndex)}`,
+      );
+    }
+    const to = this.graph.targets[e];
+    if (to === undefined) {
+      throw new Error(`missing forest target for edge ${String(e)} at event ${String(eventIndex)}`);
+    }
+    if (to < 0 || to >= target.n) {
+      throw new Error(
+        `forest target ${String(to)} out of range [0, ${String(target.n)}) at event ${String(eventIndex)}`,
+      );
+    }
+    const from = this.edgeSources[e];
+    if (from === undefined) {
+      throw new Error(`missing forest source for edge ${String(e)} at event ${String(eventIndex)}`);
+    }
+    if (from < 0 || from >= target.n) {
+      throw new Error(
+        `forest source ${String(from)} out of range [0, ${String(target.n)}) at event ${String(eventIndex)}`,
+      );
+    }
+    return { from, to };
+  }
+
+  /**
+   * Apply a spanning-forest grow overlay (paper-notes DMSY-P23).
+   *
+   * @param target - Lane state whose forest fields are mutated.
+   * @param e - CSR edge index being grown.
+   * @param tree - Subtree / search id stamped on the head vertex.
+   * @param workStamp - Billed work after this event (`target.work + cost`).
+   * @param eventIndex - Global event index for error messages.
+   */
+  private applyForestGrow(
+    target: LaneState,
+    e: number,
+    tree: number,
+    workStamp: number,
+    eventIndex: number,
+  ): void {
+    const { to } = this.resolveForestEndpoints(target, e, eventIndex);
+
+    // paper-notes DMSY-P23: last grow per head vertex
+    const oldHead = target.forestHeadEdge[to];
+    if (oldHead !== UNSETTLED && oldHead !== e) {
+      if (!Number.isInteger(oldHead) || oldHead < 0 || oldHead >= target.m) {
+        throw new Error(
+          `forest head edge ${String(oldHead)} out of range for vertex ${String(to)} at event ${String(eventIndex)}`,
+        );
+      }
+      const oldOp = target.forestEdgeOp[oldHead];
+      if (oldOp === FOREST_EDGE_GROW) {
+        target.forestGrowCount -= 1;
+      }
+      target.forestEdgeOp[oldHead] = FOREST_EDGE_NONE;
+    }
+
+    if (target.forestEdgeOp[e] !== FOREST_EDGE_GROW) {
+      target.forestGrowCount += 1;
+    }
+    target.forestHeadEdge[to] = e;
+    target.forestEdgeOp[e] = FOREST_EDGE_GROW;
+    target.forestEdgeWork[e] = workStamp;
+    target.forestEdgeTree[e] = tree;
+    target.forestTree[to] = tree;
+  }
+
+  /**
+   * Apply a spanning-forest cut overlay (paper-notes DMSY-P24).
+   *
+   * @param target - Lane state whose forest fields are mutated.
+   * @param e - CSR edge index being cut.
+   * @param tree - Subtree / search id (`F_j`) stamped on both endpoints.
+   * @param workStamp - Billed work after this event (`target.work + cost`).
+   * @param eventIndex - Global event index for error messages.
+   */
+  private applyForestCut(
+    target: LaneState,
+    e: number,
+    tree: number,
+    workStamp: number,
+    eventIndex: number,
+  ): void {
+    const { from, to } = this.resolveForestEndpoints(target, e, eventIndex);
+
+    // paper-notes DMSY-P24: cut.tree is F_j
+    if (target.forestEdgeOp[e] === FOREST_EDGE_GROW) {
+      target.forestGrowCount -= 1;
+    }
+    target.forestEdgeOp[e] = FOREST_EDGE_CUT;
+    target.forestEdgeWork[e] = workStamp;
+    target.forestEdgeTree[e] = tree;
+    target.forestTree[from] = tree;
+    target.forestTree[to] = tree;
+    target.forestCutCount += 1;
+    this.appendSubtreeIdIfNew(target, tree);
+  }
+
+  /**
+   * Append `tree` to the recurse-in subtree id list when not already present.
+   *
+   * @param target - Lane state whose {@link LaneState.subtreeIds} prefix is updated.
+   * @param tree - Distinct cut subtree id to record.
+   */
+  private appendSubtreeIdIfNew(target: LaneState, tree: number): void {
+    for (let i = 0; i < target.subtreeCount; i += 1) {
+      const existing = target.subtreeIds[i];
+      if (existing === tree) {
+        return;
+      }
+    }
+    if (target.subtreeCount < FOREST_SUBTREE_CAP) {
+      target.subtreeIds[target.subtreeCount] = tree;
+      target.subtreeCount += 1;
+    }
   }
 
   /**

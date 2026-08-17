@@ -20,7 +20,7 @@ import { runTraceJob, type TraceJobSpec } from "../../src/workers/traceJob.ts";
  * @throws When `onGraph` was never called.
  */
 export function collectTraceJob(
-  algo: "dijkstra" | "bmssp",
+  algo: "dijkstra" | "bmssp" | "dmsy",
   spec: TraceJobSpec,
 ): { graph: Graph; chunks: TraceChunk[] } {
   let graph: Graph | undefined;
@@ -43,26 +43,33 @@ export function collectTraceJob(
 }
 
 /**
- * Build lane totals from completed dijkstra and bmssp traces.
+ * Build three-lane billed totals from completed traces.
  *
  * @param dijkstra - Lane 0 chunks and graph.
  * @param bmssp - Lane 1 chunks (graph must match lane 0).
+ * @param dmsy - Lane 2 chunks (graph must match lane 0).
  */
 export function totalsFromTraces(
   dijkstra: { graph: Graph; chunks: TraceChunk[] },
   bmssp: { graph: Graph; chunks: TraceChunk[] },
+  dmsy: { graph: Graph; chunks: TraceChunk[] },
 ): StoryLaneTotals {
-  const race = new RaceScheduler(dijkstra.graph, 2);
+  const race = new RaceScheduler(dijkstra.graph, 3);
   for (const chunk of dijkstra.chunks) {
     race.appendChunk(0, chunk);
   }
   for (const chunk of bmssp.chunks) {
     race.appendChunk(1, chunk);
   }
+  for (const chunk of dmsy.chunks) {
+    race.appendChunk(2, chunk);
+  }
   race.markLaneComplete(0);
   race.markLaneComplete(1);
+  race.markLaneComplete(2);
   return {
     dijkstraWork: race.laneTotalWork(0),
     bmsspWork: race.laneTotalWork(1),
+    dmsyWork: race.laneTotalWork(2),
   };
 }

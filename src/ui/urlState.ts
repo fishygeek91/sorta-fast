@@ -17,7 +17,7 @@ import {
 export type { BmsspUrlMode };
 
 /** Lens algorithm lane selected via the URL (`algo` query param). */
-export type LensAlgo = "dijkstra" | "bmssp";
+export type LensAlgo = "dijkstra" | "bmssp" | "dmsy";
 
 /** Graph gallery fields encoded in the Lens URL. */
 export type LensUrlState = {
@@ -119,7 +119,7 @@ function parseInteger(raw: string | null, fallback: number): number {
  * @returns Whether `value` is a supported {@link LensAlgo}.
  */
 function isLensAlgo(value: string): value is LensAlgo {
-  return value === "dijkstra" || value === "bmssp";
+  return value === "dijkstra" || value === "bmssp" || value === "dmsy";
 }
 
 /**

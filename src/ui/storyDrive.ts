@@ -22,6 +22,8 @@ export type StoryLaneTotals = {
   dijkstraWork: number;
   /** BMSSP billed totalWork (lane 1). */
   bmsspWork: number;
+  /** DMSY billed totalWork (lane 2). */
+  dmsyWork: number;
 };
 
 /** Seek/play window and overlay fields for one story beat. */
@@ -37,6 +39,8 @@ export type StoryDrive = {
   showDijkstra: boolean;
   /** Lane 1 visible? */
   showBmssp: boolean;
+  /** Lane 2 visible? */
+  showDmsy: boolean;
 };
 
 /**
@@ -54,6 +58,11 @@ function assertValidTotals(totals: StoryLaneTotals): void {
       `bmsspWork must be a finite non-negative number, got ${String(totals.bmsspWork)}`,
     );
   }
+  if (!Number.isFinite(totals.dmsyWork) || totals.dmsyWork < 0) {
+    throw new Error(
+      `dmsyWork must be a finite non-negative number, got ${String(totals.dmsyWork)}`,
+    );
+  }
 }
 
 /**
@@ -68,6 +77,8 @@ function focusWorkForLayout(layout: StoryLayout, totals: StoryLaneTotals): numbe
       return totals.dijkstraWork;
     case "bmssp":
       return totals.bmsspWork;
+    case "dmsy":
+      return totals.dmsyWork;
     case "both":
       return Math.max(totals.dijkstraWork, totals.bmsspWork);
   }
@@ -95,7 +106,7 @@ function clampWorkClockT(value: number, focusWork: number): number {
  * @param step - Shipped step definition, or a shipped {@link StoryStepId} resolved via {@link storyStepById}.
  * @param totals - Lane totalWork after traces are complete.
  * @returns Drive instructions for seek, auto-play window, layout, and caption.
- * @throws If totals are not finite or are negative, or the step id is not shipped (e.g. `forest`).
+ * @throws If totals are not finite or are negative, or the step id is not shipped.
  */
 export function applyStoryStep(step: StoryStep | StoryStepId, totals: StoryLaneTotals): StoryDrive {
   assertValidTotals(totals);
@@ -112,6 +123,7 @@ export function applyStoryStep(step: StoryStep | StoryStepId, totals: StoryLaneT
   const layout = resolved.layout;
   const showDijkstra = layout === "dijkstra" || layout === "both";
   const showBmssp = layout === "bmssp" || layout === "both";
+  const showDmsy = layout === "dmsy";
 
   return {
     seekT,
@@ -121,6 +133,7 @@ export function applyStoryStep(step: StoryStep | StoryStepId, totals: StoryLaneT
     caption: resolved.caption,
     showDijkstra,
     showBmssp,
+    showDmsy,
   };
 }
 

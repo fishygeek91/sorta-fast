@@ -13,7 +13,7 @@ export type StoryUrlState = {
   g: GraphKind;
   n: number;
   seed: number;
-  /** Shipped tour step slug; unshipped ids (e.g. `forest`) are rejected on serialize. */
+  /** Shipped tour step slug. */
   step: StoryStepId;
   /** Work-clock scrub position; `0` when omitted from the URL. */
   t: number;
@@ -115,13 +115,10 @@ function parseWorkClockPosition(raw: string | null): number {
 
 /**
  * @param raw - `step` query value, or null when absent.
- * @returns A shipped story step slug; `forest` and other unshipped ids map to `wavefront`.
+ * @returns A shipped story step slug; unknown ids map to `wavefront`.
  */
 function parseStoryStep(raw: string | null): StoryStepId {
   if (raw === null || raw === "") {
-    return DEFAULT_STORY_URL.step;
-  }
-  if (raw === "forest") {
     return DEFAULT_STORY_URL.step;
   }
   if (isShippedStoryStepId(raw)) {

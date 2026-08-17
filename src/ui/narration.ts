@@ -53,3 +53,26 @@ export function formatBmsspNarration(state: LaneState): string {
 
   return "BMSSP idle";
 }
+
+/**
+ * One-line DMSY narration for the lens status strip from current lane state.
+ *
+ * Priority: live forest / subtree activity → recurse level → idle.
+ *
+ * @param state - Lane playback snapshot after the latest trace event.
+ * @returns A short status string for the DMSY overlay narration UI.
+ */
+export function formatDmsyNarration(state: LaneState): string {
+  const hasForestActivity =
+    state.forestGrowCount > 0 || state.forestCutCount > 0 || state.subtreeCount > 0;
+
+  if (hasForestActivity) {
+    return `Forest ${String(state.forestGrowCount)} edges, ${String(state.subtreeCount)} subtrees cut, ${String(state.pivotsFoundThisCall)} pivots, D occupancy ${String(state.sortedRegionSize)}`;
+  }
+
+  if (state.recursionDepth > 0) {
+    return `DMSY level ${String(state.recursionDepth)}: bound ${formatBound(state.currentBound)}`;
+  }
+
+  return "DMSY idle";
+}

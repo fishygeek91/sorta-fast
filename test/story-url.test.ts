@@ -40,12 +40,15 @@ describe("parseStoryUrl", () => {
     expect(parseStoryUrl("?t=abc")).toEqual({ ...DEFAULT_STORY_URL, t: 0 });
   });
 
-  it("defaults step to wavefront when missing, invalid, empty, or forest", () => {
+  it("defaults step to wavefront when missing, invalid, or empty", () => {
     expect(parseStoryUrl("?step=wavefront")).toEqual({ ...DEFAULT_STORY_URL, step: "wavefront" });
     expect(parseStoryUrl("?step=")).toEqual(DEFAULT_STORY_URL);
     expect(parseStoryUrl("?step=invalid")).toEqual(DEFAULT_STORY_URL);
-    expect(parseStoryUrl("?step=forest")).toEqual(DEFAULT_STORY_URL);
     expect(parseStoryUrl("?g=city&n=500&seed=1729")).toEqual(DEFAULT_STORY_URL);
+  });
+
+  it("parses forest as a shipped step", () => {
+    expect(parseStoryUrl("?step=forest")).toEqual({ ...DEFAULT_STORY_URL, step: "forest" });
   });
 });
 
@@ -70,10 +73,11 @@ describe("serializeStoryUrl", () => {
     expect(params.get("mode")).toBe("story");
   });
 
-  it("throws when step is reserved forest slug", () => {
-    expect(() => serializeStoryUrl({ ...DEFAULT_STORY_URL, step: "forest" })).toThrow(
-      /unshipped story step/i,
-    );
+  it("round-trips forest step", () => {
+    const state: StoryUrlState = { ...DEFAULT_STORY_URL, step: "forest" };
+    const query = serializeStoryUrl(state);
+    expect(query).toContain("step=forest");
+    expect(parseStoryUrl(query)).toEqual(state);
   });
 });
 

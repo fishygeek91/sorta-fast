@@ -10,6 +10,7 @@ import { collectTraceJob, totalsFromTraces } from "./helpers/story-traces.ts";
 const SYNTHETIC_TOTALS: StoryLaneTotals = {
   dijkstraWork: 1000,
   bmsspWork: 800,
+  dmsyWork: 600,
 };
 
 /**
@@ -29,6 +30,7 @@ describe("applyStoryStep — synthetic totals", () => {
     const drive = applyStoryStep("wavefront", SYNTHETIC_TOTALS);
     expect(drive.showDijkstra).toBe(true);
     expect(drive.showBmssp).toBe(false);
+    expect(drive.showDmsy).toBe(false);
     expect(drive.seekT).toBe(0);
     expect(drive.endT).toBe(850);
     expect(drive.callout).toBeNull();
@@ -40,38 +42,52 @@ describe("applyStoryStep — synthetic totals", () => {
     expect(drive.endT).toBe(1000);
     expect(drive.callout).toBe("comparisons");
     expect(drive.showBmssp).toBe(false);
+    expect(drive.showDmsy).toBe(false);
   });
 
   it("pivots shows bmssp only with seekT 0 and endT 560", () => {
     const drive = applyStoryStep("pivots", SYNTHETIC_TOTALS);
     expect(drive.showDijkstra).toBe(false);
     expect(drive.showBmssp).toBe(true);
+    expect(drive.showDmsy).toBe(false);
     expect(drive.seekT).toBe(0);
     expect(drive.endT).toBe(560);
+  });
+
+  it("forest shows dmsy only with seekT 0 and endT 420", () => {
+    const drive = applyStoryStep("forest", SYNTHETIC_TOTALS);
+    expect(drive.showDijkstra).toBe(false);
+    expect(drive.showBmssp).toBe(false);
+    expect(drive.showDmsy).toBe(true);
+    expect(drive.seekT).toBe(0);
+    expect(drive.endT).toBe(420);
   });
 
   it("race shows both lanes with endT floor(0.6 * dijkstra work)", () => {
     const drive = applyStoryStep("race", SYNTHETIC_TOTALS);
     expect(drive.showDijkstra).toBe(true);
     expect(drive.showBmssp).toBe(true);
+    expect(drive.showDmsy).toBe(false);
     expect(drive.seekT).toBe(0);
     expect(drive.endT).toBe(Math.floor(0.6 * SYNTHETIC_TOTALS.dijkstraWork));
   });
 
-  it("throws for reserved forest slug", () => {
-    expect(() => applyStoryStep("forest", SYNTHETIC_TOTALS)).toThrow(/not shipped/i);
-  });
-
   it("throws when dijkstraWork is negative", () => {
-    expect(() => applyStoryStep("wavefront", { dijkstraWork: -1, bmsspWork: 800 })).toThrow(
-      /dijkstraWork/,
-    );
+    expect(() =>
+      applyStoryStep("wavefront", { dijkstraWork: -1, bmsspWork: 800, dmsyWork: 600 }),
+    ).toThrow(/dijkstraWork/);
   });
 
   it("throws when bmsspWork is negative", () => {
-    expect(() => applyStoryStep("wavefront", { dijkstraWork: 1000, bmsspWork: -1 })).toThrow(
-      /bmsspWork/,
-    );
+    expect(() =>
+      applyStoryStep("wavefront", { dijkstraWork: 1000, bmsspWork: -1, dmsyWork: 600 }),
+    ).toThrow(/bmsspWork/);
+  });
+
+  it("throws when dmsyWork is negative", () => {
+    expect(() =>
+      applyStoryStep("forest", { dijkstraWork: 1000, bmsspWork: 800, dmsyWork: -1 }),
+    ).toThrow(/dmsyWork/);
   });
 });
 
@@ -97,7 +113,8 @@ describe("applyStoryStep — real seeded playback", () => {
 
   const dijkstra = collectTraceJob("dijkstra", STORY_TRACE_SPEC);
   const bmssp = collectTraceJob("bmssp", STORY_TRACE_SPEC);
-  const totals = totalsFromTraces(dijkstra, bmssp);
+  const dmsy = collectTraceJob("dmsy", STORY_TRACE_SPEC);
+  const totals = totalsFromTraces(dijkstra, bmssp, dmsy);
 
   it("wavefront seeks to work-clock zero", () => {
     expect(applyStoryStep("wavefront", totals).seekT).toBe(0);
@@ -111,20 +128,30 @@ describe("applyStoryStep — real seeded playback", () => {
     expect(applyStoryStep("wavefront", totals).showBmssp).toBe(false);
   });
 
+  it("forest shows dmsy only", () => {
+    const drive = applyStoryStep("forest", totals);
+    expect(drive.showDijkstra).toBe(false);
+    expect(drive.showBmssp).toBe(false);
+    expect(drive.showDmsy).toBe(true);
+  });
+
   it("race shows both lanes", () => {
     const drive = applyStoryStep("race", totals);
     expect(drive.showDijkstra).toBe(true);
     expect(drive.showBmssp).toBe(true);
+    expect(drive.showDmsy).toBe(false);
   });
 
   it("same seed yields identical seekT and endT for every shipped step", () => {
     const first = totalsFromTraces(
       collectTraceJob("dijkstra", STORY_TRACE_SPEC),
       collectTraceJob("bmssp", STORY_TRACE_SPEC),
+      collectTraceJob("dmsy", STORY_TRACE_SPEC),
     );
     const second = totalsFromTraces(
       collectTraceJob("dijkstra", STORY_TRACE_SPEC),
       collectTraceJob("bmssp", STORY_TRACE_SPEC),
+      collectTraceJob("dmsy", STORY_TRACE_SPEC),
     );
 
     expect(driveWindowsForAllSteps(first)).toEqual(driveWindowsForAllSteps(second));

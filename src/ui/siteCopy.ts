@@ -49,6 +49,8 @@ export type FairnessCopy = {
   honesty: string;
   /** BMSSP k/t honesty: paper formula vs browser-scale demo defaults. */
   params: string;
+  /** DMSY k/t/δ honesty and FindPivots heap disclosure. */
+  dmsyParams: string;
   /** Lead-in before linking {@link COST_TABLE_SOURCE_URL}. */
   sourceLead: string;
 };
@@ -62,7 +64,7 @@ export const FAIRNESS_COPY: FairnessCopy = {
   billed: [
     `comparison = ${String(FAIRNESS_COSTS.comparison)} (each distance or key comparison)`,
     `heap op = cmps × comparison (${String(FAIRNESS_COSTS.comparison)} per comparison inside the heap)`,
-    `D-structure op = cmps × comparison (${String(FAIRNESS_COSTS.comparison)} per comparison inside the partial-sort structure)`,
+    `D-structure op = cmps × comparison (${String(FAIRNESS_COSTS.comparison)} per comparison inside the partial-sort structure), including DMSY dstruct.merge`,
     `relax = ${String(FAIRNESS_COSTS.relax)}`,
     `settle = ${String(FAIRNESS_COSTS.settle)}`,
   ],
@@ -81,6 +83,8 @@ export const FAIRNESS_COPY: FairnessCopy = {
     "At browser scale (thousands to tens of thousands of nodes), Dijkstra with a binary heap often wins wall-clock time — asymptotics need enormous n and constants are real. We show you where Dijkstra still wins; the work clock is what makes the race fair and legible.",
   params:
     "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). Select bmssp=paper in the URL to race with the paper formula.",
+  dmsyParams:
+    "DMSY's paper parameters (arXiv 2602.07868) use paper k and t (Lemma 3.9) and implementation δ; at every gallery n, degree reduction yields δ = 3. FindPivots local searches use a binary heap rather than the paper's Fibonacci heap (DMSY-P07) — same O(log k) class at |K| ≤ k.",
   sourceLead: "The authoritative cost table lives in the core trace module:",
 };
 
@@ -139,7 +143,7 @@ export const EXPLAINER_COPY: ExplainerCopy = {
       persona: "The Forester",
       accent: "moss",
       blurb:
-        "Grows spanning forests from the frontier, chops them into Θ(k)-size subtrees, and only sorts one representative per subtree. Lane forthcoming (#27); the forest overlays preview the idea.",
+        "Grows spanning forests from the frontier, partitions them into Θ(k) subtrees, and only pivot representatives enter the sorted lane.",
     },
   ],
   vocabulary: [
@@ -192,9 +196,9 @@ export const EXPLAINER_COPY: ExplainerCopy = {
         "In Diff view, vertices settled only in the left lane fill with that lane's persona (marble or ember), only in the right lane with the other persona, both-settled a neutral stone, and unreached stay paper. A short ink tick marks a vertex settled out of distance order — BMSSP's allowed shortcut; always 0 for Dijkstra.",
     },
     {
-      term: "forest grow/cut (DMSY, forthcoming)",
+      term: "forest grow/cut (DMSY)",
       meaning:
-        "Spanning-forest edges sprout from the frontier and partition into Θ(k)-size subtrees; only pivot representatives enter the sorted lane. Overlay ships with the DMSY lane (#27).",
+        "Spanning-forest edges sprout from the frontier and partition into Θ(k)-size subtrees; only pivot representatives enter the sorted lane.",
     },
   ],
 };

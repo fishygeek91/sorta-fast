@@ -43,7 +43,7 @@ describe("parseRaceUrl", () => {
       seed: 1,
       mode: "race",
       target: null,
-      race: ["dijkstra", "bmssp"],
+      race: ["dijkstra", "bmssp", "dmsy"],
       t: 0,
       bmssp: "demo",
       bk: null,
@@ -178,7 +178,7 @@ describe("parseRaceUrl", () => {
       seed: 1,
       mode: "race",
       target: null,
-      race: ["dijkstra", "bmssp"],
+      race: ["dijkstra", "bmssp", "dmsy"],
       t: 0,
       bmssp: "demo",
       bk: null,
@@ -264,7 +264,7 @@ describe("parseRaceUrl", () => {
       seed: 7,
       mode: "race",
       target: null,
-      race: ["dijkstra", "bmssp"],
+      race: ["dijkstra", "bmssp", "dmsy"],
       t: 0,
       bmssp: "demo",
       bk: null,
@@ -273,22 +273,13 @@ describe("parseRaceUrl", () => {
     });
   });
 
-  it("drops dmsy from race list and keeps dijkstra and bmssp", () => {
-    expect(parseRaceUrl("?race=dijkstra,bmssp,dmsy")).toEqual({
-      ...DEFAULT_RACE_URL,
-      race: ["dijkstra", "bmssp"],
-    });
+  it("keeps dmsy in race list for explicit DMSY triple", () => {
+    expect(parseRaceUrl("?race=dijkstra,bmssp,dmsy")).toEqual(DEFAULT_RACE_URL);
   });
 
-  it("defaults to two lanes when race has only dmsy or a single valid token", () => {
-    expect(parseRaceUrl("?race=dmsy")).toEqual({
-      ...DEFAULT_RACE_URL,
-      race: ["dijkstra", "bmssp"],
-    });
-    expect(parseRaceUrl("?race=dijkstra")).toEqual({
-      ...DEFAULT_RACE_URL,
-      race: ["dijkstra", "bmssp"],
-    });
+  it("falls back to default three-lane DMSY when race has only dmsy or a single valid token", () => {
+    expect(parseRaceUrl("?race=dmsy")).toEqual(DEFAULT_RACE_URL);
+    expect(parseRaceUrl("?race=dijkstra")).toEqual(DEFAULT_RACE_URL);
   });
 
   it("expands legacy lane3=dijkstra to three lanes without race param", () => {
@@ -474,11 +465,10 @@ describe("lens URL mode contract", () => {
 });
 
 describe("lanesFromSearch", () => {
-  it("returns two default lane ids on empty search", () => {
+  it("returns three default lane ids on empty search", () => {
     const lanes = lanesFromSearch("");
-    expect(lanes.length).toBe(2);
-    expect(lanes[0].id).toBe("dijkstra");
-    expect(lanes[1].id).toBe("bmssp");
+    expect(lanes.length).toBe(3);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dmsy"]);
   });
 
   it("adds dijkstra-b as third lane when lane3=dijkstra", () => {
@@ -513,8 +503,8 @@ describe("lanesFromSearch", () => {
 
   it("ignores lane3 when value is not dijkstra or 1", () => {
     const lanes = lanesFromSearch("?lane3=bmssp");
-    expect(lanes.length).toBe(2);
-    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp"]);
+    expect(lanes.length).toBe(3);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dmsy"]);
   });
 
   it("adds DMSY as third lane when lane3=1", () => {
@@ -529,12 +519,13 @@ describe("lanesFromSearch", () => {
     });
   });
 
-  it("round-trips lane3=1 via serialize without race param", () => {
+  it("round-trips lane3=1 via serialize as canonical race param", () => {
     const parsed = parseRaceUrl("?lane3=1");
     expect(parsed.race).toEqual(["dijkstra", "bmssp", "dmsy"]);
     const query = serializeRaceUrl(parsed);
-    expect(query).toContain("lane3=1");
-    expect(query).not.toContain("race=");
+    const params = new URLSearchParams(query.slice(1));
+    expect(params.get("race")).toBe("dijkstra,bmssp,dmsy");
+    expect(query).not.toContain("lane3=");
     expect(parseRaceUrl(serializeRaceUrl(parseRaceUrl("?lane3=1"))).race).toEqual([
       "dijkstra",
       "bmssp",

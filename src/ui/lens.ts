@@ -16,7 +16,7 @@ import {
 import { isBmsspUrlMode } from "./bmsspUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { mountModeNav } from "./modeNav.ts";
-import { formatBmsspNarration } from "./narration.ts";
+import { formatBmsspNarration, formatDmsyNarration } from "./narration.ts";
 import { parseRaceUrl, serializeRaceUrl } from "./raceUrl.ts";
 import { DEFAULT_STORY_URL, serializeStoryUrl } from "./storyUrl.ts";
 import { rollSeed } from "./rollSeed.ts";
@@ -114,7 +114,13 @@ export function mountLens(): void {
    * @param algo - Lens algorithm slug from URL state.
    */
   function syncLensPersona(algo: LensAlgo): void {
-    canvas.dataset.persona = algo === "dijkstra" ? "marble" : "ember";
+    if (algo === "dijkstra") {
+      canvas.dataset.persona = "marble";
+    } else if (algo === "dmsy") {
+      canvas.dataset.persona = "moss";
+    } else {
+      canvas.dataset.persona = "ember";
+    }
   }
 
   syncLensPersona(lensState.algo);
@@ -228,7 +234,82 @@ export function mountLens(): void {
   dstructBlock.append(dstructLabel, dstructValue);
   bmsspCounters.append(depthBlock, boundBlock, pullBlock, dstructBlock);
 
-  counters.append(comparisonsBlock, secondaryCounters, bmsspCounters);
+  const dmsyCounters = document.createElement("div");
+  dmsyCounters.className = "lens-counter-row lens-counter-dmsy";
+
+  const forestGrowBlock = document.createElement("div");
+  forestGrowBlock.className = "lens-counter lens-counter-secondary";
+
+  const forestGrowLabel = document.createElement("span");
+  forestGrowLabel.className = "lens-counter-label";
+  forestGrowLabel.textContent = "Forest grow";
+
+  const forestGrowValue = document.createElement("span");
+  forestGrowValue.className = "lens-counter-value";
+  forestGrowValue.textContent = "0";
+
+  forestGrowBlock.append(forestGrowLabel, forestGrowValue);
+
+  const forestCutBlock = document.createElement("div");
+  forestCutBlock.className = "lens-counter lens-counter-secondary";
+
+  const forestCutLabel = document.createElement("span");
+  forestCutLabel.className = "lens-counter-label";
+  forestCutLabel.textContent = "Forest cut";
+
+  const forestCutValue = document.createElement("span");
+  forestCutValue.className = "lens-counter-value";
+  forestCutValue.textContent = "0";
+
+  forestCutBlock.append(forestCutLabel, forestCutValue);
+
+  const subtreeBlock = document.createElement("div");
+  subtreeBlock.className = "lens-counter lens-counter-secondary";
+
+  const subtreeLabel = document.createElement("span");
+  subtreeLabel.className = "lens-counter-label";
+  subtreeLabel.textContent = "Subtrees";
+
+  const subtreeValue = document.createElement("span");
+  subtreeValue.className = "lens-counter-value";
+  subtreeValue.textContent = "0";
+
+  subtreeBlock.append(subtreeLabel, subtreeValue);
+
+  const dmsyPivotsBlock = document.createElement("div");
+  dmsyPivotsBlock.className = "lens-counter lens-counter-secondary";
+
+  const dmsyPivotsLabel = document.createElement("span");
+  dmsyPivotsLabel.className = "lens-counter-label";
+  dmsyPivotsLabel.textContent = "Pivots";
+
+  const dmsyPivotsValue = document.createElement("span");
+  dmsyPivotsValue.className = "lens-counter-value";
+  dmsyPivotsValue.textContent = "0";
+
+  dmsyPivotsBlock.append(dmsyPivotsLabel, dmsyPivotsValue);
+
+  const sortedRegionBlock = document.createElement("div");
+  sortedRegionBlock.className = "lens-counter lens-counter-secondary";
+
+  const sortedRegionLabel = document.createElement("span");
+  sortedRegionLabel.className = "lens-counter-label";
+  sortedRegionLabel.textContent = "Sorted region";
+
+  const sortedRegionValue = document.createElement("span");
+  sortedRegionValue.className = "lens-counter-value";
+  sortedRegionValue.textContent = "0";
+
+  sortedRegionBlock.append(sortedRegionLabel, sortedRegionValue);
+  dmsyCounters.append(
+    forestGrowBlock,
+    forestCutBlock,
+    subtreeBlock,
+    dmsyPivotsBlock,
+    sortedRegionBlock,
+  );
+
+  counters.append(comparisonsBlock, secondaryCounters, bmsspCounters, dmsyCounters);
 
   const narrationEl = document.createElement("p");
   narrationEl.className = "lens-narration";
@@ -343,6 +424,33 @@ export function mountLens(): void {
   dstructCheckbox.checked = true;
   dstructStripLabel.append(dstructCheckbox, document.createTextNode(" D-structure strip"));
 
+  const forestGrowOverlayLabel = document.createElement("label");
+  forestGrowOverlayLabel.className = "lens-overlay-toggle";
+
+  const forestGrowCheckbox = document.createElement("input");
+  forestGrowCheckbox.type = "checkbox";
+  forestGrowCheckbox.checked = true;
+  forestGrowOverlayLabel.append(forestGrowCheckbox, document.createTextNode(" Forest grow"));
+
+  const forestCutOverlayLabel = document.createElement("label");
+  forestCutOverlayLabel.className = "lens-overlay-toggle";
+
+  const forestCutCheckbox = document.createElement("input");
+  forestCutCheckbox.type = "checkbox";
+  forestCutCheckbox.checked = true;
+  forestCutOverlayLabel.append(forestCutCheckbox, document.createTextNode(" Forest cut"));
+
+  const subtreePatchworkLabel = document.createElement("label");
+  subtreePatchworkLabel.className = "lens-overlay-toggle";
+
+  const subtreePatchworkCheckbox = document.createElement("input");
+  subtreePatchworkCheckbox.type = "checkbox";
+  subtreePatchworkCheckbox.checked = true;
+  subtreePatchworkLabel.append(
+    subtreePatchworkCheckbox,
+    document.createTextNode(" Subtree patchwork"),
+  );
+
   overlaysEl.append(
     frontierLabel,
     relaxedLabel,
@@ -350,6 +458,9 @@ export function mountLens(): void {
     pivotLabel,
     bloomLabel,
     dstructStripLabel,
+    forestGrowOverlayLabel,
+    forestCutOverlayLabel,
+    subtreePatchworkLabel,
   );
 
   const graphControls = document.createElement("div");
@@ -361,10 +472,16 @@ export function mountLens(): void {
 
   const algoSelect = document.createElement("select");
   algoSelect.id = "lens-algo-select";
-  for (const algo of ["dijkstra", "bmssp"] as const) {
+  for (const algo of ["dijkstra", "bmssp", "dmsy"] as const) {
     const option = document.createElement("option");
     option.value = algo;
-    option.textContent = algo === "dijkstra" ? "Dijkstra" : "BMSSP";
+    if (algo === "dijkstra") {
+      option.textContent = "Dijkstra";
+    } else if (algo === "bmssp") {
+      option.textContent = "BMSSP";
+    } else {
+      option.textContent = "🌲 DMSY";
+    }
     algoSelect.append(option);
   }
   algoLabel.append(algoSelect);
@@ -481,6 +598,9 @@ export function mountLens(): void {
     pivotFlares: true,
     batchBlooms: true,
     dstructStrip: true,
+    forestGrow: true,
+    forestCut: true,
+    subtreePatchwork: true,
   };
 
   /** True while the user is dragging the scrubber thumb. */
@@ -546,11 +666,16 @@ export function mountLens(): void {
   }
 
   /**
-   * Sync canvas persona and BMSSP-only counter row for the active algo.
+   * Sync canvas persona and algorithm-specific counter rows for the active algo.
    */
   function syncAlgoUi(): void {
     syncLensPersona(lensState.algo);
     bmsspCounters.hidden = lensState.algo !== "bmssp";
+    dmsyCounters.hidden = lensState.algo !== "dmsy";
+    const showForestOverlays = lensState.algo === "dmsy";
+    forestGrowOverlayLabel.hidden = !showForestOverlays;
+    forestCutOverlayLabel.hidden = !showForestOverlays;
+    subtreePatchworkLabel.hidden = !showForestOverlays;
   }
 
   /**
@@ -558,11 +683,19 @@ export function mountLens(): void {
    */
   function syncNarration(): void {
     if (playback === null) {
-      narrationEl.textContent = lensState.algo === "bmssp" ? "BMSSP idle" : "Dijkstra";
+      if (lensState.algo === "bmssp") {
+        narrationEl.textContent = "BMSSP idle";
+      } else if (lensState.algo === "dmsy") {
+        narrationEl.textContent = "DMSY idle";
+      } else {
+        narrationEl.textContent = "Dijkstra";
+      }
       return;
     }
     if (lensState.algo === "bmssp") {
       narrationEl.textContent = formatBmsspNarration(playback.state);
+    } else if (lensState.algo === "dmsy") {
+      narrationEl.textContent = formatDmsyNarration(playback.state);
     } else {
       narrationEl.textContent = "Dijkstra";
     }
@@ -629,6 +762,17 @@ export function mountLens(): void {
   }
 
   /**
+   * Reset DMSY-specific counter elements to their idle values.
+   */
+  function resetDmsyCounters(): void {
+    forestGrowValue.textContent = "0";
+    forestCutValue.textContent = "0";
+    subtreeValue.textContent = "0";
+    dmsyPivotsValue.textContent = "0";
+    sortedRegionValue.textContent = "0";
+  }
+
+  /**
    * Refresh headline and secondary counter elements from lane state.
    */
   function syncCounters(): void {
@@ -640,6 +784,7 @@ export function mountLens(): void {
       boundValue.textContent = "∞";
       pullValue.textContent = "0";
       dstructValue.textContent = "0";
+      resetDmsyCounters();
       return;
     }
 
@@ -653,6 +798,14 @@ export function mountLens(): void {
       boundValue.textContent = formatBound(state.currentBound);
       pullValue.textContent = String(state.lastPullN);
       dstructValue.textContent = String(state.dstructOps);
+    }
+
+    if (lensState.algo === "dmsy") {
+      forestGrowValue.textContent = String(state.forestGrowCount);
+      forestCutValue.textContent = String(state.forestCutCount);
+      subtreeValue.textContent = String(state.subtreeCount);
+      dmsyPivotsValue.textContent = String(state.pivotsFoundThisCall);
+      sortedRegionValue.textContent = String(state.sortedRegionSize);
     }
   }
 
@@ -699,6 +852,7 @@ export function mountLens(): void {
     boundValue.textContent = "∞";
     pullValue.textContent = "0";
     dstructValue.textContent = "0";
+    resetDmsyCounters();
     syncNarration();
     syncPlayPauseUi();
     clearStatus();
@@ -717,9 +871,13 @@ export function mountLens(): void {
         ? new Worker(new URL("../workers/bmsspTrace.ts", import.meta.url), {
             type: "module",
           })
-        : new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
-            type: "module",
-          });
+        : lensState.algo === "dmsy"
+          ? new Worker(new URL("../workers/dmsyTrace.ts", import.meta.url), {
+              type: "module",
+            })
+          : new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
+              type: "module",
+            });
     worker = nextWorker;
 
     nextWorker.onmessage = (event: MessageEvent<unknown>): void => {
@@ -925,6 +1083,21 @@ export function mountLens(): void {
     drawFrame();
   });
 
+  forestGrowCheckbox.addEventListener("change", () => {
+    overlays.forestGrow = forestGrowCheckbox.checked;
+    drawFrame();
+  });
+
+  forestCutCheckbox.addEventListener("change", () => {
+    overlays.forestCut = forestCutCheckbox.checked;
+    drawFrame();
+  });
+
+  subtreePatchworkCheckbox.addEventListener("change", () => {
+    overlays.subtreePatchwork = subtreePatchworkCheckbox.checked;
+    drawFrame();
+  });
+
   algoSelect.addEventListener("change", () => {
     const raw = algoSelect.value;
     if (!isLensAlgo(raw)) {
@@ -1012,7 +1185,7 @@ export function mountLens(): void {
  * @param value - Candidate lens algorithm slug from a select option.
  */
 function isLensAlgo(value: string): value is LensAlgo {
-  return value === "dijkstra" || value === "bmssp";
+  return value === "dijkstra" || value === "bmssp" || value === "dmsy";
 }
 
 /**

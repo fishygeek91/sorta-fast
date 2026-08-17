@@ -1,11 +1,11 @@
 /**
- * Race URL codec for graph gallery + race mode state (issue #14, #15).
+ * Race URL codec for graph gallery + race mode state (issue #14, #15, #27).
  *
  * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&lane3=&target=&t=&bmssp=&bk=&bt=&view=` — no DOM.
- * Legacy `lane3=dijkstra` and feature-flag `lane3=1` (DMSY third lane) apply when `race=` is absent.
+ * Legacy `lane3=dijkstra` and alias `lane3=1` (DMSY third lane) apply when `race=` is absent.
  * Graph kind / size / seed parsing mirrors Lens (`src/ui/urlState.ts`).
  *
- * Canonical race lane list: design.md §3.5. `race=` still drops `dmsy` tokens until #27; use `lane3=1`.
+ * Canonical race lane list: design.md §3.5. Default and DMSY triple serialize as `race=dijkstra,bmssp,dmsy`.
  */
 
 import { GRAPH_KINDS, type GraphKind } from "../core/graph.ts";
@@ -24,7 +24,7 @@ export type RaceMode = "race" | "lens";
 /** Race canvas layout encoded in the `view` query param. */
 export type RaceView = "lanes" | "diff";
 
-/** Canonical race-algorithm slug in parsed URL state (includes DMSY via `lane3=1`). */
+/** Canonical race-algorithm slug in parsed URL state. */
 export type RaceAlgoSlug = "dijkstra" | "bmssp" | "dmsy";
 
 /** Graph gallery and race fields encoded in the race URL. */
@@ -49,14 +49,14 @@ export type RaceUrlState = {
   view: RaceView;
 };
 
-/** Defaults match the sweep-winning race preset (sparse / 25000 / 4, two lanes). */
+/** Defaults match the sweep-winning race preset (sparse / 25000 / 4, three lanes). */
 export const DEFAULT_RACE_URL: RaceUrlState = {
   g: "sparse",
   n: 25000,
   seed: 4,
   mode: "race",
   target: null,
-  race: ["dijkstra", "bmssp"],
+  race: ["dijkstra", "bmssp", "dmsy"],
   t: 0,
   bmssp: "demo",
   bk: null,
@@ -64,7 +64,7 @@ export const DEFAULT_RACE_URL: RaceUrlState = {
   view: "lanes",
 };
 
-const DEFAULT_RACE_LIST: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp"];
+const DEFAULT_RACE_LIST: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dmsy"];
 
 const LEGACY_LANE3_RACE_LIST: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dijkstra"];
 
@@ -85,10 +85,10 @@ function isGraphKind(value: string): value is GraphKind {
 
 /**
  * @param token - Single race-list token from a comma-separated `race=` value.
- * @returns Whether `token` is accepted in `race=` (excludes `dmsy` until #27).
+ * @returns Whether `token` is a supported {@link RaceAlgoSlug}.
  */
-function isRaceAlgoSlug(token: string): token is "dijkstra" | "bmssp" {
-  return token === "dijkstra" || token === "bmssp";
+function isRaceAlgoSlug(token: string): token is RaceAlgoSlug {
+  return token === "dijkstra" || token === "bmssp" || token === "dmsy";
 }
 
 /**
@@ -249,14 +249,6 @@ function parseRaceList(params: URLSearchParams): readonly RaceAlgoSlug[] {
 }
 
 /**
- * @param race - Parsed race lane list.
- * @returns Whether the list is the DMSY feature-flag triple encoded as `lane3=1`.
- */
-function isLane3DmsyRace(race: readonly RaceAlgoSlug[]): boolean {
-  return race.length === 3 && race[0] === "dijkstra" && race[1] === "bmssp" && race[2] === "dmsy";
-}
-
-/**
  * Parse a query string or {@link URLSearchParams} into race gallery state.
  *
  * Unknown keys are ignored. Invalid or missing fields fall back to
@@ -336,8 +328,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
  * Serialize race gallery state to a canonical query string.
  *
  * The result always starts with `?` and contains `g`, `n`, `seed`, and `mode`.
- * `race=` is written for two-lane and legacy three-Dijkstra presets; the DMSY triple
- * (`dijkstra,bmssp,dmsy`) serializes as `lane3=1` only so parse round-trips.
+ * `race=` is written for all lane presets (including the default DMSY triple).
  * `target` is included only when non-null; `t` only when greater than zero.
  * `bmssp` is included only when `paper`; `bk` and `bt` only when non-null.
  * `view` is included only when `diff`; omitted when `lanes`.
@@ -352,11 +343,7 @@ export function serializeRaceUrl(state: RaceUrlState): string {
   params.set("n", String(state.n));
   params.set("seed", String(state.seed));
   params.set("mode", state.mode);
-  if (isLane3DmsyRace(state.race)) {
-    params.set("lane3", "1");
-  } else {
-    params.set("race", state.race.join(","));
-  }
+  params.set("race", state.race.join(","));
   if (state.target !== null) {
     params.set("target", String(state.target));
   }

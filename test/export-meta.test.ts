@@ -56,7 +56,7 @@ describe("issue #18 export meta", () => {
       expect(url).toContain("seed=4");
       expect(url).toContain("mode=race");
       const params = new URLSearchParams(url.split("?")[1] ?? "");
-      expect(params.get("race")).toBe("dijkstra,bmssp");
+      expect(params.get("race")).toBe("dijkstra,bmssp,dmsy");
     });
 
     it("includes t when t > 0", () => {

@@ -84,8 +84,8 @@ type RaceLanesKey = (typeof RACE_LANES_KEYS)[number];
 /** Two-lane race: Dijkstra vs BMSSP. */
 const TWO_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp"];
 
-/** Three-lane race: Dijkstra vs BMSSP vs Dijkstra B. */
-const THREE_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dijkstra"];
+/** Three-lane race: Dijkstra vs BMSSP vs DMSY. */
+const THREE_LANE_RACE: readonly RaceAlgoSlug[] = ["dijkstra", "bmssp", "dmsy"];
 
 /** Minimum interval between URL `t` writes while playback is running. */
 const URL_WRITE_THROTTLE_MS = 250;
@@ -252,7 +252,7 @@ export function mountRace(): void {
   twoLanesOption.textContent = "Dijkstra vs BMSSP";
   const threeLanesOption = document.createElement("option");
   threeLanesOption.value = "three";
-  threeLanesOption.textContent = "Dijkstra vs BMSSP vs Dijkstra B";
+  threeLanesOption.textContent = "🌲 Dijkstra vs BMSSP vs DMSY";
   lanesSelect.append(twoLanesOption, threeLanesOption);
   lanesLabel.append(lanesSelect);
 
