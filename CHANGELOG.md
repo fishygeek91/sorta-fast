@@ -17,10 +17,12 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Pull now selects from the packed block prefix (amortized O(|S′|) cmps) instead of a billed full-store sort, matching Lemma 3.4 at race-scale N (#25).
 - Forest `grow` now emits on lazy incoming-edge replace so `W_j` trees replay as last-grow-per-head; `partitionTree` walks an explicit stack on tree-local scratch so long chains cannot blow the JS stack or allocate O(n) per `F̄` (#24).
 
 ### Changed
 
+- paper-notes DMSY-P26 / §3.5: Pull bills prefix select (O(|S′|)); Merge `putPair` bills a log(#blocks) factor; Insert/Merge/Pull exclude packing from `cmps` (#25).
 - paper-notes: close DMSY-P10 (`merge` schema); add DMSY-P26 (`ZERO_LABEL`, Merge consumes D′) (#25).
 - paper-notes §1.2: implementation δ is 3 for every finite JS `n` (the raw `⌊(1/4)·log₂ log₂ n⌋` term never reaches 3); `reducedSource` JSDoc notes the O(|V′|) scan for #26 (#23).
 

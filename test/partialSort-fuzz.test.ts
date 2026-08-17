@@ -188,7 +188,6 @@ describe("PartialSortD differential fuzz", () => {
             );
           }
         } else if (r < 0.75 && d.size > 0) {
-          const sizeBefore = d.size;
           let dRes: PartialSortPullResult;
           try {
             dRes = d.pull();
@@ -199,10 +198,8 @@ describe("PartialSortD differential fuzz", () => {
           }
           const nRes = naive.pull();
 
-          // Lemma 3.4 Pull is O(|S′|) on a packed prefix. Selection is billed
-          // over the live store (≤ N) with the same slack family as Insert.
-          const pullBound =
-            LEMMA_34_SLACK * Math.max(1, dRes.n) * (1 + Math.log2(sizeBefore / M + 2));
+          // Lemma 3.4 Pull is O(|S′|) on a packed prefix.
+          const pullBound = LEMMA_34_SLACK * Math.max(1, dRes.n);
           if (dRes.cmps > pullBound) {
             violations.push(
               `seed=${seed} op=${op} pull cmps=${dRes.cmps} > ${pullBound} (n=${dRes.n})`,
@@ -301,6 +298,70 @@ describe("PartialSortD differential fuzz", () => {
           violations.push(
             `seed=${seed} insert cmps=${insertCmps} > ${insertBound} (I=${insertCount} N=${N} M=${M})`,
           );
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  }, 30_000);
+
+  it("Pull cmps stay O(|S′|) on large-N packed prefixes", () => {
+    const violations: string[] = [];
+    const N_VALUES = [1000, 8192] as const;
+    const M_VALUES = [16, 64] as const;
+
+    for (const N of N_VALUES) {
+      for (const M of M_VALUES) {
+        const rng = mulberry32(N * 1000 + M);
+        const d = new PartialSortD(M, B_INFINITY);
+        const naive = new NaivePartialSort(M, B_INFINITY);
+
+        for (let i = 0; i < N; i += 1) {
+          const length = i % 5 === 0 ? Math.floor(rng.next() * 8) : rng.next() * 1000;
+          const nEdges = Math.floor(rng.next() * 4);
+          const label = lab(length, nEdges, i, SENTINEL);
+          d.insert(i, label);
+          naive.insert(i, label);
+        }
+
+        for (let pull = 0; pull < 3 && d.size > 0; pull += 1) {
+          let dRes: PartialSortPullResult;
+          try {
+            dRes = d.pull();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            violations.push(`N=${N} M=${M} pull=${pull} pull threw: ${message}`);
+            break;
+          }
+          const nRes = naive.pull();
+
+          const pullBound = LEMMA_34_SLACK * Math.max(1, dRes.n);
+          if (dRes.cmps > pullBound) {
+            violations.push(
+              `N=${N} M=${M} pull=${pull} pull cmps=${dRes.cmps} > ${pullBound} (n=${dRes.n})`,
+            );
+          }
+
+          if (!keysEqual(dRes.keys, nRes.keys)) {
+            violations.push(
+              `N=${N} M=${M} pull=${pull} pull keys mismatch d=${formatKeys(dRes.keys)} naive=${formatKeys(nRes.keys)}`,
+            );
+          }
+          if (compareLabels(dRes.bound, nRes.bound) !== "=") {
+            violations.push(
+              `N=${N} M=${M} pull=${pull} pull bound mismatch d=${dRes.bound.length} naive=${nRes.bound.length}`,
+            );
+          }
+          if (dRes.n !== nRes.n) {
+            violations.push(
+              `N=${N} M=${M} pull=${pull} pull n mismatch d=${dRes.n} naive=${nRes.n}`,
+            );
+          }
+          if (d.size !== naive.size) {
+            violations.push(
+              `N=${N} M=${M} pull=${pull} pull size-after mismatch d=${d.size} naive=${naive.size}`,
+            );
+          }
         }
       }
     }

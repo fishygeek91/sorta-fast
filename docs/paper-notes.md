@@ -344,6 +344,8 @@ Time `O(|D′|)`.
 
 **Amortized costs (Lemma 3.4).** Insert `O(log(N/M))`; Merge `O(|D′|)`; Pull `O(|S′|)`.
 
+**Implementation billing (#25).** Insert/Merge bill interval search and duplicate Comparison only; Pull bills Hoare select on the packed leftmost prefix (working set in `[M+1, 2M]` when packing holds), not a store-wide sort. Split/join/repack is unbilled maintenance (DMSY-P26).
+
 **Trace schema (DMSY-P10).** Schema landed in #25: `dstruct.op = "merge"`. Emitters pass `cmps`; `costOf` uses `OP_COST.comparison`.
 
 ```
@@ -516,7 +518,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P23 | §3.1 Algorithm 2 | Decrease-key vs browser heap | Binary heap with **lazy re-push**. If `v` already in `K`, replace the incoming tree edge, emit a corrective `forest` `grow`, and re-push; do not increase `\|K\|`. Replay uses **last grow per head vertex** within a search. | DMSY-P07; Dijkstra primitive; no Fibonacci decrease-key |
 | DMSY-P24 | §3.1; Appendix A.1; design §4.2 | How do `cut` events encode `{F_j}`? | One `forest` `cut` per tree-edge assigned to an `F_j` (`cut.tree` = `F_j` index). Replay groups cuts by `tree`. Edgeless singleton `F_j` (`k=1`) emits **no** `cut` (`e` must stay a real CSR id for the #23 unmapper). `grow.tree` is the **local-search id only** — after an overlap merge one `F̄` may span several `grow.tree` ids; `F̄`/`F_j` identity comes from `cut` events. `W_j` tree edges replay as last-grow-per-head (DMSY-P23). | Issue #24 audit AC; `createTraceUnmapper` rejects `e < 0` |
 | DMSY-P25 | Appendix A.1; Lemma A.1 | When to test `\|U\| >= s`? | After **each** child (inside the child loop), then leftover-merge. Reported groups stay in `[s, 2s)` before merge; last group `< 3s`. | §3.4 prose put the test after the loop; that overshoots `2s` on high-degree nodes. Lemma A.1 bound requires the per-child test. |
-| DMSY-P26 | Lemma 3.4; §A.2 | Initial interval `[0, B)` and whether Merge consumes D′ | Left endpoint is `ZERO_LABEL = ⟨0, 0, SENTINEL, SENTINEL⟩` in `partialSort.ts`. `merge(other)` always consumes `other` (reset to one empty `[ZERO, B)` block). Incoming pairs are placed by interval search (`putPair`); when D′ holds leftover keys below the last Pull bound this lands on the leftmost blocks (the paper append-to-first path). | §A.2; determinism; #25 |
+| DMSY-P26 | Lemma 3.4; §A.2 | Initial interval `[0, B)` and whether Merge consumes D′ | Left endpoint is `ZERO_LABEL = ⟨0, 0, SENTINEL, SENTINEL⟩` in `partialSort.ts`. `merge(other)` always consumes `other` (reset to one empty `[ZERO, B)` block). Incoming pairs are placed by interval search (`putPair`); when D′ holds leftover keys below the last Pull bound this lands on the leftmost blocks (the paper append-to-first path). `putPair` interval search bills O(\|D′\| · log #blocks)—one log factor above Lemma A.2's O(\|D′\|); accepted for placement correctness on unsorted intra-block lists; fuzz slack covers it. Pull bills Hoare select on that packed prefix (Lemma 3.4 O(\|S′\|)), not a store-wide sort. | §A.2; determinism; #25 |
 
 ## 7. Lemma and cost-bound sanity checklist
 

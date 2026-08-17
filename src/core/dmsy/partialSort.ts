@@ -2,8 +2,13 @@
  * DMSY partial-sorting structure D — arXiv 2602.07868 Lemma 3.4 / Appendix A.2 (issue #25).
  *
  * Geometry: in-order array of blocks (the paper's BST of blocks). Pairs inside
- * a block are unsorted. A key→label store is the source of truth for membership
- * and size; blocks are a packed view used for interval search and Pull.
+ * a block are unsorted. The key→label store is membership/size source of truth;
+ * blocks are the packed view for interval search and the billed Pull prefix.
+ *
+ * Billed work: search/select/Comparison on insert, merge, and pull. Structural
+ * normalize/split/join/repack is unbilled maintenance on all three ops (same
+ * family as map lookups / key-id sort). Differential fuzz is the unbilled
+ * correctness cross-check — no runtime full-store asserts in core.
  */
 
 import { type VertexId } from "../graph.ts";
@@ -216,7 +221,8 @@ export class PartialSortD {
     const stored = copyLabel(value);
     this.store.set(key, stored);
     this.putPair(c, { key, value: stored });
-    this.normalize(Math.ceil(this.M / 3), this.M, c);
+    const pack: Cmps = { n: 0 };
+    this.normalize(Math.ceil(this.M / 3), this.M, pack);
     return { n: 1, cmps: c.n };
   }
 
@@ -259,43 +265,36 @@ export class PartialSortD {
   /**
    * Extract the M smallest keys (or all keys when `|D| ≤ M`).
    *
-   * Selection runs on the store (source of truth) so Pull matches a naive
-   * Comparison sort even if a prior packing drifted. Blocks are then
-   * rebuilt from the leftover keys.
+   * Selection is one Hoare find of the (M+1)st pair on an O(M)-size prefix of
+   * leftmost blocks (Lemma 3.4 O(|S′|)), not a full-store sort. The store
+   * remains membership/size source of truth; leftover keys stay in place via
+   * `removeKey`.
    *
    * @returns Keys sorted by id (unbilled), `B_pull`, operand `n`, billed `cmps`.
    */
   pull(): PartialSortPullResult {
     const c: Cmps = { n: 0 };
     // arXiv 2602.07868 Lemma 3.4
-    const all = this.storePairs();
-    if (all.length === 0) {
+    const n = this.size;
+    if (n === 0) {
       return { keys: [], bound: copyLabel(this.B), n: 0, cmps: 0 };
     }
-    if (all.length <= this.M) {
-      const keys = all.map((pair) => pair.key).sort((a, b) => a - b);
+    if (n <= this.M) {
+      const keys = [...this.store.keys()].sort((a, b) => a - b);
       this.resetToEmpty();
       return { keys, bound: copyLabel(this.B), n: keys.length, cmps: 0 };
     }
-    const ranked = all.map((pair) => ({ key: pair.key, value: copyLabel(pair.value) }));
-    ranked.sort((a, b) => {
-      const order = billedCmp(c, a.value, b.value);
-      if (order !== "=") {
-        return order === "<" ? -1 : 1;
-      }
-      return a.key - b.key;
-    });
-    const selected = ranked.slice(0, this.M);
-    const threshold = must(ranked[this.M], "pull: missing (M+1)st pair");
+    const prefix = this.collectPullPrefix();
+    const { selected, bound } = this.selectPullPrefix(c, prefix);
     for (const pair of selected) {
-      this.store.delete(pair.key);
+      this.removeKey(pair.key);
     }
-    this.repackFromStore();
+    this.dropEmptyBlocks();
     const pack: Cmps = { n: 0 };
     this.normalize(Math.ceil(this.M / 2), Math.max(1, Math.floor((2 * this.M) / 3)), pack);
     return {
       keys: selected.map((pair) => pair.key).sort((a, b) => a - b),
-      bound: copyLabel(threshold.value),
+      bound,
       n: selected.length,
       cmps: c.n,
     };
@@ -395,17 +394,110 @@ export class PartialSortD {
     this.remap(must(this.blocks[0], "repack: missing root"));
   }
 
+  /**
+   * Concatenate leftmost nonempty blocks until the prefix has at least M+1 pairs
+   * and at most 2M when possible. A single leading block larger than 2M is taken
+   * as-is so Pull never loops forever.
+   */
+  private collectPullPrefix(): SortPair[] {
+    const prefix: SortPair[] = [];
+    const minPairs = this.M + 1;
+    const maxPairs = 2 * this.M;
+    for (const block of this.blocks) {
+      if (block.pairs.length === 0) {
+        continue;
+      }
+      if (prefix.length >= minPairs && prefix.length + block.pairs.length > maxPairs) {
+        break;
+      }
+      for (const pair of block.pairs) {
+        prefix.push({ key: pair.key, value: copyLabel(pair.value) });
+      }
+      if (prefix.length >= minPairs) {
+        break;
+      }
+    }
+    if (prefix.length < minPairs) {
+      throw new Error(
+        `collectPullPrefix: expected at least ${String(minPairs)} pairs, got ${String(prefix.length)}`,
+      );
+    }
+    return prefix;
+  }
+
+  /**
+   * Lemma 3.4 Pull on a packed prefix: one Hoare find of the (M+1)st pair `x`,
+   * then the M pairs strictly before `x`. `B_pull` is the label of `x`.
+   */
+  private selectPullPrefix(
+    c: Cmps,
+    prefix: readonly SortPair[],
+  ): { selected: SortPair[]; bound: DistanceLabel } {
+    const work = prefix.map((pair) => ({ key: pair.key, value: copyLabel(pair.value) }));
+    const threshold = selectKthPair(c, work, this.M);
+    const selected: SortPair[] = [];
+    for (const pair of prefix) {
+      if (pairLess(c, pair, threshold)) {
+        selected.push(pair);
+      }
+    }
+    if (selected.length !== this.M) {
+      throw new Error(
+        `pull: expected ${String(this.M)} keys before the (M+1)st, got ${String(selected.length)}`,
+      );
+    }
+    return { selected, bound: copyLabel(threshold.value) };
+  }
+
+  /**
+   * Split `pairs` into a Comparison-smaller left half and the remainder.
+   * Falls back to a billed key-order cut when value ties leave an empty right
+   * while the block is still oversized (needed so Pull's prefix stays O(M)).
+   */
+  private partitionBlockPairs(
+    c: Cmps,
+    pairs: SortPair[],
+    leftCount: number,
+    maxSize: number,
+  ): { left: SortPair[]; right: SortPair[] } {
+    const left = selectMSmallest(c, pairs, leftCount);
+    const leftKeys = new Set(left.map((pair) => pair.key));
+    const right = pairs.filter((pair) => !leftKeys.has(pair.key));
+    if (right.length > 0) {
+      return { left, right };
+    }
+    if (pairs.length <= maxSize) {
+      return { left: pairs, right: [] };
+    }
+    const ranked = pairs.map((pair) => ({ key: pair.key, value: copyLabel(pair.value) }));
+    ranked.sort((a, b) => {
+      const order = billedCmp(c, a.value, b.value);
+      if (order !== "=") {
+        return order === "<" ? -1 : 1;
+      }
+      return a.key - b.key;
+    });
+    const cutLeft = ranked.slice(0, leftCount);
+    const cutRight = ranked.slice(leftCount);
+    if (cutRight.length === 0) {
+      throw new Error(
+        `splitAt: cannot partition block of length ${String(pairs.length)} (maxSize ${String(maxSize)})`,
+      );
+    }
+    return { left: cutLeft, right: cutRight };
+  }
+
   private splitAt(index: number, c: Cmps, maxSize: number): void {
     const block = this.blocks[index];
     if (block === undefined || block.pairs.length <= maxSize || block.pairs.length < 2) {
       return;
     }
     const leftCount = Math.max(1, Math.floor(block.pairs.length / 2));
-    const left = selectMSmallest(c, block.pairs, leftCount);
-    const leftKeys = new Set(left.map((pair) => pair.key));
-    const right = block.pairs.filter((pair) => !leftKeys.has(pair.key));
+    const { left, right } = this.partitionBlockPairs(c, block.pairs, leftCount, maxSize);
     if (right.length === 0) {
-      return;
+      throw new Error(
+        `splitAt: empty right partition at index ${String(index)} (length ${String(block.pairs.length)}, maxSize ${String(maxSize)})`,
+      );
     }
     const cut = selectKthPair(
       c,
@@ -458,14 +550,14 @@ export class PartialSortD {
       if (block === undefined) {
         continue;
       }
-      let guard = 0;
-      while (block.pairs.length > maxSize && guard < 8) {
+      while (block.pairs.length > maxSize) {
         const before = block.pairs.length;
         this.splitAt(i, c, maxSize);
         if (block.pairs.length >= before) {
-          break;
+          throw new Error(
+            `normalize: splitAt failed to shrink block at index ${String(i)} (length ${String(before)}, maxSize ${String(maxSize)})`,
+          );
         }
-        guard += 1;
       }
     }
     for (let i = 0; i < this.blocks.length;) {
