@@ -20,7 +20,7 @@ When this document conflicts with the design-doc sketch, **the paper wins** and 
 | §3.3 Algorithm 3; §3.4–3.6 Lemmas 3.6–3.9 | §3.6 | `dmsy.ts` (#26) |
 | §3.7 Algorithm 4 | §3.7 | `dmsy.ts` (#26) |
 
-Design §4.1 names only `degreeReduce.ts`, `forest.ts`, `partialSort.ts`, and `dmsy.ts`. Label helpers and `paperDmsyParams` live **inside** the #26 module (or a file that issue adds under `src/core/dmsy/`). Do not invent a required `labels.ts` layout file.
+Design §4.1 names only `degreeReduce.ts`, `forest.ts`, `partialSort.ts`, and `dmsy.ts`. Comparison/Addition/Relax helpers are exported from `forest.ts` (#24; DMSY-P22); #26 may re-export. `paperDmsyParams` lives inside the #26 module. Do not invent a required `labels.ts` layout file.
 
 **#54** owns the billed-work `scanCosts` sweep and demo defaults. This document records which paper parameters degenerate at gallery `n ≤ 100000`. Do not copy BMSSP demo `k = max(4, paper k)`.
 
@@ -266,7 +266,7 @@ P_j = { x ∈ (S \ Q) ∩ F_j : ∀ j' < j, x ∉ F_{j'} }
 
 **Heap (DMSY-P07).** Paper Algorithm 2 names a Fibonacci heap for `O(log k)` per extracted vertex (Lemma 3.2, citing [13]). Each local search stops at `|K| ≥ k`, so `|K| ≤ k`. Sorta Fast **reuses the existing binary-heap Dijkstra primitive**. Same `O(log k)` class; Fairness later discloses the constant-factor difference.
 
-**Pivots are selected in Algorithm 3**, not here: `p_j = arg min_{x ∈ P_j} d[x]` under Comparison. Emit `pivot` for each `p_j`.
+**Pivots are selected in Algorithm 3**, not here: `p_j = arg min_{x ∈ P_j} d[x]` under Comparison. Emit `pivot` for each `p_j`. (#24 emits this first `p_j` here; Algorithm 3 re-selects per §3.6.)
 
 **Invariants** (Lemma 3.2, Remark 3.3):
 
@@ -510,6 +510,10 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P19 | §2.1 | Neighbor/id/coord order | Neighbors of v sorted by ascending id; slot k → cycle vertex floor(k/(δ−2)); reduced ids allocated v-major then cycle-index; split-copy (x,y) copy the original vertex. | Determinism (AGENTS.md); packCsr coords |
 | DMSY-P20 | §2.1; design §4.2 | How to un-map traces | Drop VIRTUAL_EDGE (cycle) relax/forest. First settle per original vertex wins; first pivot per original vertex wins (separate seen-sets). Pass through heap/batch/recurse/dstruct. Helpers only in degreeReduce.ts; harness/render unchanged. | Renderer sees original IDs; #26 wires the boundary |
 | DMSY-P21 | §2.1; `trace.ts` relax | Un-mapped `improved` flags | `createTraceUnmapper` preserves the reduced-graph `improved` bit. Two original edges can improve two different copies of `v` on G′; last-write replay on G is then wrong. Callers that replay on the original CSR (`TraceBuffer`, `auditDistancesFromTrace`) must recompute improvement. #26 does this at the emission boundary. | TraceBuffer last-write on `improved===1`; #23 tests rewrite in-test |
+| DMSY-P22 | §2.3; Algorithm 1; design §4.1 | Where do Comparison/Addition/Relax helpers live? | Exported from `src/core/dmsy/forest.ts` (#24). #26 may re-export. Do **not** add `labels.ts`. | #24 needs Algorithm 1 to run Algorithm 2; paper-notes forbade inventing a required `labels.ts` |
+| DMSY-P23 | §3.1 Algorithm 2 | Decrease-key vs browser heap | Binary heap with **lazy re-push**. If `v` already in `K`, replace the incoming tree edge, emit a corrective `forest` `grow`, and re-push; do not increase `\|K\|`. Replay uses **last grow per head vertex** within a search. | DMSY-P07; Dijkstra primitive; no Fibonacci decrease-key |
+| DMSY-P24 | §3.1; Appendix A.1; design §4.2 | How do `cut` events encode `{F_j}`? | One `forest` `cut` per tree-edge assigned to an `F_j` (`cut.tree` = `F_j` index). Replay groups cuts by `tree`. Edgeless singleton `F_j` (`k=1`) emits **no** `cut` (`e` must stay a real CSR id for the #23 unmapper). `grow.tree` is the **local-search id only** — after an overlap merge one `F̄` may span several `grow.tree` ids; `F̄`/`F_j` identity comes from `cut` events. `W_j` tree edges replay as last-grow-per-head (DMSY-P23). | Issue #24 audit AC; `createTraceUnmapper` rejects `e < 0` |
+| DMSY-P25 | Appendix A.1; Lemma A.1 | When to test `\|U\| >= s`? | After **each** child (inside the child loop), then leftover-merge. Reported groups stay in `[s, 2s)` before merge; last group `< 3s`. | §3.4 prose put the test after the loop; that overshoots `2s` on high-degree nodes. Lemma A.1 bound requires the per-child test. |
 
 ## 7. Lemma and cost-bound sanity checklist
 
