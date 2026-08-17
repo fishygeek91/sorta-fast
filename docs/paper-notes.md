@@ -525,6 +525,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P28 | §3.7 vs §4 | Does Algorithm 4 use a binary heap? | **No.** Algorithm 4 is `PartialSortD(M = 1)` + settle/relax/`dstruct`. Heap events only from Algorithm 2. | §3.7 is authoritative; §4 table was leftover BMSSP wording |
 | DMSY-P29 | Lemma A.2 Merge | `t = 1` makes parent and child both `M = 1` so `other.M ≥ this.M` | Do not call `PartialSortD.merge`. Absorb leftover child keys via billed `insert` and emit one `dstruct.merge` with summed `n`/`cmps`. | Lemma A.2 assumes `M′ < M`; gallery-small `n` can have `t = 1` |
 | DMSY-P30 | Observation 3.5 | Throw if an edge is scanned or insert-banded twice in Algorithm 3? | **No runtime abort.** Parent and child both scan `U_i` edges; nested insert-band uses can both fire as labels move. Observation 3.5 is an analysis bound, not an implementation trap. | Analysis fact vs loop structure |
+| DMSY-P31 | §3.3 finalize / Lemma 3.7 | W′ relax landing strictly below B′ | Union that vertex into U and settle it (completeness). Insert into D only when Addition ≥ B′ (paper-notes §3.6.6.2). | Hole would leave a vertex complete-below-B′ out of U and D |
 
 ## 7. Lemma and cost-bound sanity checklist
 

@@ -19,11 +19,15 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- DMSY 10k fuzz decorrelates graph kind from `n` so every kind sees sizes 8–47; lex tie-break checker cross-checks public `run()` distances and predecessors against mapped `runInstrumented()` on the reduced graph (#26).
+- Race pool sends BMSSP `k`/`t` only to the BMSSP worker and ignores DMSY `k`/`t` echoes for FindPivots narration (#26).
+- Public `run()` predecessors now map back the lex-winning reduced pred, not a scalar relax replay (#26).
 - Pull now selects from the packed block prefix (amortized O(|S′|) cmps) instead of a billed full-store sort, matching Lemma 3.4 at race-scale N (#25).
 - Forest `grow` now emits on lazy incoming-edge replace so `W_j` trees replay as last-grow-per-head; `partitionTree` walks an explicit stack on tree-local scratch so long chains cannot blow the JS stack or allocate O(n) per `F̄` (#24).
 
 ### Changed
 
+- paper-notes DMSY-P31 W′ relax below B′ unions into U (#26).
 - paper-notes §4 heap wording (Algorithm 2 only) and ambiguity log DMSY-P27–P30: `t` floor at `n = 2`, Algorithm 4 uses `dstruct` not heap, `t = 1` merge bypass, Observation 3.5 is analysis-only (#26).
 - paper-notes DMSY-P26 / §3.5: Pull bills prefix select (O(|S′|)); Merge `putPair` bills a log(#blocks) factor; Insert/Merge/Pull exclude packing from `cmps` (#25).
 - paper-notes: close DMSY-P10 (`merge` schema); add DMSY-P26 (`ZERO_LABEL`, Merge consumes D′) (#25).

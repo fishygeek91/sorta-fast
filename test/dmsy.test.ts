@@ -26,6 +26,7 @@ import {
   assertDmsyBoundedSettle,
   assertDmsyLexTieBreak,
   auditDmsyLengthsFromTrace,
+  drainDmsyInstrumented,
   drainDmsyRun,
 } from "./dmsy-helpers.ts";
 
@@ -130,6 +131,14 @@ describe("dmsy 3-node chain", () => {
     expect(assertDmsyLexTieBreak(graph, 0)).toEqual([]);
     expect(Array.from(result.predecessors)).toEqual([SENTINEL, 0, 1]);
   });
+
+  it("public run predecessors match runInstrumented on identity graph", () => {
+    const { result: publicResult } = drainDmsyRun(graph, 0);
+    const { result: instrumentedResult } = drainDmsyInstrumented(graph, 0);
+    expect(Array.from(publicResult.predecessors)).toEqual(
+      Array.from(instrumentedResult.predecessors),
+    );
+  });
 });
 
 describe("dmsy paper-notes §2.4 diamond", () => {
@@ -151,6 +160,17 @@ describe("dmsy paper-notes §2.4 diamond", () => {
     expectDistancesEqual(result.distances, new Float64Array([0, 1, 1]));
     expect(Array.from(result.predecessors)).toEqual([SENTINEL, 0, 0]);
     expect(assertDmsyLexTieBreak(graph, 0)).toEqual([]);
+
+    const inst = drainDmsyInstrumented(graph, 0);
+    expect(Array.from(result.predecessors)).toEqual(Array.from(inst.result.predecessors));
+  });
+
+  it("public run predecessors match runInstrumented on identity graph", () => {
+    const { result: publicResult } = drainDmsyRun(graph, 0);
+    const { result: instrumentedResult } = drainDmsyInstrumented(graph, 0);
+    expect(Array.from(publicResult.predecessors)).toEqual(
+      Array.from(instrumentedResult.predecessors),
+    );
   });
 
   it("labels d[1] ≺ d[2] by curr under runInstrumented", () => {

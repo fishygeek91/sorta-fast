@@ -6,6 +6,7 @@ import {
   degreeReduce,
   reducedSource,
   mapBackDistances,
+  mapBackPredecessors,
   createTraceUnmapper,
   type DegreeReduceResult,
 } from "../src/core/dmsy/degreeReduce.ts";
@@ -16,7 +17,7 @@ import {
   type Graph,
   SIZE_PRESETS,
 } from "../src/core/graph.ts";
-import { type TraceEvent } from "../src/core/trace.ts";
+import { SENTINEL, type TraceEvent } from "../src/core/trace.ts";
 import { auditDistancesFromTrace, drainRun } from "./dijkstra-helpers.ts";
 
 function expectDistancesEqual(a: Float64Array, b: Float64Array): void {
@@ -397,6 +398,55 @@ describe("degreeReduce trace un-map audit", () => {
         expect(event.e).toBeLessThan(original.m);
       }
     }
+  });
+});
+
+describe("mapBackPredecessors", () => {
+  it("throws on invalid n and length mismatch", () => {
+    const vertexMap = new Int32Array([0, 1]);
+    const reducedDist = new Float64Array([0, 1]);
+    const reducedPred = new Int32Array([SENTINEL, 0]);
+    expect(() => mapBackPredecessors(reducedPred, reducedDist, vertexMap, -1)).toThrow(
+      /n must be a non-negative integer/,
+    );
+    expect(() => mapBackPredecessors(reducedPred, new Float64Array([0]), vertexMap, 2)).toThrow(
+      /must match/,
+    );
+  });
+
+  it("copies predecessors through on an identity map", () => {
+    const n = 3;
+    const vertexMap = new Int32Array([0, 1, 2]);
+    const reducedDist = new Float64Array([0, 1, 2]);
+    const reducedPred = new Int32Array([SENTINEL, 0, 1]);
+    expect(Array.from(mapBackPredecessors(reducedPred, reducedDist, vertexMap, n))).toEqual([
+      SENTINEL,
+      0,
+      1,
+    ]);
+  });
+
+  it("walks off zero-weight cycle copies before projecting", () => {
+    const n = 2;
+    const vertexMap = new Int32Array([0, 0, 1]);
+    const reducedDist = new Float64Array([1, 1, 2]);
+    const reducedPred = new Int32Array([1, SENTINEL, 0]);
+    expect(Array.from(mapBackPredecessors(reducedPred, reducedDist, vertexMap, n))).toEqual([
+      SENTINEL,
+      0,
+    ]);
+  });
+
+  it("leaves unreachable originals at SENTINEL", () => {
+    const n = 3;
+    const vertexMap = new Int32Array([0, 1]);
+    const reducedDist = new Float64Array([0, 1]);
+    const reducedPred = new Int32Array([SENTINEL, 0]);
+    expect(Array.from(mapBackPredecessors(reducedPred, reducedDist, vertexMap, n))).toEqual([
+      SENTINEL,
+      0,
+      SENTINEL,
+    ]);
   });
 });
 

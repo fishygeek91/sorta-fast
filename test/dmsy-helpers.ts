@@ -15,7 +15,13 @@ import {
   type DmsyParams,
   type DmsyResult,
 } from "../src/core/dmsy/dmsy.ts";
-import { compareLabels, labelAt, type DistanceLabel } from "../src/core/dmsy/forest.ts";
+import {
+  degreeReduce,
+  mapBackDistances,
+  mapBackPredecessors,
+  reducedSource,
+} from "../src/core/dmsy/degreeReduce.ts";
+import { labelAt, type DistanceLabel } from "../src/core/dmsy/forest.ts";
 import { type Graph, type VertexId } from "../src/core/graph.ts";
 import { SENTINEL, type TraceEvent } from "../src/core/trace.ts";
 
@@ -216,7 +222,8 @@ function isUnreachableInitLabel(label: DistanceLabel, v: VertexId): boolean {
 }
 
 /**
- * Check DMSY lexicographic labels against the instrumented distance store.
+ * Check DMSY lexicographic labels and cross-check public {@link run} vs mapped
+ * {@link runInstrumented} on the degree-reduced graph.
  *
  * `recurse.bound` is only the length component of the call bound (schema is a
  * number). A synthetic ⟨bound, 0, SENTINEL, SENTINEL⟩ is **not** the real 4-tuple
@@ -224,9 +231,11 @@ function isUnreachableInitLabel(label: DistanceLabel, v: VertexId): boolean {
  * a larger nEdges/curr/pred. The algorithm already throws in `emitSettle` if
  * `compareLabels(label, B) !== "<"` against the live bound.
  *
- * This checker verifies store shape: settled `curr === v` and finite length;
- * source is ⟨0, 0, s, SENTINEL⟩; unreachable stay ⟨Infinity, 0, v, SENTINEL⟩;
- * `compareLabels` is a total order on the settled set (antisymmetry).
+ * Store shape on the instrumented lane: settled `curr === v` and finite length;
+ * source is ⟨0, 0, s, SENTINEL⟩; unreachable stay ⟨Infinity, 0, v, SENTINEL⟩.
+ * Distances and predecessors from public `run()` must match
+ * {@link mapBackDistances} / {@link mapBackPredecessors} of the instrumented
+ * result so a scalar pred replay cannot silently disagree with the live store.
  *
  * @returns Empty array when all checks pass; otherwise human-readable violation messages.
  */
@@ -236,22 +245,25 @@ export function assertDmsyLexTieBreak(
   params?: DmsyParams,
 ): string[] {
   const violations: string[] = [];
-  const { events, result } = drainDmsyInstrumented(graph, source, params);
+  const pub = drainDmsyRun(graph, source, params);
+  const reduced = degreeReduce(graph);
+  const reducedSrc = reducedSource(reduced.vertexMap, source);
+  const inst = drainDmsyInstrumented(reduced.graph, reducedSrc, params);
+  const { events, result } = inst;
   const { dist, distances } = result;
 
-  const sourceLabel = labelAt(dist, source);
+  const sourceLabel = labelAt(dist, reducedSrc);
   if (
     sourceLabel.length !== 0 ||
     sourceLabel.nEdges !== 0 ||
-    sourceLabel.curr !== source ||
+    sourceLabel.curr !== reducedSrc ||
     sourceLabel.pred !== SENTINEL
   ) {
     violations.push(
-      `source ${source}: expected ⟨0, 0, ${source}, SENTINEL⟩, got ${JSON.stringify(sourceLabel)}`,
+      `source ${reducedSrc}: expected ⟨0, 0, ${reducedSrc}, SENTINEL⟩, got ${JSON.stringify(sourceLabel)}`,
     );
   }
 
-  const settled: VertexId[] = [];
   for (const event of events) {
     if (event.k !== "settle") {
       continue;
@@ -264,42 +276,49 @@ export function assertDmsyLexTieBreak(
     if (!Number.isFinite(label.length)) {
       violations.push(`settle vertex ${v}: label length is not finite`);
     }
-    if (label.pred !== SENTINEL && (label.pred < 0 || label.pred >= graph.n)) {
+    if (label.pred !== SENTINEL && (label.pred < 0 || label.pred >= reduced.graph.n)) {
       violations.push(`settle vertex ${v}: pred ${label.pred} is out of range`);
     }
-    settled.push(v);
   }
 
-  for (let i = 0; i < settled.length; i += 1) {
-    const a = settled[i];
-    if (a === undefined) {
-      throw new Error(`settled[${i}] missing`);
-    }
-    const labelA = labelAt(dist, a);
-    if (compareLabels(labelA, labelA) !== "=") {
-      violations.push(`compareLabels is not reflexive at vertex ${a}`);
-    }
-    for (let j = i + 1; j < settled.length; j += 1) {
-      const b = settled[j];
-      if (b === undefined) {
-        throw new Error(`settled[${j}] missing`);
-      }
-      const labelB = labelAt(dist, b);
-      const ab = compareLabels(labelA, labelB);
-      const ba = compareLabels(labelB, labelA);
-      if (ab === "=" && ba !== "=") {
-        violations.push(`compareLabels antisymmetry failed for ${a} vs ${b}`);
-      }
-      if (ab === "<" && ba !== ">") {
-        violations.push(`compareLabels inversion failed for ${a} < ${b}`);
-      }
-      if (ab === ">" && ba !== "<") {
-        violations.push(`compareLabels inversion failed for ${a} > ${b}`);
-      }
-    }
-  }
-
+  const mappedDistances = mapBackDistances(inst.result.distances, reduced.vertexMap, graph.n);
   for (let v = 0; v < graph.n; v += 1) {
+    const pubDist = pub.result.distances[v];
+    const mappedDist = mappedDistances[v];
+    if (pubDist === undefined || mappedDist === undefined) {
+      violations.push(`vertex ${v}: missing distance slot in public vs instrumented cross-check`);
+      continue;
+    }
+    if (pubDist !== mappedDist) {
+      violations.push(
+        `vertex ${v}: public distance ${String(pubDist)} !== mapped instrumented ${String(mappedDist)}`,
+      );
+    }
+  }
+
+  const mappedPredecessors = mapBackPredecessors(
+    inst.result.predecessors,
+    inst.result.distances,
+    reduced.vertexMap,
+    graph.n,
+  );
+  for (let v = 0; v < graph.n; v += 1) {
+    const pubPred = pub.result.predecessors[v];
+    const mappedPred = mappedPredecessors[v];
+    if (pubPred === undefined || mappedPred === undefined) {
+      violations.push(
+        `vertex ${v}: missing predecessor slot in public vs instrumented cross-check`,
+      );
+      continue;
+    }
+    if (pubPred !== mappedPred) {
+      violations.push(
+        `vertex ${v}: public pred ${String(pubPred)} !== mapped instrumented ${String(mappedPred)}`,
+      );
+    }
+  }
+
+  for (let v = 0; v < reduced.graph.n; v += 1) {
     const distV = distances[v];
     if (distV === undefined) {
       violations.push(`distances[${v}] missing`);

@@ -72,6 +72,8 @@ export type SpawnRaceWorker = (algo: TraceAlgo) => RaceWorkerHandle;
 export class RaceWorkerPool {
   private readonly spawnWorker: SpawnRaceWorker;
   private workers: RaceWorkerHandle[] = [];
+  /** Lane algorithms for the active race; cleared on terminate. */
+  private laneAlgos: readonly TraceAlgo[] = [];
   private graphN: number | null = null;
   private graphM: number | null = null;
 
@@ -94,6 +96,7 @@ export class RaceWorkerPool {
   start(spec: RaceSpec, handlers: RacePoolHandlers): void {
     validateRaceSpec(spec);
     this.terminateWorkers();
+    this.laneAlgos = spec.lanes;
     this.graphN = null;
     this.graphM = null;
 
@@ -122,14 +125,16 @@ export class RaceWorkerPool {
         seed: spec.seed,
         source: spec.source,
       };
-      if (spec.mode !== undefined) {
-        runMessage.mode = spec.mode;
-      }
-      if (spec.k !== undefined) {
-        runMessage.k = spec.k;
-      }
-      if (spec.t !== undefined) {
-        runMessage.t = spec.t;
+      if (algo === "bmssp") {
+        if (spec.mode !== undefined) {
+          runMessage.mode = spec.mode;
+        }
+        if (spec.k !== undefined) {
+          runMessage.k = spec.k;
+        }
+        if (spec.t !== undefined) {
+          runMessage.t = spec.t;
+        }
       }
       worker.postMessage(runMessage);
       nextWorkers.push(worker);
@@ -141,6 +146,7 @@ export class RaceWorkerPool {
   /** Terminate all active workers and clear handles. Safe to call repeatedly. */
   terminate(): void {
     this.terminateWorkers();
+    this.laneAlgos = [];
     this.graphN = null;
     this.graphM = null;
   }
@@ -164,10 +170,16 @@ export class RaceWorkerPool {
           this.graphM = message.m;
           const graph = graphFromTraceMessage(message);
           // First graph wins so playback can start before every lane finishes
-          // generate. A later BMSSP echo is not retrofitted — Race/Story then
-          // fall back to findPivotsKFromEcho(graph.n). Correct while generators
-          // preserve n; do not drop this comment if a kind starts rounding n.
-          if (typeof message.k === "number" && typeof message.t === "number") {
+          // generate. k/t echo is BMSSP-lane-only — DMSY echoes paper params but
+          // must not drive FindPivots narration. A later BMSSP echo is not
+          // retrofitted; Race/Story fall back to findPivotsKFromEcho(graph.n).
+          // Correct while generators preserve n; do not drop if a kind rounds n.
+          const laneAlgo = this.laneAlgos[lane];
+          if (
+            laneAlgo === "bmssp" &&
+            typeof message.k === "number" &&
+            typeof message.t === "number"
+          ) {
             handlers.onGraph(graph, { k: message.k, t: message.t });
           } else {
             handlers.onGraph(graph);

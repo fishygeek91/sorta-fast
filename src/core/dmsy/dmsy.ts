@@ -11,6 +11,7 @@ import {
   createTraceUnmapper,
   degreeReduce,
   mapBackDistances,
+  mapBackPredecessors,
   reducedSource,
 } from "./degreeReduce.ts";
 import {
@@ -705,7 +706,14 @@ function* dmsy(
 
         if (accepted) {
           const labelV = labelAt(dist, v);
-          if (compareLabels(labelV, Bprime) !== "<") {
+          if (compareLabels(labelV, Bprime) === "<") {
+            // DMSY-P31: W′ relax landing strictly below B′ unions into U and settles
+            if (inUall[v] === 0) {
+              inUall[v] = 1;
+              Uall.push(v);
+            }
+            yield* emitSettle(v, B, dist, settleState);
+          } else {
             const insertResult = D.insert(v, labelV);
             yield {
               k: "dstruct",
@@ -814,9 +822,6 @@ export function* run(
   origDist.fill(Number.POSITIVE_INFINITY);
   origDist[source] = 0;
 
-  const origPred = new Int32Array(graph.n);
-  origPred.fill(SENTINEL);
-
   const edgeTails = buildEdgeTails(graph);
   const { weights, targets } = graph;
 
@@ -841,11 +846,8 @@ export function* run(
         const cand = distFrom + w;
         const improved = cand < distTo;
         yield { k: "relax", e, improved, cost: RELAX_EVENT_COST };
-        if (cand <= distTo) {
-          if (improved) {
-            origDist[to] = cand;
-            origPred[to] = from;
-          }
+        if (improved) {
+          origDist[to] = cand;
         }
       } else {
         yield mapped;
@@ -857,6 +859,11 @@ export function* run(
   const innerResult = step.value;
   return {
     distances: mapBackDistances(innerResult.distances, reduced.vertexMap, graph.n),
-    predecessors: origPred,
+    predecessors: mapBackPredecessors(
+      innerResult.predecessors,
+      innerResult.distances,
+      reduced.vertexMap,
+      graph.n,
+    ),
   };
 }
