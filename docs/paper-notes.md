@@ -344,7 +344,9 @@ Time `O(|D′|)`.
 
 **Amortized costs (Lemma 3.4).** Insert `O(log(N/M))`; Merge `O(|D′|)`; Pull `O(|S′|)`.
 
-**Trace schema gap (DMSY-P10).** `DSTRUCT_OP` is `{insert, batchPrepend, pull}`. Paper operations are Insert / **Merge** / Pull. **Do not edit `trace.ts` in #22.** Issue **#25** adds a `"merge"` op (or a tiny schema issue if #25 would exceed the line budget). Until then, do not invent a parallel billing path.
+**Implementation billing (#25).** Insert/Merge bill interval search and duplicate Comparison only; Pull bills Hoare select on the packed leftmost prefix (working set in `[M+1, 2M]` when packing holds), not a store-wide sort. Split/join/repack is unbilled maintenance (DMSY-P26).
+
+**Trace schema (DMSY-P10).** Schema landed in #25: `dstruct.op = "merge"`. Emitters pass `cmps`; `costOf` uses `OP_COST.comparison`.
 
 ```
 // arXiv 2602.07868 Lemma 3.4
@@ -433,13 +435,13 @@ Algorithms emit `TraceEvent`s only. The renderer never imports algorithm code. E
 | `batch` | Optional: FindPivots scan; each Pull-round | `OP_COST.batch` (0) |
 | `recurse` | `BMSSP` entry (`"in"`) and return (`"out"`) | `OP_COST.recurse` (0) |
 | `forest` | `grow`: edge added to `K` (Alg. 2). `cut`: Partition reports a group (Alg. 5) | `OP_COST.forest` (0) |
-| `dstruct` | `Insert` / `Pull` now; `Merge` after #25 | `cmps × OP_COST.comparison` |
+| `dstruct` | `Insert` / `Merge` / `Pull` | `cmps × OP_COST.comparison` |
 
 `pivot` / `batch` / `recurse` / `forest` are zero-cost so BMSSP/DMSY are not billed for structure Dijkstra does not emit.
 
 **Not traced:** `P̂_j`, partition DFS internals, degree-reduction build, map lookups.
 
-**Merge gap:** see DMSY-P10. No `dstruct.op = "merge"` on the #22 branch.
+**Merge:** uses `dstruct.op = "merge"` (#25 / DMSY-P10).
 
 Unreachable vertices never `settle`. Their predecessors stay `SENTINEL`. Trace audit re-derives **lengths** from `relax` events with the same Comparison / Relax rules.
 
@@ -473,6 +475,8 @@ Specified here; implemented in #23–#26. All fuzz uses seeded mulberry32 and **
 - `Merge` matches §A.2 (empty / `|D′| < M` / `|D′| ≥ M`); smaller value kept on duplicates.
 - Once the schema lands: every Insert / Pull / Merge emits `dstruct` with honest `cmps`.
 
+The structure methods return `{n, cmps}`; tests and #26 wrap them as `dstruct` events (the class is not a generator).
+
 ### 5.4 #26 — `dmsy.ts`
 
 - Differential lengths vs Dijkstra, BMSSP, and Bellman-Ford on **10 000** seeded graphs including ties (CI).
@@ -498,7 +502,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P07 | §3.1; Algorithm 2 | Fibonacci heap vs browser | **Binary heap**; `|K| ≤ k` keeps `O(log k)` | Lemma 3.2 proof; existing Dijkstra primitive |
 | DMSY-P08 | Algorithm 2 | Order of `forall x ∈ S` | **Ascending `VertexId`** | Determinism (`AGENTS.md`) |
 | DMSY-P09 | §2 opening | Paper assumes all vertices reachable | Keep unreachable at `⟨∞, 0, v, SENTINEL⟩`; skip `∞` FindPivots sources; **no discard** | Matches Dijkstra/BMSSP lanes |
-| DMSY-P10 | Lemma 3.4; `trace.ts` | `Merge` not in `DSTRUCT_OP` | No schema edit in #22; **#25** adds `"merge"` | Avoid a half-schema |
+| DMSY-P10 | Lemma 3.4; `trace.ts` | `Merge` not in `DSTRUCT_OP` | #25 added `DSTRUCT_OP.merge = 3` (append-only; insert/batchPrepend/pull codes unchanged). Billing remains `cmps × OP_COST.comparison`. | Avoid a half-schema |
 | DMSY-P11 | §3.1; Appendix A.1 | `forest` semantics | **`grow`** = edge added to `K`; **`cut`** = Partition reports a group | design.md §4.2; #24 / #27 |
 | DMSY-P12 | §3.5; Lemma 3.7 | Implement `P̂_j`? | **Proof-only**; maintain `p_j` per Alg. 3 | Footnote 2 |
 | DMSY-P13 | §3.3 HTML | Garbled Algorithm 3 line refs | Reconstruct from **§3.3 prose** | ar5iv artifact |
@@ -514,6 +518,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P23 | §3.1 Algorithm 2 | Decrease-key vs browser heap | Binary heap with **lazy re-push**. If `v` already in `K`, replace the incoming tree edge, emit a corrective `forest` `grow`, and re-push; do not increase `\|K\|`. Replay uses **last grow per head vertex** within a search. | DMSY-P07; Dijkstra primitive; no Fibonacci decrease-key |
 | DMSY-P24 | §3.1; Appendix A.1; design §4.2 | How do `cut` events encode `{F_j}`? | One `forest` `cut` per tree-edge assigned to an `F_j` (`cut.tree` = `F_j` index). Replay groups cuts by `tree`. Edgeless singleton `F_j` (`k=1`) emits **no** `cut` (`e` must stay a real CSR id for the #23 unmapper). `grow.tree` is the **local-search id only** — after an overlap merge one `F̄` may span several `grow.tree` ids; `F̄`/`F_j` identity comes from `cut` events. `W_j` tree edges replay as last-grow-per-head (DMSY-P23). | Issue #24 audit AC; `createTraceUnmapper` rejects `e < 0` |
 | DMSY-P25 | Appendix A.1; Lemma A.1 | When to test `\|U\| >= s`? | After **each** child (inside the child loop), then leftover-merge. Reported groups stay in `[s, 2s)` before merge; last group `< 3s`. | §3.4 prose put the test after the loop; that overshoots `2s` on high-degree nodes. Lemma A.1 bound requires the per-child test. |
+| DMSY-P26 | Lemma 3.4; §A.2 | Initial interval `[0, B)` and whether Merge consumes D′ | Left endpoint is `ZERO_LABEL = ⟨0, 0, SENTINEL, SENTINEL⟩` in `partialSort.ts`. `merge(other)` always consumes `other` (reset to one empty `[ZERO, B)` block). Incoming pairs are placed by interval search (`putPair`); when D′ holds leftover keys below the last Pull bound this lands on the leftmost blocks (the paper append-to-first path). `putPair` interval search bills O(\|D′\| · log #blocks)—one log factor above Lemma A.2's O(\|D′\|); accepted for placement correctness on unsorted intra-block lists; fuzz slack covers it. Pull bills Hoare select on that packed prefix (Lemma 3.4 O(\|S′\|)), not a store-wide sort. | §A.2; determinism; #25 |
 
 ## 7. Lemma and cost-bound sanity checklist
 

@@ -550,7 +550,7 @@ export class TraceBuffer {
           throw new Error(`missing dstruct fields at event ${String(eventIndex)}`);
         }
         target.dstructOps += 1;
-        if (op === DSTRUCT_OP.insert) {
+        if (op === DSTRUCT_OP.insert || op === DSTRUCT_OP.merge) {
           this.appendDBlock(target, n);
         } else if (op === DSTRUCT_OP.batchPrepend) {
           this.prependDBlock(target, n);
