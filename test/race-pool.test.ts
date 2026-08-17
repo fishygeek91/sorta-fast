@@ -365,10 +365,12 @@ describe("RaceWorkerPool BMSSP k/t echo", () => {
   });
 
   it("ignores DMSY k/t echo when DMSY graph arrives first in a three-lane race", () => {
+    let graphCount = 0;
     let capturedBmssp: EchoedBmsspParams | undefined;
 
     const { records } = startPool(["dijkstra", "bmssp", "dmsy"], {
       onGraph: (_graph, bmssp) => {
+        graphCount += 1;
         capturedBmssp = bmssp;
       },
     });
@@ -382,6 +384,7 @@ describe("RaceWorkerPool BMSSP k/t echo", () => {
       data: { ...sampleGraphMessage(4, 3), k: 8, t: 64 },
     });
 
+    expect(graphCount).toBe(1);
     expect(capturedBmssp).toBeUndefined();
   });
 });

@@ -296,12 +296,7 @@ export function assertDmsyLexTieBreak(
     }
   }
 
-  const mappedPredecessors = mapBackPredecessors(
-    inst.result.predecessors,
-    inst.result.distances,
-    reduced.vertexMap,
-    graph.n,
-  );
+  const mappedPredecessors = mapBackPredecessors(inst.result.dist, reduced.vertexMap, graph.n);
   for (let v = 0; v < graph.n; v += 1) {
     const pubPred = pub.result.predecessors[v];
     const mappedPred = mappedPredecessors[v];

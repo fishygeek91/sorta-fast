@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { bellmanFord } from "../src/core/bellmanFord.ts";
 import { generateGraph, GRAPH_KINDS, packCsr, type CsrEdge } from "../src/core/graph.ts";
+import { mulberry32 } from "../src/core/prng.ts";
 import { drainBmsspRun } from "./bmssp-helpers.ts";
 import { drainRun } from "./dijkstra-helpers.ts";
 import {
@@ -25,6 +26,32 @@ function float64ArraysEqual(a: Float64Array, b: Float64Array): boolean {
 
 function formatGraph(seed: number, kind: string, n: number, source: number): string {
   return `seed=${seed} kind=${kind} n=${n} source=${source}`;
+}
+
+/** Dense simple digraph with integer weights in {1, 2} for lex-predecessor tie fuzzing. */
+function buildDenseIntegerWeightGraph(seed: number): {
+  graph: ReturnType<typeof packCsr>;
+  source: number;
+  n: number;
+} {
+  const n = 4 + (seed % 9);
+  const rng = mulberry32(seed);
+  const edges: CsrEdge[] = [];
+  for (let u = 0; u < n; u += 1) {
+    for (let v = 0; v < n; v += 1) {
+      if (u === v) {
+        continue;
+      }
+      if (rng.next() < 0.4) {
+        const weight = rng.next() < 0.5 ? 1 : 2;
+        edges.push({ from: u, to: v, weight });
+      }
+    }
+  }
+  const coords = Array.from({ length: n }, (_, i) => i);
+  const graph = packCsr(n, edges, coords, coords);
+  const source = seed % n;
+  return { graph, source, n };
 }
 
 describe("dmsy differential fuzz", () => {
@@ -154,6 +181,51 @@ describe("dmsy differential fuzz", () => {
 
     expect(violations).toEqual([]);
   }, 120_000);
+
+  it("matches references on dense integer-weight digraphs (lex-pred load-bearing)", () => {
+    const violations: string[] = [];
+
+    for (let seed = 0; seed < 400; seed += 1) {
+      const { graph, source, n } = buildDenseIntegerWeightGraph(seed);
+      const ctx = `dense int seed=${seed} n=${n} source=${source}`;
+
+      const { events, result } = drainDmsyRun(graph, source);
+      const dijkstra = drainRun(graph, source);
+      const bmssp = drainBmsspRun(graph, source);
+      const ref = bellmanFord(graph, source);
+
+      if (!float64ArraysEqual(result.distances, dijkstra.result.distances)) {
+        violations.push(`${ctx}: distances differ from Dijkstra`);
+      }
+
+      if (!float64ArraysEqual(result.distances, bmssp.result.distances)) {
+        violations.push(`${ctx}: distances differ from BMSSP`);
+      }
+
+      if (!float64ArraysEqual(result.distances, ref)) {
+        violations.push(`${ctx}: distances differ from Bellman-Ford`);
+      }
+
+      const audited = auditDmsyLengthsFromTrace(graph, events, source);
+      if (!float64ArraysEqual(audited, result.distances)) {
+        violations.push(`${ctx}: trace audit distances differ from algorithm output`);
+      }
+
+      for (const msg of assertDmsyBoundedSettle(events, result.distances)) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      for (const msg of assertDmsyLexTieBreak(graph, source)) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      if (events.some((event) => event.k === "dstruct" && event.op === "batchPrepend")) {
+        violations.push(`${ctx}: trace contains forbidden dstruct batchPrepend`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  }, 60_000);
 
   it("produces identical events on repeated drains", () => {
     const seed = 42;

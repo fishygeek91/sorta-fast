@@ -9,6 +9,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- DMSY fuzz now includes 400 dense integer-weight digraphs (n 4–12, p≈0.4, weights in {1,2}) so the public-vs-instrumented lex predecessor check is load-bearing. (#26)
 - Instrumented DMSY lane (`src/core/dmsy/dmsy.ts`): Algorithms 3–4 composing degree reduction (#23), FindPivots (#24), and partial-sort D (#25); 4-tuple lex tie-break; degree-reduce trace un-map at the emission boundary; race lane behind `?lane3=1` with worker trace job/stream, URL codec round-trip, lane config (moss persona), and renderer settle-diff fill — `race=dmsy` tokens remain dropped until #27 (#26).
 - DMSY correctness battery: unit/golden helpers (`test/dmsy-helpers.ts`, `test/dmsy.test.ts`) and 10k-seed differential fuzz vs Dijkstra, BMSSP, and Bellman-Ford (`test/dmsy-fuzz.test.ts`) (#26).
 - Partial-sorting structure D (`src/core/dmsy/partialSort.ts`): BST-of-blocks Insert / Merge / Pull with billed `compareLabels` counters and `dstruct.op = "merge"` per arXiv 2602.07868 Lemma 3.4 / Appendix A.2 (#25).
@@ -19,6 +20,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Public `run()` predecessor projection now picks the 4-tuple lex-min reduced copy (`compareLabels` on ⟨length, nEdges, curr, pred⟩), not min length + lowest copy id. Cycle copies of one original share length but differ in hop count. (#26)
 - DMSY 10k fuzz decorrelates graph kind from `n` so every kind sees sizes 8–47; lex tie-break checker cross-checks public `run()` distances and predecessors against mapped `runInstrumented()` on the reduced graph (#26).
 - Race pool sends BMSSP `k`/`t` only to the BMSSP worker and ignores DMSY `k`/`t` echoes for FindPivots narration (#26).
 - Public `run()` predecessors now map back the lex-winning reduced pred, not a scalar relax replay (#26).
@@ -27,6 +29,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- paper-notes DMSY-P31: W′ `<B′` settles bypass `uCount`; `|U|` may exceed the workload cap by at most δ·|W′|. (#26)
 - paper-notes DMSY-P31 W′ relax below B′ unions into U (#26).
 - paper-notes §4 heap wording (Algorithm 2 only) and ambiguity log DMSY-P27–P30: `t` floor at `n = 2`, Algorithm 4 uses `dstruct` not heap, `t = 1` merge bypass, Observation 3.5 is analysis-only (#26).
 - paper-notes DMSY-P26 / §3.5: Pull bills prefix select (O(|S′|)); Merge `putPair` bills a log(#blocks) factor; Insert/Merge/Pull exclude packing from `cmps` (#25).

@@ -859,11 +859,6 @@ export function* run(
   const innerResult = step.value;
   return {
     distances: mapBackDistances(innerResult.distances, reduced.vertexMap, graph.n),
-    predecessors: mapBackPredecessors(
-      innerResult.predecessors,
-      innerResult.distances,
-      reduced.vertexMap,
-      graph.n,
-    ),
+    predecessors: mapBackPredecessors(innerResult.dist, reduced.vertexMap, graph.n),
   };
 }
