@@ -50,7 +50,7 @@ import { mountStory } from "./story.ts";
 import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
 import { RACE_CHROME_COPY, explainerMeaning, personaTitle } from "./siteCopy.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
-import { lanesFromSearch, type RaceLaneConfig } from "./raceLanes.ts";
+import { lanesFromRaceList, type RaceLaneConfig } from "./raceLanes.ts";
 import {
   parseRaceUrl,
   serializeRaceUrl,
@@ -2013,9 +2013,7 @@ function createCounterBlock(
  * @param state - Current race URL state.
  */
 function lanesFromRaceState(state: RaceUrlState): RaceLaneConfig[] {
-  const params = new URLSearchParams();
-  params.set("race", state.race.join(","));
-  return lanesFromSearch(params);
+  return lanesFromRaceList(state.race);
 }
 
 /**

@@ -56,7 +56,7 @@ export const GHOST_WINDOW_OPS = 10_000;
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
 
 /** Lane persona accent for settle-diff fills (issue #68). */
-export type DiffPersona = "marble" | "ember" | "stub";
+export type DiffPersona = "marble" | "ember" | "moss" | "stub";
 
 /** Options for {@link Renderer.drawDiff} settle-diff overlay (issue #68). */
 export type DiffOverlayOpts = {
@@ -358,6 +358,8 @@ export class Renderer {
   private diffMarbleFill: string;
   /** Ember persona settle-diff fill (issue #68). */
   private diffEmberFill: string;
+  /** Moss persona settle-diff fill (DMSY lane). */
+  private diffMossFill: string;
   /** Both-lanes settle-diff fill (issue #68). */
   private diffBothFill: string;
   /** Ink stroke for OOO ticks and labels (issue #68). */
@@ -427,6 +429,7 @@ export class Renderer {
     this.finishMarkStroke = dark.finishMark;
     this.diffMarbleFill = dark.diffMarble;
     this.diffEmberFill = dark.diffEmber;
+    this.diffMossFill = dark.moss;
     this.diffBothFill = dark.diffBoth;
     this.inkStroke = dark.ink;
     this.fillPixels = null;
@@ -455,6 +458,7 @@ export class Renderer {
     this.finishMarkStroke = tokens.finishMark;
     this.diffMarbleFill = tokens.diffMarble;
     this.diffEmberFill = tokens.diffEmber;
+    this.diffMossFill = tokens.moss;
     this.diffBothFill = tokens.diffBoth;
     this.inkStroke = tokens.ink;
     this.diffChromeDirty = true;
@@ -1059,6 +1063,9 @@ export class Renderer {
   private personaFill(persona: DiffPersona): string {
     if (persona === "ember") {
       return this.diffEmberFill;
+    }
+    if (persona === "moss") {
+      return this.diffMossFill;
     }
     return this.diffMarbleFill;
   }

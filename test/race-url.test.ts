@@ -511,10 +511,35 @@ describe("lanesFromSearch", () => {
     expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dijkstra-b"]);
   });
 
-  it("ignores lane3 when value is not dijkstra", () => {
-    const lanes = lanesFromSearch("?lane3=1");
+  it("ignores lane3 when value is not dijkstra or 1", () => {
+    const lanes = lanesFromSearch("?lane3=bmssp");
     expect(lanes.length).toBe(2);
     expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp"]);
+  });
+
+  it("adds DMSY as third lane when lane3=1", () => {
+    const lanes = lanesFromSearch("?lane3=1");
+    expect(lanes.length).toBe(3);
+    expect(lanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dmsy"]);
+    expect(lanes[2]).toEqual({
+      algo: "dmsy",
+      id: "dmsy",
+      label: "DMSY '26",
+      persona: "moss",
+    });
+  });
+
+  it("round-trips lane3=1 via serialize without race param", () => {
+    const parsed = parseRaceUrl("?lane3=1");
+    expect(parsed.race).toEqual(["dijkstra", "bmssp", "dmsy"]);
+    const query = serializeRaceUrl(parsed);
+    expect(query).toContain("lane3=1");
+    expect(query).not.toContain("race=");
+    expect(parseRaceUrl(serializeRaceUrl(parseRaceUrl("?lane3=1"))).race).toEqual([
+      "dijkstra",
+      "bmssp",
+      "dmsy",
+    ]);
   });
 
   it("serializes three-lane parse without lane3 param", () => {

@@ -7,7 +7,8 @@
  */
 
 import { type CsrEdge, type EdgeId, type Graph, packCsr, type VertexId } from "../graph.ts";
-import { type TraceEvent } from "../trace.ts";
+import { SENTINEL, type TraceEvent } from "../trace.ts";
+import { compareLabels, labelAt, type DistanceStore } from "./forest.ts";
 
 /** Marker in {@link DegreeReduceResult.edgeMap} for zero-weight cycle connectors. */
 export const VIRTUAL_EDGE = -1;
@@ -447,6 +448,117 @@ export function mapBackDistances(
   }
 
   return out;
+}
+
+/**
+ * Project the lex-winning reduced predecessor onto original vertex ids.
+ *
+ * For each original `v`, among reduced copies that map to `v` with finite
+ * {@link DistanceStore.length}, pick the copy whose full label
+ * ⟨length, nEdges, curr, pred⟩ is lexicographically smallest via
+ * {@link compareLabels}. Cycle copies of one original share length but differ in
+ * `nEdges` (each zero-weight hop adds one), so the fewest-hop copy wins — not
+ * the lowest copy id. {@link mapBackDistances} stays length-min; lex-min implies
+ * length-min among finite copies.
+ *
+ * Walk `dist.pred` off zero-weight cycle hops whose `vertexMap[p] === v` before
+ * projecting the predecessor to an original id.
+ *
+ * @param dist - Per-vertex distance store on the reduced graph.
+ * @param vertexMap - Reduced → original map from {@link degreeReduce}.
+ * @param n - Original vertex count.
+ */
+export function mapBackPredecessors(
+  dist: DistanceStore,
+  vertexMap: Int32Array,
+  n: number,
+): Int32Array {
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`n must be a non-negative integer, got ${String(n)}`);
+  }
+  const reducedN = vertexMap.length;
+  if (
+    dist.length.length !== reducedN ||
+    dist.nEdges.length !== reducedN ||
+    dist.curr.length !== reducedN ||
+    dist.pred.length !== reducedN
+  ) {
+    throw new Error(
+      `dist columns length ${dist.length.length} and vertexMap length ${reducedN} must match`,
+    );
+  }
+
+  const winCopy = new Int32Array(n);
+  for (let v = 0; v < n; v += 1) {
+    winCopy[v] = SENTINEL;
+  }
+
+  for (let r = 0; r < reducedN; r += 1) {
+    const v = vertexMap[r];
+    if (!Number.isInteger(v) || v < 0 || v >= n) {
+      throw new Error(`vertexMap[${r}] = ${String(v)} is out of range for n = ${n}`);
+    }
+    const length = dist.length[r];
+    if (length === undefined || (!Number.isFinite(length) && length !== Infinity)) {
+      throw new Error(`dist.length[${r}] is not a finite distance or Infinity`);
+    }
+    if (length === Infinity) {
+      continue;
+    }
+
+    const best = winCopy[v];
+    if (best === undefined) {
+      throw new Error(`mapBackPredecessors: missing winCopy slot for original vertex ${v}`);
+    }
+    if (best === SENTINEL) {
+      winCopy[v] = r;
+      continue;
+    }
+    if (compareLabels(labelAt(dist, r), labelAt(dist, best)) === "<") {
+      winCopy[v] = r;
+    }
+  }
+
+  const predecessors = new Int32Array(n);
+  predecessors.fill(SENTINEL);
+  const hopCap = reducedN;
+
+  for (let v = 0; v < n; v += 1) {
+    const r0 = winCopy[v];
+    if (r0 === undefined) {
+      throw new Error(`mapBackPredecessors: missing winCopy slot for original vertex ${v}`);
+    }
+    if (r0 === SENTINEL) {
+      continue;
+    }
+
+    const seen = new Set<number>();
+    let r = r0;
+    for (let hop = 0; hop < hopCap; hop += 1) {
+      const p = dist.pred[r];
+      if (p === undefined) {
+        throw new Error(`dist.pred[${r}] is undefined`);
+      }
+      if (p === SENTINEL) {
+        break;
+      }
+      const mappedPred = vertexMap[p];
+      if (mappedPred === undefined) {
+        throw new Error(`vertexMap[${p}] is undefined during predecessor walk`);
+      }
+      if (mappedPred !== v) {
+        predecessors[v] = mappedPred;
+        break;
+      }
+      if (seen.has(p)) {
+        break;
+      }
+      seen.add(p);
+      r = p;
+    }
+  }
+
+  return predecessors;
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   degreeReduce,
   reducedSource,
   mapBackDistances,
+  mapBackPredecessors,
   createTraceUnmapper,
   type DegreeReduceResult,
 } from "../src/core/dmsy/degreeReduce.ts";
@@ -16,7 +17,8 @@ import {
   type Graph,
   SIZE_PRESETS,
 } from "../src/core/graph.ts";
-import { type TraceEvent } from "../src/core/trace.ts";
+import { SENTINEL, type TraceEvent } from "../src/core/trace.ts";
+import { createDistanceStore, type DistanceStore } from "../src/core/dmsy/forest.ts";
 import { auditDistancesFromTrace, drainRun } from "./dijkstra-helpers.ts";
 
 function expectDistancesEqual(a: Float64Array, b: Float64Array): void {
@@ -397,6 +399,69 @@ describe("degreeReduce trace un-map audit", () => {
         expect(event.e).toBeLessThan(original.m);
       }
     }
+  });
+});
+
+describe("mapBackPredecessors", () => {
+  function makeStore(
+    length: readonly number[],
+    nEdges: readonly number[],
+    curr: readonly number[],
+    pred: readonly number[],
+  ): DistanceStore {
+    const dist = createDistanceStore(length.length);
+    for (let r = 0; r < length.length; r += 1) {
+      const len = length[r];
+      const ne = nEdges[r];
+      const c = curr[r];
+      const p = pred[r];
+      if (len === undefined || ne === undefined || c === undefined || p === undefined) {
+        throw new Error(`makeStore: missing column at index ${r}`);
+      }
+      dist.length[r] = len;
+      dist.nEdges[r] = ne;
+      dist.curr[r] = c;
+      dist.pred[r] = p;
+    }
+    return dist;
+  }
+
+  it("throws on invalid n and length mismatch", () => {
+    const vertexMap = new Int32Array([0, 1]);
+    const dist = makeStore([0, 1], [0, 1], [0, 1], [SENTINEL, 0]);
+    expect(() => mapBackPredecessors(dist, vertexMap, -1)).toThrow(
+      /n must be a non-negative integer/,
+    );
+    const shortDist = createDistanceStore(1);
+    expect(() => mapBackPredecessors(shortDist, vertexMap, 2)).toThrow(/must match/);
+  });
+
+  it("copies predecessors through on an identity map", () => {
+    const n = 3;
+    const vertexMap = new Int32Array([0, 1, 2]);
+    const dist = makeStore([0, 1, 2], [0, 1, 1], [0, 1, 2], [SENTINEL, 0, 1]);
+    expect(Array.from(mapBackPredecessors(dist, vertexMap, n))).toEqual([SENTINEL, 0, 1]);
+  });
+
+  it("walks off zero-weight cycle copies before projecting", () => {
+    const n = 2;
+    const vertexMap = new Int32Array([0, 0, 1]);
+    const dist = makeStore([1, 1, 2], [0, 0, 1], [0, 1, 2], [1, SENTINEL, 0]);
+    expect(Array.from(mapBackPredecessors(dist, vertexMap, n))).toEqual([SENTINEL, 0]);
+  });
+
+  it("leaves unreachable originals at SENTINEL", () => {
+    const n = 3;
+    const vertexMap = new Int32Array([0, 1]);
+    const dist = makeStore([0, 1], [0, 1], [0, 1], [SENTINEL, 0]);
+    expect(Array.from(mapBackPredecessors(dist, vertexMap, n))).toEqual([SENTINEL, 0, SENTINEL]);
+  });
+
+  it("picks lex-min copy (fewest hops), not lowest copy id, at equal length", () => {
+    const n = 3;
+    const vertexMap = new Int32Array([0, 1, 0, 2]);
+    const dist = makeStore([2, 1, 2, 1], [14, 1, 7, 1], [0, 1, 2, 3], [1, SENTINEL, 3, SENTINEL]);
+    expect(Array.from(mapBackPredecessors(dist, vertexMap, n))).toEqual([2, SENTINEL, SENTINEL]);
   });
 });
 

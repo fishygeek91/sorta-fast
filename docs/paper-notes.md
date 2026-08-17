@@ -20,7 +20,7 @@ When this document conflicts with the design-doc sketch, **the paper wins** and 
 | §3.3 Algorithm 3; §3.4–3.6 Lemmas 3.6–3.9 | §3.6 | `dmsy.ts` (#26) |
 | §3.7 Algorithm 4 | §3.7 | `dmsy.ts` (#26) |
 
-Design §4.1 names only `degreeReduce.ts`, `forest.ts`, `partialSort.ts`, and `dmsy.ts`. Comparison/Addition/Relax helpers are exported from `forest.ts` (#24; DMSY-P22); #26 may re-export. `paperDmsyParams` lives inside the #26 module. Do not invent a required `labels.ts` layout file.
+Design §4.1 names only `degreeReduce.ts`, `forest.ts`, `partialSort.ts`, and `dmsy.ts`. Comparison/Addition/Relax helpers are exported from `forest.ts` (#24; DMSY-P22); #26 may re-export. `paperDmsyParams` lives in `src/core/dmsy/dmsy.ts`. Do not invent a required `labels.ts` layout file.
 
 **#54** owns the billed-work `scanCosts` sweep and demo defaults. This document records which paper parameters degenerate at gallery `n ≤ 100000`. Do not copy BMSSP demo `k = max(4, paper k)`.
 
@@ -430,7 +430,7 @@ Algorithms emit `TraceEvent`s only. The renderer never imports algorithm code. E
 |---|---|---|
 | `relax` | Every Algorithm 1 test | `OP_COST.relax` (1), improved or not |
 | `settle` | Vertex committed complete into `U` | `OP_COST.settle` (1) |
-| `heap` | Binary-heap ops in FindPivots local Dijkstra and Algorithm 4 | `cmps × OP_COST.comparison` |
+| `heap` | Binary-heap ops in FindPivots local Dijkstra (**Algorithm 2 only**) | `cmps × OP_COST.comparison` |
 | `pivot` | Each `p_j` first inserted, and each full re-selection | `OP_COST.pivot` (0) |
 | `batch` | Optional: FindPivots scan; each Pull-round | `OP_COST.batch` (0) |
 | `recurse` | `BMSSP` entry (`"in"`) and return (`"out"`) | `OP_COST.recurse` (0) |
@@ -440,6 +440,8 @@ Algorithms emit `TraceEvent`s only. The renderer never imports algorithm code. E
 `pivot` / `batch` / `recurse` / `forest` are zero-cost so BMSSP/DMSY are not billed for structure Dijkstra does not emit.
 
 **Not traced:** `P̂_j`, partition DFS internals, degree-reduction build, map lookups.
+
+**Algorithm 4** uses `PartialSortD` with `M = 1` (`dstruct` insert/pull only), not `heap` (DMSY-P28).
 
 **Merge:** uses `dstruct.op = "merge"` (#25 / DMSY-P10).
 
@@ -519,6 +521,11 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P24 | §3.1; Appendix A.1; design §4.2 | How do `cut` events encode `{F_j}`? | One `forest` `cut` per tree-edge assigned to an `F_j` (`cut.tree` = `F_j` index). Replay groups cuts by `tree`. Edgeless singleton `F_j` (`k=1`) emits **no** `cut` (`e` must stay a real CSR id for the #23 unmapper). `grow.tree` is the **local-search id only** — after an overlap merge one `F̄` may span several `grow.tree` ids; `F̄`/`F_j` identity comes from `cut` events. `W_j` tree edges replay as last-grow-per-head (DMSY-P23). | Issue #24 audit AC; `createTraceUnmapper` rejects `e < 0` |
 | DMSY-P25 | Appendix A.1; Lemma A.1 | When to test `\|U\| >= s`? | After **each** child (inside the child loop), then leftover-merge. Reported groups stay in `[s, 2s)` before merge; last group `< 3s`. | §3.4 prose put the test after the loop; that overshoots `2s` on high-degree nodes. Lemma A.1 bound requires the per-child test. |
 | DMSY-P26 | Lemma 3.4; §A.2 | Initial interval `[0, B)` and whether Merge consumes D′ | Left endpoint is `ZERO_LABEL = ⟨0, 0, SENTINEL, SENTINEL⟩` in `partialSort.ts`. `merge(other)` always consumes `other` (reset to one empty `[ZERO, B)` block). Incoming pairs are placed by interval search (`putPair`); when D′ holds leftover keys below the last Pull bound this lands on the leftmost blocks (the paper append-to-first path). `putPair` interval search bills O(\|D′\| · log #blocks)—one log factor above Lemma A.2's O(\|D′\|); accepted for placement correctness on unsorted intra-block lists; fuzz slack covers it. Pull bills Hoare select on that packed prefix (Lemma 3.4 O(\|S′\|)), not a store-wide sort. | §A.2; determinism; #25 |
+| DMSY-P27 | §1.2; Lemma 3.9 | `t` formula underflows at `n = 2` (`log₂ log₂ n = 0`) | `t = max(1, ⌈√(log₂ n · log₂ log₂ n / δ)⌉)`; `n < 2` still `{k: 1, t: 1}` | Avoid `t = 0` / `M = 0` |
+| DMSY-P28 | §3.7 vs §4 | Does Algorithm 4 use a binary heap? | **No.** Algorithm 4 is `PartialSortD(M = 1)` + settle/relax/`dstruct`. Heap events only from Algorithm 2. | §3.7 is authoritative; §4 table was leftover BMSSP wording |
+| DMSY-P29 | Lemma A.2 Merge | `t = 1` makes parent and child both `M = 1` so `other.M ≥ this.M` | Do not call `PartialSortD.merge`. Absorb leftover child keys via billed `insert` and emit one `dstruct.merge` with summed `n`/`cmps`. | Lemma A.2 assumes `M′ < M`; gallery-small `n` can have `t = 1` |
+| DMSY-P30 | Observation 3.5 | Throw if an edge is scanned or insert-banded twice in Algorithm 3? | **No runtime abort.** Parent and child both scan `U_i` edges; nested insert-band uses can both fire as labels move. Observation 3.5 is an analysis bound, not an implementation trap. | Analysis fact vs loop structure |
+| DMSY-P31 | §3.3 finalize / Lemma 3.7 | W′ relax landing strictly below B′ | Union that vertex into U and settle it (completeness). Insert into D only when Addition ≥ B′ (paper-notes §3.6.6.2). W′ `<B′` settles bypass `uCount`, so `\|U\|` may exceed the Lemma 3.1/3.8 workload cap by at most `δ · \|W′\|` (gallery `δ = 3`). | Hole would leave a vertex complete-below-B′ out of U and D |
 
 ## 7. Lemma and cost-bound sanity checklist
 

@@ -19,7 +19,7 @@ const SHARED_SPEC: TraceJobSpec = {
  * @returns CSR graph from `onGraph`.
  * @throws When `onGraph` was never called.
  */
-function captureGraph(algo: "dijkstra" | "bmssp", spec: TraceJobSpec): Graph {
+function captureGraph(algo: "dijkstra" | "bmssp" | "dmsy", spec: TraceJobSpec): Graph {
   let graph: Graph | undefined;
 
   runTraceJob(algo, spec, {
@@ -37,13 +37,19 @@ function captureGraph(algo: "dijkstra" | "bmssp", spec: TraceJobSpec): Graph {
 }
 
 describe("runTraceJob graph identity", () => {
-  it("dijkstra and bmssp emit the same n, m, offsets, and targets for identical spec", () => {
+  it("dijkstra, bmssp, and dmsy emit the same n, m, offsets, and targets for identical spec", () => {
     const dijkstraGraph = captureGraph("dijkstra", SHARED_SPEC);
     const bmsspGraph = captureGraph("bmssp", SHARED_SPEC);
+    const dmsyGraph = captureGraph("dmsy", SHARED_SPEC);
 
     expect(dijkstraGraph.n).toBe(bmsspGraph.n);
     expect(dijkstraGraph.m).toBe(bmsspGraph.m);
     expect(dijkstraGraph.offsets).toEqual(bmsspGraph.offsets);
     expect(dijkstraGraph.targets).toEqual(bmsspGraph.targets);
+
+    expect(dmsyGraph.n).toBe(dijkstraGraph.n);
+    expect(dmsyGraph.m).toBe(dijkstraGraph.m);
+    expect(dmsyGraph.offsets).toEqual(dijkstraGraph.offsets);
+    expect(dmsyGraph.targets).toEqual(dijkstraGraph.targets);
   });
 });

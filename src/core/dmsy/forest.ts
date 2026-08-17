@@ -349,9 +349,12 @@ export function addWeight(label: DistanceLabel, weight: number, head: VertexId):
 }
 
 /**
- * Read the label at vertex `v` from a distance store.
+ * Read the ⟨length, nEdges, curr, pred⟩ 4-tuple at vertex `v` from a {@link DistanceStore}.
+ *
+ * @param dist - Per-vertex distance store.
+ * @param v - Vertex id.
  */
-function labelAt(dist: DistanceStore, v: VertexId): DistanceLabel {
+export function labelAt(dist: DistanceStore, v: VertexId): DistanceLabel {
   const length = dist.length[v];
   const nEdges = dist.nEdges[v];
   const curr = dist.curr[v];
