@@ -9,6 +9,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- Spanning-forest FindPivots (`src/core/dmsy/forest.ts`): local Dijkstra growth, Θ(k) subtree partition, per-subtree pivots, and `forest` grow/cut plus `pivot` trace events per arXiv 2602.07868 §3.1 / Appendix A.1 (#24).
 - Degree-reduction preprocessing (`src/core/dmsy/degreeReduce.ts`): Frederickson-style vertex split to a δ-bounded digraph with identity when `m/n < 3`, plus mapping tables and a trace un-mapper so later DMSY emission can project reduced IDs onto the original gallery graph (#23).
 - `TraceBuffer.applyCount` counts live-cursor applies so a second `syncLanes` past photo-finish freeze can assert zero applies, not only matching final `eventIndex` (#44).
 - `docs/paper-notes.md`: DMSY (arXiv 2602.07868 v2) implementation spec — section-cited pseudocode, 4-tuple tie-break, paper parameter formulas with gallery-n degeneracy, and a living ambiguity log (#22).
