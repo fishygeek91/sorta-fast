@@ -120,6 +120,11 @@ describe("encode / decodeAt round-trip", () => {
     const original: TraceEvent = { k: "dstruct", op: "pull", n: 2, cmps: 5 };
     expect(decodeAt(encodeOne(original), 0)).toEqual(original);
   });
+
+  it("dstruct merge", () => {
+    const original: TraceEvent = { k: "dstruct", op: "merge", n: 6, cmps: 4 };
+    expect(decodeAt(encodeOne(original), 0)).toEqual(original);
+  });
 });
 
 describe("costOf and tally", () => {

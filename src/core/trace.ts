@@ -28,7 +28,7 @@ export const HEAP_OP = { push: 0, popmin: 1, sift: 2 } as const;
 export const BATCH_PHASE = { start: 0, end: 1 } as const;
 export const RECURSE_DIR = { in: 0, out: 1 } as const;
 export const FOREST_OP = { grow: 0, cut: 1 } as const;
-export const DSTRUCT_OP = { insert: 0, batchPrepend: 1, pull: 2 } as const;
+export const DSTRUCT_OP = { insert: 0, batchPrepend: 1, pull: 2, merge: 3 } as const;
 
 /**
  * Fairness rules for every lane (design.md §2.4). The only place billed
@@ -65,7 +65,7 @@ export type TraceEvent =
   | { k: "batch"; phase: "start" | "end"; level: number; size: number }
   | { k: "recurse"; dir: "in" | "out"; level: number; bound: number }
   | { k: "forest"; op: "grow" | "cut"; e: EdgeId; tree: number }
-  | { k: "dstruct"; op: "insert" | "batchPrepend" | "pull"; n: number; cmps: number };
+  | { k: "dstruct"; op: "insert" | "batchPrepend" | "pull" | "merge"; n: number; cmps: number };
 
 /**
  * Structure-of-arrays trace slab. `count` is the number of filled rows;
@@ -233,7 +233,7 @@ function forestOpFromCode(code: number): "grow" | "cut" {
   }
 }
 
-function dstructOpFromCode(code: number): "insert" | "batchPrepend" | "pull" {
+function dstructOpFromCode(code: number): "insert" | "batchPrepend" | "pull" | "merge" {
   switch (code) {
     case DSTRUCT_OP.insert:
       return "insert";
@@ -241,6 +241,8 @@ function dstructOpFromCode(code: number): "insert" | "batchPrepend" | "pull" {
       return "batchPrepend";
     case DSTRUCT_OP.pull:
       return "pull";
+    case DSTRUCT_OP.merge:
+      return "merge";
     default:
       throw new Error(`invalid dstruct op code ${code}`);
   }

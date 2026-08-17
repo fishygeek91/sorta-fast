@@ -9,6 +9,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- Partial-sorting structure D (`src/core/dmsy/partialSort.ts`): BST-of-blocks Insert / Merge / Pull with billed `compareLabels` counters and `dstruct.op = "merge"` per arXiv 2602.07868 Lemma 3.4 / Appendix A.2 (#25).
 - Spanning-forest FindPivots (`src/core/dmsy/forest.ts`): local Dijkstra growth, Θ(k) subtree partition, per-subtree pivots, and `forest` grow/cut plus `pivot` trace events per arXiv 2602.07868 §3.1 / Appendix A.1 (#24).
 - Degree-reduction preprocessing (`src/core/dmsy/degreeReduce.ts`): Frederickson-style vertex split to a δ-bounded digraph with identity when `m/n < 3`, plus mapping tables and a trace un-mapper so later DMSY emission can project reduced IDs onto the original gallery graph (#23).
 - `TraceBuffer.applyCount` counts live-cursor applies so a second `syncLanes` past photo-finish freeze can assert zero applies, not only matching final `eventIndex` (#44).
@@ -20,6 +21,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- paper-notes: close DMSY-P10 (`merge` schema); add DMSY-P26 (`ZERO_LABEL`, Merge consumes D′) (#25).
 - paper-notes §1.2: implementation δ is 3 for every finite JS `n` (the raw `⌊(1/4)·log₂ log₂ n⌋` term never reaches 3); `reducedSource` JSDoc notes the O(|V′|) scan for #26 (#23).
 
 ## [1.0.0] - 2026-08-14

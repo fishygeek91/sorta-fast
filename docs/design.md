@@ -150,7 +150,7 @@ type TraceEvent =
   | { k: 'batch';  phase: 'start'|'end'; level: number; size: number }
   | { k: 'recurse'; dir: 'in'|'out'; level: number; bound: number }
   | { k: 'forest'; op: 'grow'|'cut'; e: EdgeId; tree: number } // DMSY only
-  | { k: 'dstruct'; op: 'insert'|'batchPrepend'|'pull'; n: number; cmps: number }
+  | { k: 'dstruct'; op: 'insert'|'batchPrepend'|'pull'|'merge'; n: number; cmps: number }
 ```
 Consequences: algorithms are testable headless in Node; the renderer never knows algorithm internals; scrub/rewind/replay are free; op accounting is centralized in one cost table (auditable — link it from the Fairness panel).
 

@@ -18,7 +18,7 @@ const HEAP_OPS = ["push", "popmin", "sift"] as const;
 const BATCH_PHASES = ["start", "end"] as const;
 const RECURSE_DIRS = ["in", "out"] as const;
 const FOREST_OPS = ["grow", "cut"] as const;
-const DSTRUCT_OPS = ["insert", "batchPrepend", "pull"] as const;
+const DSTRUCT_OPS = ["insert", "batchPrepend", "pull", "merge"] as const;
 
 function pickOp<T>(ops: readonly T[], index: number): T {
   const op = ops[index];
@@ -66,7 +66,7 @@ export function mixedTraceEvent(i: number): TraceEvent {
     default:
       return {
         k: "dstruct",
-        op: pickOp(DSTRUCT_OPS, i % 3),
+        op: pickOp(DSTRUCT_OPS, i % 4),
         n: (i % 128) + 1,
         cmps: i % 12,
       };

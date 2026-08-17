@@ -703,6 +703,29 @@ describe("BMSSP overlay state", () => {
     expect(buf.state.dBlockSizes[2]).toBe(2);
   });
 
+  it("dstruct merge appends a schematic block like insert", () => {
+    const graph = packCsr(1, [], [0], [0]);
+    const chunks = chunksFromEvents([
+      { k: "dstruct", op: "insert", n: 3, cmps: 1 },
+      { k: "dstruct", op: "merge", n: 4, cmps: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    expect(buf.state.dstructOps).toBe(0);
+    expect(buf.state.dBlockCount).toBe(0);
+
+    buf.seekWork(1);
+    expect(buf.state.dstructOps).toBe(1);
+    expect(buf.state.dBlockCount).toBe(1);
+    expect(buf.state.dBlockSizes[0]).toBe(3);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.dstructOps).toBe(2);
+    expect(buf.state.dBlockCount).toBe(2);
+    expect(buf.state.dBlockSizes[0]).toBe(3);
+    expect(buf.state.dBlockSizes[1]).toBe(4);
+  });
+
   it("seekWork(0) after BMSSP events resets overlay fields via keyframe", () => {
     const graph = packCsr(4, [{ from: 0, to: 1, weight: 1 }], [0, 5, 0, 0], [0, 0, 5, 0]);
     const chunks = chunksFromEvents([
