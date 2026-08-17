@@ -10,7 +10,7 @@ import { type Graph, type GraphKind } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
 
 /** Lane algorithm selector for trace worker requests. */
-export type TraceAlgo = "dijkstra" | "bmssp";
+export type TraceAlgo = "dijkstra" | "bmssp" | "dmsy";
 
 /** Main → worker: start a graph generation + algorithm trace run. */
 export type TraceRunRequest = {
@@ -23,9 +23,9 @@ export type TraceRunRequest = {
   source: number;
   /** BMSSP only: `"demo"` or `"paper"`; omitted → demo {@link bmsspParams}(n). Dijkstra ignores. */
   mode?: BmsspParamMode;
-  /** BMSSP only: optional level parameter k; omitted → mode default. Dijkstra ignores. */
+  /** BMSSP / DMSY only: optional level parameter k; omitted → mode or paper default. Dijkstra ignores. */
   k?: number;
-  /** BMSSP only: optional block parameter t; omitted → mode default. Dijkstra ignores. */
+  /** BMSSP / DMSY only: optional block parameter t; omitted → mode or paper default. Dijkstra ignores. */
   t?: number;
 };
 
@@ -39,9 +39,9 @@ export type TraceGraphMessage = {
   weights: Float64Array;
   x: Float64Array;
   y: Float64Array;
-  /** BMSSP only: resolved FindPivots/level k. Must arrive with `t`; Dijkstra omits both. */
+  /** BMSSP / DMSY only: resolved FindPivots/level k. Must arrive with `t`; Dijkstra omits both. */
   k?: number;
-  /** BMSSP only: resolved block parameter t. Must arrive with `k`; Dijkstra omits both. */
+  /** BMSSP / DMSY only: resolved block parameter t. Must arrive with `k`; Dijkstra omits both. */
   t?: number;
 };
 

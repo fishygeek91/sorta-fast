@@ -225,8 +225,10 @@ function validateRaceSpec(spec: RaceSpec): void {
 
   for (let lane = 0; lane < spec.lanes.length; lane += 1) {
     const algo = spec.lanes[lane];
-    if (algo !== "dijkstra" && algo !== "bmssp") {
-      throw new Error(`lanes[${String(lane)}] must be "dijkstra" or "bmssp", got ${String(algo)}`);
+    if (algo !== "dijkstra" && algo !== "bmssp" && algo !== "dmsy") {
+      throw new Error(
+        `lanes[${String(lane)}] must be "dijkstra", "bmssp", or "dmsy", got ${String(algo)}`,
+      );
     }
   }
 
@@ -284,16 +286,25 @@ function isGraphKind(value: string): value is GraphKind {
  * @param algo - Lane algorithm selector.
  */
 function defaultSpawnWorker(algo: TraceAlgo): RaceWorkerHandle {
-  const worker =
-    algo === "bmssp"
-      ? new Worker(new URL("../workers/bmsspTrace.ts", import.meta.url), {
-          type: "module",
-        })
-      : new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
-          type: "module",
-        });
-
-  return wrapDomWorker(worker);
+  if (algo === "bmssp") {
+    return wrapDomWorker(
+      new Worker(new URL("../workers/bmsspTrace.ts", import.meta.url), {
+        type: "module",
+      }),
+    );
+  }
+  if (algo === "dmsy") {
+    return wrapDomWorker(
+      new Worker(new URL("../workers/dmsyTrace.ts", import.meta.url), {
+        type: "module",
+      }),
+    );
+  }
+  return wrapDomWorker(
+    new Worker(new URL("../workers/dijkstraTrace.ts", import.meta.url), {
+      type: "module",
+    }),
+  );
 }
 
 /**

@@ -69,6 +69,12 @@ function main(): void {
     return;
   }
 
+  const dmsyChunk = findWorkerChunk(files, "dmsyTrace");
+  if (dmsyChunk === undefined) {
+    fail('no dist/assets/*.js chunk containing "dmsyTrace"');
+    return;
+  }
+
   const faviconPath = join(distDir, "favicon.svg");
   if (!existsSync(faviconPath)) {
     fail("dist/favicon.svg missing");
@@ -117,7 +123,7 @@ function main(): void {
     return;
   }
 
-  console.log(`build-workers ok: ${dijkstraChunk}, ${bmsspChunk}`);
+  console.log(`build-workers ok: ${dijkstraChunk}, ${bmsspChunk}, ${dmsyChunk}`);
 }
 
 main();

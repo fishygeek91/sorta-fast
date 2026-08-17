@@ -9,6 +9,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- Instrumented DMSY lane (`src/core/dmsy/dmsy.ts`): Algorithms 3–4 composing degree reduction (#23), FindPivots (#24), and partial-sort D (#25); 4-tuple lex tie-break; degree-reduce trace un-map at the emission boundary; race lane behind `?lane3=1` with worker trace job/stream, URL codec round-trip, lane config (moss persona), and renderer settle-diff fill — `race=dmsy` tokens remain dropped until #27 (#26).
+- DMSY correctness battery: unit/golden helpers (`test/dmsy-helpers.ts`, `test/dmsy.test.ts`) and 10k-seed differential fuzz vs Dijkstra, BMSSP, and Bellman-Ford (`test/dmsy-fuzz.test.ts`) (#26).
 - Partial-sorting structure D (`src/core/dmsy/partialSort.ts`): BST-of-blocks Insert / Merge / Pull with billed `compareLabels` counters and `dstruct.op = "merge"` per arXiv 2602.07868 Lemma 3.4 / Appendix A.2 (#25).
 - Spanning-forest FindPivots (`src/core/dmsy/forest.ts`): local Dijkstra growth, Θ(k) subtree partition, per-subtree pivots, and `forest` grow/cut plus `pivot` trace events per arXiv 2602.07868 §3.1 / Appendix A.1 (#24).
 - Degree-reduction preprocessing (`src/core/dmsy/degreeReduce.ts`): Frederickson-style vertex split to a δ-bounded digraph with identity when `m/n < 3`, plus mapping tables and a trace un-mapper so later DMSY emission can project reduced IDs onto the original gallery graph (#23).
@@ -22,6 +24,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- paper-notes §4 heap wording (Algorithm 2 only) and ambiguity log DMSY-P27–P30: `t` floor at `n = 2`, Algorithm 4 uses `dstruct` not heap, `t = 1` merge bypass, Observation 3.5 is analysis-only (#26).
 - paper-notes DMSY-P26 / §3.5: Pull bills prefix select (O(|S′|)); Merge `putPair` bills a log(#blocks) factor; Insert/Merge/Pull exclude packing from `cmps` (#25).
 - paper-notes: close DMSY-P10 (`merge` schema); add DMSY-P26 (`ZERO_LABEL`, Merge consumes D′) (#25).
 - paper-notes §1.2: implementation δ is 3 for every finite JS `n` (the raw `⌊(1/4)·log₂ log₂ n⌋` term never reaches 3); `reducedSource` JSDoc notes the O(|V′|) scan for #26 (#23).

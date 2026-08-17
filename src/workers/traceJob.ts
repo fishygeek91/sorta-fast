@@ -7,6 +7,7 @@
 import { type BmsspParamMode } from "../core/bmssp/params.ts";
 import { type GraphKind } from "../core/graph.ts";
 import { runBmsspTraceJob } from "./bmsspTraceJob.ts";
+import { runDmsyTraceJob } from "./dmsyTraceJob.ts";
 import { runDijkstraTraceJob, type JobSink } from "./dijkstraTraceJob.ts";
 import { type TraceAlgo } from "./protocol.ts";
 
@@ -31,7 +32,7 @@ export type { JobSink };
 /**
  * Run a trace job for the requested algorithm.
  *
- * @param algo - `"dijkstra"` or `"bmssp"`.
+ * @param algo - `"dijkstra"`, `"bmssp"`, or `"dmsy"`.
  * @param spec - Graph kind, size, seed, source, optional BMSSP k/t, and optional writer capacity.
  * @param sink - Receives the CSR graph once, then each trace chunk in order.
  * @throws When `algo` is not a supported {@link TraceAlgo}.
@@ -43,6 +44,9 @@ export function runTraceJob(algo: TraceAlgo, spec: TraceJobSpec, sink: JobSink):
       return;
     case "bmssp":
       runBmsspTraceJob(spec, sink);
+      return;
+    case "dmsy":
+      runDmsyTraceJob(spec, sink);
       return;
     default: {
       const unexpected: never = algo;
