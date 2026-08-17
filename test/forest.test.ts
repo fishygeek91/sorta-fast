@@ -11,7 +11,7 @@ import {
   type DistanceStore,
   type PartitionGroup,
 } from "../src/core/dmsy/forest.ts";
-import { packCsr, type Graph, type VertexId } from "../src/core/graph.ts";
+import { packCsr, type CsrEdge, type Graph, type VertexId } from "../src/core/graph.ts";
 import {
   costOf,
   decodeChunk,
@@ -450,4 +450,73 @@ describe("findPivotsForest duplicate sources", () => {
     expect(dup.result).toEqual(single.result);
     expect(dup.events).toEqual(single.events);
   });
+});
+
+describe("findPivotsForest lazy re-push grow", () => {
+  it("emits a corrective grow so last-grow-per-head matches collectK edges", () => {
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: 10 },
+        { from: 0, to: 2, weight: 1 },
+        { from: 2, to: 1, weight: 1 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const dist = makeLabels(3, [0]);
+    const { events, result } = drainFindPivotsForest(graph, B_INFINITY, [0], 4, dist, 0);
+
+    expect(result.Q).toEqual([0]);
+    expect(result.W).toEqual([0, 1, 2]);
+    expect(result.P).toEqual([]);
+
+    const lastGrowByHead = new Map<VertexId, number>();
+    for (const event of events) {
+      if (event.k === "forest" && event.op === "grow") {
+        const head = graph.targets[event.e];
+        if (head === undefined) {
+          throw new Error(`grow edge ${event.e} missing target`);
+        }
+        lastGrowByHead.set(head, event.e);
+      }
+    }
+
+    expect(lastGrowByHead.get(1)).toBe(2);
+    expect(lastGrowByHead.get(2)).toBe(1);
+    expect(events.some((e) => e.k === "forest" && e.op === "grow" && e.e === 2)).toBe(true);
+    auditForestTrace(graph, events, result);
+  });
+});
+
+describe("partitionTree long chain", () => {
+  it("partitions a 20000-vertex path without overflowing the stack", () => {
+    const n = 20000;
+    const edges: CsrEdge[] = [];
+    for (let i = 0; i < n - 1; i += 1) {
+      edges.push({ from: i, to: i + 1, weight: 1 });
+    }
+    const coords = Array.from({ length: n }, (_, i) => i);
+    const graph = packCsr(n, edges, coords, coords);
+    const vertices = coords;
+    const treeEdges = Array.from({ length: n - 1 }, (_, i) => i);
+    const s = 2;
+
+    const { groups } = drainPartitionTree(graph, vertices, treeEdges, s, 0);
+
+    const seenEdges = new Set<number>();
+    const covered = new Set<VertexId>();
+    for (const group of groups) {
+      expect(group.vertices.length).toBeGreaterThanOrEqual(s);
+      expect(group.vertices.length).toBeLessThan(3 * s);
+      for (const e of group.edges) {
+        expect(seenEdges.has(e)).toBe(false);
+        seenEdges.add(e);
+      }
+      for (const v of group.vertices) {
+        covered.add(v);
+      }
+    }
+    expect(covered.size).toBe(n);
+  }, 15_000);
 });

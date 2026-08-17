@@ -14,6 +14,10 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 - `TraceBuffer.applyCount` counts live-cursor applies so a second `syncLanes` past photo-finish freeze can assert zero applies, not only matching final `eventIndex` (#44).
 - `docs/paper-notes.md`: DMSY (arXiv 2602.07868 v2) implementation spec — section-cited pseudocode, 4-tuple tie-break, paper parameter formulas with gallery-n degeneracy, and a living ambiguity log (#22).
 
+### Fixed
+
+- Forest `grow` now emits on lazy incoming-edge replace so `W_j` trees replay as last-grow-per-head; `partitionTree` walks an explicit stack on tree-local scratch so long chains cannot blow the JS stack or allocate O(n) per `F̄` (#24).
+
 ### Changed
 
 - paper-notes §1.2: implementation δ is 3 for every finite JS `n` (the raw `⌊(1/4)·log₂ log₂ n⌋` term never reaches 3); `reducedSource` JSDoc notes the O(|V′|) scan for #26 (#23).

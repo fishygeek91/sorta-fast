@@ -517,14 +517,33 @@ export function* partitionTree(
     }
   }
 
-  const inTree = new Uint8Array(graph.n);
-  for (const v of vertices) {
-    inTree[v] = 1;
+  type AdjEntry = { neighbor: VertexId; edge: EdgeId };
+  type PartitionFrame = {
+    node: VertexId;
+    parent: VertexId;
+    incomingEdge: EdgeId;
+    childIdx: number;
+    children: AdjEntry[];
+    accumVertices: VertexId[];
+    accumEdges: EdgeId[];
+  };
+
+  const treeSize = vertices.length;
+  const localIndex = new Map<VertexId, number>();
+  for (let i = 0; i < treeSize; i += 1) {
+    localIndex.set(vertices[i], i);
   }
 
-  type AdjEntry = { neighbor: VertexId; edge: EdgeId };
-  const adj: AdjEntry[][] = Array.from({ length: graph.n }, () => []);
+  const adj: AdjEntry[][] = Array.from({ length: treeSize }, () => []);
   const { targets } = graph;
+
+  const localOf = (v: VertexId): number => {
+    const idx = localIndex.get(v);
+    if (idx === undefined) {
+      throw new Error(`vertex ${v} is not in the partition tree`);
+    }
+    return idx;
+  };
 
   for (const e of treeEdges) {
     const u = edgeSource(graph, e);
@@ -532,15 +551,15 @@ export function* partitionTree(
     if (v === undefined) {
       throw new Error(`CSR arc ${e} missing target`);
     }
-    if (inTree[u] === 0 || inTree[v] === 0) {
+    if (!localIndex.has(u) || !localIndex.has(v)) {
       throw new Error(`tree edge ${e} connects vertex outside tree`);
     }
-    adj[u].push({ neighbor: v, edge: e });
-    adj[v].push({ neighbor: u, edge: e });
+    adj[localOf(u)].push({ neighbor: v, edge: e });
+    adj[localOf(v)].push({ neighbor: u, edge: e });
   }
 
-  for (let u = 0; u < graph.n; u += 1) {
-    const entries = adj[u];
+  for (let i = 0; i < treeSize; i += 1) {
+    const entries = adj[i];
     if (entries.length > 0) {
       entries.sort((a, b) => a.neighbor - b.neighbor);
     }
@@ -552,6 +571,17 @@ export function* partitionTree(
       root = v;
     }
   }
+
+  const childrenOf = (node: VertexId, parent: VertexId): AdjEntry[] => {
+    const neighbors = adj[localOf(node)];
+    const children: AdjEntry[] = [];
+    for (const entry of neighbors) {
+      if (entry.neighbor !== parent) {
+        children.push(entry);
+      }
+    }
+    return children;
+  };
 
   const reports: ReportEntry[] = [];
   const cutEmitted = new Set<EdgeId>();
@@ -566,46 +596,75 @@ export function* partitionTree(
     }
   };
 
-  // arXiv 2602.07868 Algorithm 5
-  const partitionRecurse = (node: VertexId, parent: VertexId): SubtreeAccum => {
-    let accumVertices: VertexId[] = [node];
-    let accumEdges: EdgeId[] = [];
-
-    const neighbors = adj[node];
-    for (const entry of neighbors) {
-      const neighbor = entry.neighbor;
-      if (neighbor === parent) {
-        continue;
-      }
-      const childResult = partitionRecurse(neighbor, node);
-      for (const cv of childResult.vertices) {
-        accumVertices.push(cv);
-      }
-      for (const ce of childResult.edges) {
-        accumEdges.push(ce);
-      }
-      accumEdges.push(entry.edge);
-
-      // Lemma A.1: test |U| >= s after each child so reported groups stay in [s, 2s)
-      // before the leftover merge (DMSY-P25). Paper-notes §3.4 writes the test after
-      // the child loop; that reconstruction overshoots 2s on high-degree nodes.
-      if (accumVertices.length >= s) {
-        const group: PartitionGroup = {
-          vertices: sortedCopy(accumVertices),
-          edges: sortedEdgeCopy(accumEdges),
-        };
-        const treeId = nextReportTreeId;
-        nextReportTreeId += 1;
-        reports.push({ group, treeId });
-        accumVertices = [node];
-        accumEdges = [];
-      }
+  const maybeReport = (frame: PartitionFrame): void => {
+    if (frame.accumVertices.length < s) {
+      return;
     }
-
-    return { vertices: accumVertices, edges: accumEdges };
+    const group: PartitionGroup = {
+      vertices: sortedCopy(frame.accumVertices),
+      edges: sortedEdgeCopy(frame.accumEdges),
+    };
+    const treeId = nextReportTreeId;
+    nextReportTreeId += 1;
+    reports.push({ group, treeId });
+    frame.accumVertices = [frame.node];
+    frame.accumEdges = [];
   };
 
-  const leftover = partitionRecurse(root, SENTINEL);
+  // arXiv 2602.07868 Algorithm 5 — explicit stack (path-shaped F̄ can be Ω(n)).
+  const stack: PartitionFrame[] = [
+    {
+      node: root,
+      parent: SENTINEL,
+      incomingEdge: SENTINEL,
+      childIdx: 0,
+      children: childrenOf(root, SENTINEL),
+      accumVertices: [root],
+      accumEdges: [],
+    },
+  ];
+
+  let leftover: SubtreeAccum = { vertices: [root], edges: [] };
+
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1];
+    if (frame === undefined) {
+      throw new Error("partitionTree: empty stack frame");
+    }
+    if (frame.childIdx < frame.children.length) {
+      const entry = frame.children[frame.childIdx];
+      frame.childIdx += 1;
+      stack.push({
+        node: entry.neighbor,
+        parent: frame.node,
+        incomingEdge: entry.edge,
+        childIdx: 0,
+        children: childrenOf(entry.neighbor, frame.node),
+        accumVertices: [entry.neighbor],
+        accumEdges: [],
+      });
+      continue;
+    }
+
+    stack.pop();
+    if (stack.length === 0) {
+      leftover = { vertices: frame.accumVertices, edges: frame.accumEdges };
+      break;
+    }
+
+    const parentFrame = stack[stack.length - 1];
+    if (parentFrame === undefined) {
+      throw new Error("partitionTree: missing parent frame");
+    }
+    for (const cv of frame.accumVertices) {
+      parentFrame.accumVertices.push(cv);
+    }
+    for (const ce of frame.accumEdges) {
+      parentFrame.accumEdges.push(ce);
+    }
+    parentFrame.accumEdges.push(frame.incomingEdge);
+    maybeReport(parentFrame);
+  }
 
   if (reports.length === 0) {
     const soleGroup: PartitionGroup = {
@@ -702,9 +761,6 @@ export function* findPivotsForest(
   }
   if (!Number.isFinite(B.length) && B.length !== Number.POSITIVE_INFINITY) {
     throw new Error(`B.length must be finite or +Infinity, got ${String(B.length)}`);
-  }
-  if (Number.isNaN(B.length) || B.length === Number.NEGATIVE_INFINITY) {
-    throw new Error(`B.length must not be NaN or -Infinity, got ${String(B.length)}`);
   }
   if (
     dist.length.length !== graph.n ||
@@ -860,6 +916,8 @@ export function* findPivotsForest(
 
         if (kInK[v] === 1) {
           kIncoming[v] = e;
+          // DMSY-P23/P24: last grow per head vertex wins on replay.
+          yield { k: "forest", op: "grow", e, tree: currentSearchId };
           const rePushCmps = heap.push(v, labelAt(dist, v));
           yield { k: "heap", op: "push", cmps: rePushCmps };
           continue;
