@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyRelax,
   B_INFINITY,
   compareLabels,
   createDistanceStore,
@@ -120,6 +121,24 @@ describe("distance labels (paper-notes §2.4)", () => {
       curr: 2,
       pred: SENTINEL,
     });
+  });
+
+  it("relax accepts equal-label re-scans; applyRelax reports no strict improvement", () => {
+    const dist = makeLabels(2, [0]);
+
+    expect(relax(dist, 0, 1, 1, B_INFINITY)).toBe(true);
+    const afterFirst = readLabel(dist, 1);
+
+    expect(relax(dist, 0, 1, 1, B_INFINITY)).toBe(true);
+    expect(readLabel(dist, 1)).toEqual(afterFirst);
+
+    const distEqual = makeLabels(2, [0]);
+    relax(distEqual, 0, 1, 1, B_INFINITY);
+    expect(applyRelax(distEqual, 0, 1, 1, B_INFINITY)).toEqual({
+      accepted: true,
+      improved: false,
+    });
+    expect(readLabel(distEqual, 1)).toEqual(afterFirst);
   });
 
   it("relax from source accepts equal-weight paths and rejects longer ones", () => {

@@ -25,6 +25,7 @@ import { drainRun } from "./dijkstra-helpers.ts";
 import {
   assertDmsyBoundedSettle,
   assertDmsyLexTieBreak,
+  assertDmsySettleFinality,
   auditDmsyLengthsFromTrace,
   drainDmsyInstrumented,
   drainDmsyRun,
@@ -129,6 +130,7 @@ describe("dmsy 3-node chain", () => {
     expectDistancesEqual(auditDmsyLengthsFromTrace(graph, events, 0), result.distances);
     expect(assertDmsyBoundedSettle(events, result.distances)).toEqual([]);
     expect(assertDmsyLexTieBreak(graph, 0)).toEqual([]);
+    expect(assertDmsySettleFinality(graph, events, 0).messages).toEqual([]);
     expect(Array.from(result.predecessors)).toEqual([SENTINEL, 0, 1]);
   });
 
@@ -155,10 +157,12 @@ describe("dmsy paper-notes §2.4 diamond", () => {
   );
 
   it("settles equal lengths with lex tie-break and predecessors [SENTINEL, 0, 0]", () => {
-    const { result } = drainDmsyRun(graph, 0);
+    const { events, result } = drainDmsyRun(graph, 0);
 
     expectDistancesEqual(result.distances, new Float64Array([0, 1, 1]));
     expect(Array.from(result.predecessors)).toEqual([SENTINEL, 0, 0]);
+    expect(assertDmsyBoundedSettle(events, result.distances)).toEqual([]);
+    expect(assertDmsySettleFinality(graph, events, 0).messages).toEqual([]);
     expect(assertDmsyLexTieBreak(graph, 0)).toEqual([]);
 
     const inst = drainDmsyInstrumented(graph, 0);

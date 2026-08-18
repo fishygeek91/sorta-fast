@@ -15,12 +15,12 @@ import {
   reducedSource,
 } from "./degreeReduce.ts";
 import {
+  applyRelax,
   B_INFINITY,
   compareLabels,
   createDistanceStore,
   findPivotsForest,
   labelAt,
-  relax,
   type DistanceLabel,
   type DistanceStore,
 } from "./forest.ts";
@@ -425,10 +425,11 @@ function* basePartialSort(
         throw new Error(`CSR arc ${e} missing`);
       }
 
-      const accepted = relax(dist, u, v, w, B);
-      yield { k: "relax", e, improved: accepted, cost: RELAX_EVENT_COST };
+      // DMSY-P32: improved is strict 4-tuple <; accepted still includes "=" (arXiv 2602.07868 Algorithm 1)
+      const outcome = applyRelax(dist, u, v, w, B);
+      yield { k: "relax", e, improved: outcome.improved, cost: RELAX_EVENT_COST };
 
-      if (accepted) {
+      if (outcome.accepted) {
         const insertResult = D.insert(v, labelAt(dist, v));
         yield {
           k: "dstruct",
@@ -597,10 +598,10 @@ function* dmsy(
             throw new Error(`CSR arc ${e} missing`);
           }
 
-          const accepted = relax(dist, u, v, w, B);
-          yield { k: "relax", e, improved: accepted, cost: RELAX_EVENT_COST };
+          const outcome = applyRelax(dist, u, v, w, B);
+          yield { k: "relax", e, improved: outcome.improved, cost: RELAX_EVENT_COST };
 
-          if (accepted) {
+          if (outcome.accepted) {
             const labelV = labelAt(dist, v);
             const vsBi = compareLabels(labelV, Bi);
             const vsB = compareLabels(labelV, B);
@@ -701,10 +702,10 @@ function* dmsy(
           throw new Error(`CSR arc ${e} missing`);
         }
 
-        const accepted = relax(dist, u, v, w, B);
-        yield { k: "relax", e, improved: accepted, cost: RELAX_EVENT_COST };
+        const outcome = applyRelax(dist, u, v, w, B);
+        yield { k: "relax", e, improved: outcome.improved, cost: RELAX_EVENT_COST };
 
-        if (accepted) {
+        if (outcome.accepted) {
           const labelV = labelAt(dist, v);
           if (compareLabels(labelV, Bprime) === "<") {
             // DMSY-P31: W′ relax landing strictly below B′ unions into U and settles

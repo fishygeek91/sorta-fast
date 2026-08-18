@@ -157,7 +157,7 @@ AND
 Comparison(Addition(d[u], w_uv), B) = "<"
 ```
 
-On accept, `d[v] ← Addition(d[u], w_uv)`. Algorithm 1’s scalar `d[u] + w ≤ d[v]` and `< B` are **shorthand** for these Comparison calls (DMSY-P06). The `≤` vs `d[v]` is required: when `u = d[v].pred` and `d[u]` has improved, `d[v]` must update even if length/nEdges would otherwise look tied (§2.3).
+On accept, `d[v] ← Addition(d[u], w_uv)`. The boolean returned to **algorithm control flow** is paper accept (`Comparison ∈ {"<", "="}`). The trace event’s `improved` field is **only** `Comparison === "<"` (DMSY-P32): an `"="` accept writes the same 4-tuple and is not an improvement. Algorithm 1’s scalar `d[u] + w ≤ d[v]` and `< B` are **shorthand** for these Comparison calls (DMSY-P06). The `≤` vs `d[v]` is required: when `u = d[v].pred` and `d[u]` has improved, `d[v]` must update even if length/nEdges would otherwise look tied (§2.3).
 
 ### 2.3 Why four components suffice (§2.3)
 
@@ -428,7 +428,7 @@ Algorithms emit `TraceEvent`s only. The renderer never imports algorithm code. E
 
 | Kind | When | Cost |
 |---|---|---|
-| `relax` | Every Algorithm 1 test | `OP_COST.relax` (1), improved or not |
+| `relax` | Every Algorithm 1 test; `improved` iff the 4-tuple strictly decreased (`Comparison === "<"`), not paper accept (`"="` is a no-op write) | `OP_COST.relax` (1), improved or not |
 | `settle` | Vertex committed complete into `U` | `OP_COST.settle` (1) |
 | `heap` | Binary-heap ops in FindPivots local Dijkstra (**Algorithm 2 only**) | `cmps × OP_COST.comparison` |
 | `pivot` | Each `p_j` first inserted, and each full re-selection | `OP_COST.pivot` (0) |
@@ -526,6 +526,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P29 | Lemma A.2 Merge | `t = 1` makes parent and child both `M = 1` so `other.M ≥ this.M` | Do not call `PartialSortD.merge`. Absorb leftover child keys via billed `insert` and emit one `dstruct.merge` with summed `n`/`cmps`. | Lemma A.2 assumes `M′ < M`; gallery-small `n` can have `t = 1` |
 | DMSY-P30 | Observation 3.5 | Throw if an edge is scanned or insert-banded twice in Algorithm 3? | **No runtime abort.** Parent and child both scan `U_i` edges; nested insert-band uses can both fire as labels move. Observation 3.5 is an analysis bound, not an implementation trap. | Analysis fact vs loop structure |
 | DMSY-P31 | §3.3 finalize / Lemma 3.7 | W′ relax landing strictly below B′ | Union that vertex into U and settle it (completeness). Insert into D only when Addition ≥ B′ (paper-notes §3.6.6.2). W′ `<B′` settles bypass `uCount`, so `\|U\|` may exceed the Lemma 3.1/3.8 workload cap by at most `δ · \|W′\|` (gallery `δ = 3`). | Hole would leave a vertex complete-below-B′ out of U and D |
+| DMSY-P32 | §2.3 Algorithm 1; §2.4; Lemma 3.7; issue #92 | Post-settle `improved: true` on instrumented traces | **Not a completeness violation.** Hunt (gallery+dense, paper and forced {2,2}) found only equal-label no-ops from Relax accepting `"="` (mostly Alg. 3 step 5.6 re-scans). Trace `improved` = strict 4-tuple `<`. Paper accept still includes `"="`. Public `run()` already recomputes scalar improvement (DMSY-P21). | #92 |
 
 ## 7. Lemma and cost-bound sanity checklist
 
