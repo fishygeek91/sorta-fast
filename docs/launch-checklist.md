@@ -70,7 +70,7 @@ DMSY announcement kit — three-lane race (Dijkstra vs BMSSP vs DMSY). First pub
 
 ### Social unfurl (OG)
 
-- [x] 3-way OG card captured via #18 exporter at 1200×630 (`sips -z 630 1200`); city n=500 seed 1729. #51 oxipng/pngquant compression still open (neither tool on PATH).
+- [x] 3-way OG card captured via #18 exporter at 1200×630 (`sips -z 630 1200`); city n=500 seed 1729. #51 done: compressed with pngquant + oxipng from 815,118 to 225,213 bytes (72% smaller), still 1200×630.
 - [ ] Twitter/OG debugger verify on the live URL after deploy.
 
 ### Exports

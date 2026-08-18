@@ -38,6 +38,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- `public/og-card.png` recompressed with pngquant + oxipng from 815,118 to 225,213 bytes (72% smaller, still 1200×630 so `og:image` meta stays correct); byte-ceiling and IHDR contract tests in `test/og-card.test.ts` and `test/build-workers.ts` (#51).
 - README, `index.html` meta, and `package.json` description now advertise the shipped 3-way race (Dijkstra vs BMSSP vs DMSY) and the first-public-implementation claim for arXiv 2602.07868 (#28).
 - Deleted the unused `relax()` wrapper so production callers cannot emit paper-accept as `improved` (#92).
 - paper-notes DMSY-P32: trace `improved` is a strict 4-tuple decrease; paper Relax accept still includes `"="` (#92).
