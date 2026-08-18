@@ -220,7 +220,14 @@ export function assertDmsyBoundedSettle(
 /** Classification of a post-settle improving relax relative to the settled label. */
 export type DmsySettleImproveClass = "strict-length" | "lex-only" | "equal-label";
 
-/** Emission region derived from recurse/batch context at the finding. */
+/**
+ * Emission region inferred from recurse context at the finding.
+ *
+ * `after-child` is sticky: once a child returns (`lastRecurseDir === "out"`),
+ * later same-frame work — Algorithm 3 step 5.6 `U_i` re-scans *and* the W′
+ * finalize block (DMSY-P31) — shares this tag. Diagnostic only; it does not
+ * gate the settle-finality invariant.
+ */
 export type DmsySettleImproveRegion = "level-0" | "after-child" | "in-level";
 
 /** One post-settle improving relax witness from {@link assertDmsySettleFinality}. */
@@ -323,6 +330,7 @@ function settleImproveContext(
     return { region: "level-0", recurseDepth, activeLevel };
   }
   if (lastRecurseDir === "out") {
+    // Sticky: step 5.6 and W′ finalize both sit after the last child `out`.
     return { region: "after-child", recurseDepth, activeLevel };
   }
   return { region: "in-level", recurseDepth, activeLevel };

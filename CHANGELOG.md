@@ -33,6 +33,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Deleted the unused `relax()` wrapper so production callers cannot emit paper-accept as `improved` (#92).
 - paper-notes DMSY-P32: trace `improved` is a strict 4-tuple decrease; paper Relax accept still includes `"="` (#92).
 - Empty `?` loads the 3-way DMSY race (`race=dijkstra,bmssp,dmsy`); URL codec serializes `race=` instead of `lane3=1` (`race=dmsy` accepted; `lane3=1` still parsed) (#27).
 - Fairness panel: DMSY params paragraph (paper k/t/δ, binary heap vs Fibonacci); `dstruct.merge` in billed prose; Forester blurb and forest vocabulary no longer "forthcoming" (#27).

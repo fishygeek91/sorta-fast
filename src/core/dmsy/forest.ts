@@ -426,21 +426,6 @@ export function applyRelax(
 }
 
 /**
- * Paper Relax accept predicate — arXiv 2602.07868 Algorithm 1.
- *
- * @returns Whether the candidate label was accepted into `dist[v]`.
- */
-export function relax(
-  dist: DistanceStore,
-  u: VertexId,
-  v: VertexId,
-  weight: number,
-  B: DistanceLabel,
-): boolean {
-  return applyRelax(dist, u, v, weight, B).accepted;
-}
-
-/**
  * Sort a copy of vertex ids in ascending order.
  */
 function sortedCopy(members: readonly VertexId[]): VertexId[] {
