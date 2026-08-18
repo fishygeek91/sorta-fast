@@ -10,11 +10,11 @@ import { SIZE_PRESETS } from "../core/graph.ts";
 /** Maximum caption length enforced at module load (keeps canvas callouts terse). */
 const MAX_CAPTION_LENGTH = 220;
 
-/** Story beat slug. `forest` is reserved for #27 and is not shipped. */
+/** Story beat slug. */
 export type StoryStepId = "wavefront" | "sorting" | "pivots" | "forest" | "race";
 
 /** Which lane canvases are visible for a beat. */
-export type StoryLayout = "dijkstra" | "bmssp" | "both";
+export type StoryLayout = "dijkstra" | "bmssp" | "dmsy" | "both";
 
 /** Optional counter highlight. */
 export type StoryCallout = "comparisons" | null;
@@ -36,12 +36,7 @@ export type StoryStep = {
  */
 export const STORY_PRESET = { g: "city", n: SIZE_PRESETS.S, seed: 1729 } as const;
 
-/**
- * Shipped story beats in tour order.
- *
- * Issue #27 inserts a `forest` step after {@link STORY_FOREST_INSERT_AFTER}; that slug is
- * reserved in {@link StoryStepId} but is not present in this array.
- */
+/** Shipped story beats in tour order. */
 const STORY_STEPS_TABLE: readonly StoryStep[] = [
   {
     id: "wavefront",
@@ -69,6 +64,15 @@ const STORY_STEPS_TABLE: readonly StoryStep[] = [
     callout: null,
     caption:
       "BMSSP refuses a full sort. It picks pivots and settles vertices in batch blooms on the same graph.",
+  },
+  {
+    id: "forest",
+    layout: "dmsy",
+    startFrac: 0,
+    endFrac: 0.7,
+    callout: null,
+    caption:
+      "DMSY grows a spanning forest on the fly — edges sprout, get cut, and partition the graph. Only pivot vertices enter the sorted D-structure lane.",
   },
   {
     id: "race",
@@ -121,10 +125,10 @@ function assertValidStorySteps(steps: readonly StoryStep[]): void {
 
 assertValidStorySteps(STORY_STEPS_TABLE);
 
-/** Shipped story beats in tour order (excludes reserved `forest` from #27). */
+/** Shipped story beats in tour order. */
 export const STORY_STEPS: readonly StoryStep[] = STORY_STEPS_TABLE;
 
-/** Shipped ids in tour order (excludes `forest`). */
+/** Shipped ids in tour order. */
 export const STORY_TOUR_IDS: readonly StoryStepId[] = STORY_STEPS.map((step) => step.id);
 
 /** #27 inserts `forest` after this shipped id. */
@@ -134,18 +138,18 @@ export const STORY_FOREST_INSERT_AFTER = "pivots" as const;
  * Play-speed multiplier for story rAF (WorkClock).
  *
  * Measured on the pedagogical preset (city / 500 / seed 1729): shipped beat
- * windows sum to 30,999 billed ops. At BASE_OPS_PER_SECOND = 20,000 this
- * speed yields ~91s of auto-play (issue #19 ~90s tour). Prefer slowing
- * speed over bumping n so mobile gen stays instant.
+ * windows sum to 82,453 billed ops (five beats including forest #27). At
+ * BASE_OPS_PER_SECOND = 20,000 this speed yields ~90s of auto-play. Prefer
+ * slowing speed over bumping n so mobile gen stays instant.
  */
-export const STORY_SPEED = 0.017;
+export const STORY_SPEED = 0.0458;
 
 /** Wheel/swipe threshold in CSS pixels before advancing a step. */
 export const STORY_SCROLL_THRESHOLD_PX = 80;
 
 /**
  * @param id - Candidate step slug from URL or navigation.
- * @returns Whether `id` is a shipped beat (present in {@link STORY_STEPS}; not `forest`).
+ * @returns Whether `id` is a shipped beat (present in {@link STORY_STEPS}).
  */
 export function isShippedStoryStepId(id: string): id is StoryStepId {
   for (const step of STORY_STEPS) {
@@ -159,7 +163,7 @@ export function isShippedStoryStepId(id: string): id is StoryStepId {
 /**
  * @param id - Story beat slug.
  * @returns The shipped step definition for `id`.
- * @throws When `id` is not shipped (e.g. reserved `forest` from #27).
+ * @throws When `id` is not shipped.
  */
 export function storyStepById(id: StoryStepId): StoryStep {
   for (const step of STORY_STEPS) {
@@ -173,7 +177,7 @@ export function storyStepById(id: StoryStepId): StoryStep {
 /**
  * @param id - Shipped story beat slug.
  * @returns Zero-based index of `id` in {@link STORY_STEPS}.
- * @throws When `id` is not shipped (e.g. reserved `forest` from #27).
+ * @throws When `id` is not shipped.
  */
 export function storyStepIndex(id: StoryStepId): number {
   for (let index = 0; index < STORY_STEPS.length; index += 1) {

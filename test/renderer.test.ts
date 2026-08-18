@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import { packCsr, type Graph } from "../src/core/graph.ts";
-import { LaneState } from "../src/harness/laneState.ts";
+import {
+  FOREST_EDGE_CUT,
+  FOREST_EDGE_GROW,
+  FOREST_EDGE_NONE,
+  LaneState,
+} from "../src/harness/laneState.ts";
 import { fitCamera, projectX, projectY } from "../src/render/camera.ts";
-import { rgbForSettleOrder } from "../src/render/palette.ts";
+import {
+  cssColorForSettleOrder,
+  cssColorForSubtree,
+  rgbForSettleOrder,
+  rgbForSubtree,
+} from "../src/render/palette.ts";
 import {
   AGGREGATED_NODE_PX,
   AGGREGATED_RENDER_MIN_N,
   DSTRUCT_STRIP_HEIGHT,
+  FOREST_GROW_WINDOW_OPS,
   GHOST_WINDOW_OPS,
   MARK_LINE_WIDTH,
   PHOTO_FINISH_GOLD,
@@ -24,6 +35,7 @@ import {
 } from "./helpers/fake-canvas.ts";
 
 const GHOST_STROKE = THEMES.dark.ghost;
+const MOSS_STROKE = THEMES.dark.moss;
 
 /** Recursion tint alpha for depth 3 — must match renderer.ts constants. */
 const RECURSION_TINT_DEPTH_3_ALPHA = Math.min(1, 3 / 5) * 0.08;
@@ -54,6 +66,16 @@ function chainGraph(n: number): Graph {
 
 function fillCallsSince(fill: FakeCanvasSurface, startIndex: number): readonly DrawCall[] {
   return getFakeContext(fill).calls.slice(startIndex);
+}
+
+function settledFillStyles(fill: FakeCanvasSurface): string[] {
+  const styles: string[] = [];
+  for (const call of getFakeContext(fill).calls) {
+    if (call.op === "fill" && call.fillStyle !== undefined) {
+      styles.push(call.fillStyle);
+    }
+  }
+  return styles;
 }
 
 function drawImageCount(surface: FakeCanvasSurface): number {
@@ -128,6 +150,27 @@ function overlayGhostStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
     (call) => call.op === "stroke" && call.strokeStyle === GHOST_STROKE,
   );
 }
+
+function overlayForestGrowStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) =>
+      call.op === "stroke" &&
+      call.strokeStyle === MOSS_STROKE &&
+      call.lineWidth === GHOST_LINE_WIDTH,
+  );
+}
+
+function overlayForestCutStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) =>
+      call.op === "stroke" &&
+      call.strokeStyle === MOSS_STROKE &&
+      call.lineWidth === FOREST_CUT_LINE_WIDTH,
+  );
+}
+
+const GHOST_LINE_WIDTH = 1.5;
+const FOREST_CUT_LINE_WIDTH = 2.5;
 
 function overlayLineToCount(overlay: FakeCanvasSurface): number {
   return overlayCalls(overlay).filter((call) => call.op === "lineTo").length;
@@ -307,6 +350,161 @@ describe("Renderer", () => {
 
     expect(overlayLineToCount(overlay)).toBe(0);
     expect(overlayGhostStrokeCalls(overlay)).toHaveLength(0);
+  });
+
+  it("draws forest grow edges on the overlay by default", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_GROW;
+    state.forestEdgeWork[0] = 0;
+    state.work = 1;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    expect(overlayLineToCount(overlay)).toBeGreaterThan(0);
+    expect(overlayForestGrowStrokeCalls(overlay).length).toBeGreaterThan(0);
+  });
+
+  it("skips forest grow edges on the overlay when forestGrow toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_GROW;
+    state.forestEdgeWork[0] = 0;
+    state.work = 1;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      pivotFlares: false,
+      forestGrow: false,
+    });
+
+    expect(overlayLineToCount(overlay)).toBe(0);
+    expect(overlayForestGrowStrokeCalls(overlay)).toHaveLength(0);
+  });
+
+  it("draws a fresh forest grow pulse after the live grow is cleared", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_NONE;
+    state.forestEdgeWork[0] = 0;
+    state.work = 1;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    expect(overlayLineToCount(overlay)).toBeGreaterThan(0);
+    expect(overlayForestGrowStrokeCalls(overlay).length).toBeGreaterThan(0);
+  });
+
+  it("does not draw forest grow pulses outside FOREST_GROW_WINDOW_OPS", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_NONE;
+    state.forestEdgeWork[0] = 0;
+    state.work = FOREST_GROW_WINDOW_OPS;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    expect(overlayLineToCount(overlay)).toBe(0);
+    expect(overlayForestGrowStrokeCalls(overlay)).toHaveLength(0);
+  });
+
+  it("draws forest cut edges on the overlay by default", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_CUT;
+    state.forestEdgeWork[0] = 0;
+    state.work = 1;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    expect(overlayLineToCount(overlay)).toBeGreaterThan(0);
+    expect(overlayForestCutStrokeCalls(overlay).length).toBeGreaterThan(0);
+  });
+
+  it("skips forest cut edges on the overlay when forestCut toggle is off", () => {
+    const graph = tinyGraph();
+    const { renderer, overlay } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.forestEdgeOp[0] = FOREST_EDGE_CUT;
+    state.forestEdgeWork[0] = 0;
+    state.work = 1;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      pivotFlares: false,
+      forestCut: false,
+    });
+
+    expect(overlayLineToCount(overlay)).toBe(0);
+    expect(overlayForestCutStrokeCalls(overlay)).toHaveLength(0);
+  });
+
+  it("colors settled vertices by forestTree when subtreePatchwork is on", () => {
+    const graph = tinyGraph();
+    const { renderer, fill } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.settleOrder[0] = 0;
+    state.settleOrder[1] = 1;
+    state.forestTree[0] = 1;
+    state.forestTree[1] = 2;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    const fills = settledFillStyles(fill);
+    expect(fills).toContain(cssColorForSubtree(1));
+    expect(fills).toContain(cssColorForSubtree(2));
+    expect(fills[0]).not.toBe(fills[1]);
+  });
+
+  it("uses the same patchwork color for vertices sharing a forestTree id", () => {
+    const graph = tinyGraph();
+    const { renderer, fill } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.settleOrder[0] = 0;
+    state.settleOrder[1] = 1;
+    state.forestTree[0] = 7;
+    state.forestTree[1] = 7;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    const fills = settledFillStyles(fill);
+    expect(fills).toEqual([cssColorForSubtree(7), cssColorForSubtree(7)]);
+  });
+
+  it("uses settle-order fills when subtreePatchwork is off even with forestTree set", () => {
+    const graph = tinyGraph();
+    const { renderer, fill } = createRendererWithLayers(graph);
+
+    const state = new LaneState(2, graph.m);
+    state.settleOrder[0] = 0;
+    state.settleOrder[1] = 1;
+    state.forestTree[0] = 1;
+    state.forestTree[1] = 2;
+
+    renderer.draw(state, {
+      frontier: false,
+      relaxedEdges: false,
+      pivotFlares: false,
+      subtreePatchwork: false,
+    });
+
+    const fills = settledFillStyles(fill);
+    expect(fills).toEqual([cssColorForSettleOrder(0, 2), cssColorForSettleOrder(1, 2)]);
   });
 
   it("draws recursion-depth tint on the fx layer by default", () => {
@@ -578,6 +776,55 @@ describe("Renderer", () => {
     expect(
       overlayOps.some((call) => call.op === "fillRect" && call.fillStyle === THEMES.dark.frontier),
     ).toBe(true);
+  });
+
+  it("skips forest edge strokes in aggregated mode but keeps patchwork fills", () => {
+    const n = AGGREGATED_RENDER_MIN_N;
+    const graph = chainGraph(n);
+    const { renderer, overlay, fill } = createRendererWithLayers(graph);
+    const overlayCtx = getFakeContext(overlay);
+    const before = overlayCtx.calls.length;
+
+    const state = new LaneState(n, graph.m);
+    state.settleOrder[0] = 0;
+    state.settleOrder[12500] = 1;
+    state.forestTree[0] = 3;
+    state.forestTree[12500] = 9;
+    state.forestEdgeOp[0] = FOREST_EDGE_GROW;
+    state.forestEdgeOp[1] = FOREST_EDGE_CUT;
+    state.forestEdgeWork[0] = 0;
+    state.forestEdgeWork[1] = 0;
+    state.work = 1;
+
+    renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+
+    const overlayOps = overlayCalls(overlay).slice(before);
+    expect(overlayOps.some((call) => call.op === "lineTo")).toBe(false);
+    expect(overlayForestGrowStrokeCalls(overlay)).toHaveLength(0);
+    expect(overlayForestCutStrokeCalls(overlay)).toHaveLength(0);
+
+    const camera = fitCamera(graph, CANVAS_SIZE, CANVAS_SIZE);
+    const x0 = graph.x[0];
+    const y0 = graph.y[0];
+    const xMid = graph.x[12500];
+    const yMid = graph.y[12500];
+    if (x0 === undefined || y0 === undefined || xMid === undefined || yMid === undefined) {
+      throw new Error("chain graph missing vertex coordinates");
+    }
+    const px0 = Math.floor(projectX(camera, x0));
+    const py0 = Math.floor(projectY(camera, y0));
+    const pxMid = Math.floor(projectX(camera, xMid));
+    const pyMid = Math.floor(projectY(camera, yMid));
+    const pixel0 = pixelAt(fill, px0, py0);
+    const pixelMid = pixelAt(fill, pxMid, pyMid);
+    const expected0 = rgbForSubtree(3);
+    const expectedMid = rgbForSubtree(9);
+    expect(pixel0.r).toBe(expected0.r);
+    expect(pixel0.g).toBe(expected0.g);
+    expect(pixel0.b).toBe(expected0.b);
+    expect(pixelMid.r).toBe(expectedMid.r);
+    expect(pixelMid.g).toBe(expectedMid.g);
+    expect(pixelMid.b).toBe(expectedMid.b);
   });
 
   it("rejects non-finite or non-positive pixelScale", () => {

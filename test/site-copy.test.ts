@@ -25,6 +25,7 @@ function joinFairnessCopy(): string {
     FAIRNESS_COPY.secondary,
     FAIRNESS_COPY.honesty,
     FAIRNESS_COPY.params,
+    FAIRNESS_COPY.dmsyParams,
     FAIRNESS_COPY.sourceLead,
   ].join("\n");
 }
@@ -94,6 +95,19 @@ describe("siteCopy", () => {
           includesIgnoreCase(prose, "asymptotic"),
       ).toBe(true);
     });
+
+    it("fairness prose discloses DMSY params and dstruct.merge billing", () => {
+      const prose = joinFairnessCopy();
+
+      expect(
+        prose.includes("2602.07868") ||
+          includesIgnoreCase(prose, "DMSY-P07") ||
+          includesIgnoreCase(prose, "binary heap"),
+      ).toBe(true);
+      expect(includesIgnoreCase(prose, "dstruct.merge") || includesIgnoreCase(prose, "merge")).toBe(
+        true,
+      );
+    });
   });
 
   describe("EXPLAINER_COPY", () => {
@@ -122,6 +136,14 @@ describe("siteCopy", () => {
       expect(personaNames).toContain("The Forester");
     });
 
+    it("Forester blurb is present-tense (no forthcoming)", () => {
+      const forester = EXPLAINER_COPY.personas.find((p) => p.persona === "The Forester");
+      if (forester === undefined) {
+        throw new Error("Forester persona missing from EXPLAINER_COPY.personas");
+      }
+      expect(includesIgnoreCase(forester.blurb, "forthcoming")).toBe(false);
+    });
+
     it("vocabulary covers overlay terms and a forest-related entry", () => {
       const terms = EXPLAINER_COPY.vocabulary.map((v) => v.term);
 
@@ -136,6 +158,7 @@ describe("siteCopy", () => {
         "D-structure strip",
         "photo-finish gold path",
         "settle-diff tint",
+        "forest grow/cut (DMSY)",
       ];
 
       for (const term of requiredTerms) {

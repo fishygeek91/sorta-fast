@@ -70,6 +70,28 @@ describe("story mount wiring", () => {
     expect(source).toContain("decideStoryWheel");
   });
 
+  it("story.ts source uses three-lane race spec with dmsy", () => {
+    const source = readUiSource("story.ts");
+    expect(source).toContain('"dmsy"');
+    expect(source).toContain("showDmsy");
+    expect(source).toMatch(/new RaceScheduler\(graph,\s*3/);
+  });
+
+  it("storyScript.ts source includes forest beat after pivots", () => {
+    const source = readUiSource("storyScript.ts");
+    expect(source).toContain('id: "forest"');
+    expect(source).toContain('layout: "dmsy"');
+  });
+
+  it("story.ts source uses formatDmsyNarration on forest beat (#27)", () => {
+    const source = readUiSource("story.ts");
+    expect(source).toContain("formatDmsyNarration");
+    expect(source).toContain("formatDmsyNarration(race.laneState(2))");
+    expect(source).not.toMatch(
+      /storyState\.step === "forest"[\s\S]*?narrationEl\.textContent = "DMSY"/,
+    );
+  });
+
   for (const filename of STORY_UI_FILES) {
     it(`${filename} does not import trace.ts`, () => {
       const source = readUiSource(filename);

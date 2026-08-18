@@ -4,7 +4,7 @@ import { generateGraph } from "../src/core/graph.ts";
 import { type TraceEvent, TraceWriter } from "../src/core/trace.ts";
 import { LaneState } from "../src/harness/laneState.ts";
 import { TraceBuffer } from "../src/harness/traceBuffer.ts";
-import { formatBmsspNarration } from "../src/ui/narration.ts";
+import { formatBmsspNarration, formatDmsyNarration } from "../src/ui/narration.ts";
 import { drainBmsspRun } from "./bmssp-helpers.ts";
 
 /** Build a minimal lane and apply scalar overrides for narration branches. */
@@ -144,6 +144,91 @@ describe("formatBmsspNarration", () => {
         }),
       ),
     ).toBe("FindPivots round 2/5: 20 vertices relaxed, 4 pivots found");
+  });
+});
+
+describe("formatDmsyNarration", () => {
+  it("returns idle when recursion depth is zero and forest counters are zero", () => {
+    expect(
+      formatDmsyNarration(
+        laneWith({
+          recursionDepth: 0,
+          forestGrowCount: 0,
+          forestCutCount: 0,
+          subtreeCount: 0,
+        }),
+      ),
+    ).toBe("DMSY idle");
+  });
+
+  it("describes forest stats when forest grow count is positive", () => {
+    expect(
+      formatDmsyNarration(
+        laneWith({
+          forestGrowCount: 12,
+          subtreeCount: 3,
+          pivotsFoundThisCall: 2,
+          sortedRegionSize: 4,
+        }),
+      ),
+    ).toBe("Forest 12 edges, 3 subtrees cut, 2 pivots, D occupancy 4");
+  });
+
+  it("describes forest stats when only cumulative cut count is positive", () => {
+    expect(
+      formatDmsyNarration(
+        laneWith({
+          forestGrowCount: 0,
+          forestCutCount: 5,
+          subtreeCount: 0,
+          pivotsFoundThisCall: 0,
+          sortedRegionSize: 0,
+        }),
+      ),
+    ).toBe("Forest 0 edges, 0 subtrees cut, 0 pivots, D occupancy 0");
+  });
+
+  it("describes recurse level with finite bound when forest counters are zero", () => {
+    expect(
+      formatDmsyNarration(
+        laneWith({
+          recursionDepth: 2,
+          currentBound: 17,
+          forestGrowCount: 0,
+          forestCutCount: 0,
+          subtreeCount: 0,
+        }),
+      ),
+    ).toBe("DMSY level 2: bound 17");
+  });
+
+  it("uses infinity symbol for non-finite bound at recurse depth", () => {
+    expect(
+      formatDmsyNarration(
+        laneWith({
+          recursionDepth: 1,
+          currentBound: Infinity,
+          forestGrowCount: 0,
+          forestCutCount: 0,
+          subtreeCount: 0,
+        }),
+      ),
+    ).toBe("DMSY level 1: bound ∞");
+  });
+
+  it("includes numeric forest and D occupancy values in the forest branch", () => {
+    const narration = formatDmsyNarration(
+      laneWith({
+        forestGrowCount: 7,
+        subtreeCount: 1,
+        pivotsFoundThisCall: 3,
+        sortedRegionSize: 9,
+      }),
+    );
+    expect(narration).toContain("7");
+    expect(narration).toContain("1");
+    expect(narration).toContain("3");
+    expect(narration).toContain("9");
   });
 });
 

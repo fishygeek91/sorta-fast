@@ -2,7 +2,7 @@
  * Story mode Playwright smoke test (GitHub issue #61).
  *
  * Verifies wheel-driven beat navigation on the shipped story tour (wavefront →
- * sorting → pivots → race) without importing app modules — Playwright cannot
+ * sorting → pivots → forest → race) without importing app modules — Playwright cannot
  * resolve the repo's `.ts` extension imports.
  */
 
@@ -115,6 +115,14 @@ test.describe("Story mode smoke (#61)", () => {
     ({ mode, step } = storyStepFromUrl(page));
     expect(mode).toBe("story");
     expect(step).toBe("pivots");
+    expect(await visibleLaneCount(page)).toBe(1);
+
+    await page.waitForTimeout(WHEEL_COOLDOWN_WAIT_MS);
+    await dispatchWheelBurst(page);
+
+    ({ mode, step } = storyStepFromUrl(page));
+    expect(mode).toBe("story");
+    expect(step).toBe("forest");
     expect(await visibleLaneCount(page)).toBe(1);
 
     await page.waitForTimeout(WHEEL_COOLDOWN_WAIT_MS);

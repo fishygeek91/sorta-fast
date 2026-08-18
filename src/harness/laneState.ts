@@ -2,8 +2,9 @@
  * Typed-array visual state for one race lane (issue #7, design.md §4.3).
  *
  * Headless playback snapshot: settle order, frontier flags, event cursor,
- * billed work, per-edge relax ghost data for lens mode, and BMSSP overlay
- * narration fields (issue #12). No DOM, `Date.now()`, or `Math.random()`.
+ * billed work, per-edge relax ghost data for lens mode, BMSSP overlay
+ * narration fields (issue #12), and DMSY forest overlay fields (issue #27).
+ * No DOM, `Date.now()`, or `Math.random()`.
  */
 
 import { SENTINEL } from "../core/trace.ts";
@@ -13,6 +14,15 @@ export const UNSETTLED = SENTINEL;
 
 /** Maximum schematic D blocks tracked for BMSSP overlay narration. */
 export const D_BLOCK_CAP = 64;
+
+/** No live forest overlay on this edge. */
+export const FOREST_EDGE_NONE = 0;
+/** Edge is a live spanning-forest grow (paper-notes DMSY-P23). */
+export const FOREST_EDGE_GROW = 1;
+/** Edge was reported in a partition cut (paper-notes DMSY-P24). */
+export const FOREST_EDGE_CUT = 2;
+/** Max distinct cut.tree ids tracked per recurse-in window. */
+export const FOREST_SUBTREE_CAP = 1024;
 
 /**
  * Per-lane playback state derived from trace events.
@@ -26,6 +36,8 @@ export const D_BLOCK_CAP = 64;
  * settle detection via `maxSettledDist` and the per-vertex `outOfOrder` bitset.
  * BMSSP fields hold visual/narration state
  * for recurse depth, FindPivots batches, bloom regions, and schematic D blocks.
+ * Forest overlay fields hold scrub-safe spanning-forest grow/cut state and
+ * reconstructed-D occupancy for DMSY lane narration (issue #27).
  */
 export class LaneState {
   readonly n: number;
@@ -125,6 +137,51 @@ export class LaneState {
   readonly dBlockSizes: Int32Array;
 
   /**
+   * Subtree / search id for patchwork fill on vertex `v`, or {@link UNSETTLED}
+   * when unset.
+   */
+  readonly forestTree: Int32Array;
+  /**
+   * Live incoming grow edge for head vertex `v`, or {@link UNSETTLED} when none.
+   */
+  readonly forestHeadEdge: Int32Array;
+  /**
+   * Forest overlay op on edge `e`: {@link FOREST_EDGE_NONE}, {@link FOREST_EDGE_GROW},
+   * or {@link FOREST_EDGE_CUT}.
+   */
+  readonly forestEdgeOp: Uint8Array;
+  /**
+   * Billed work when the forest event on edge `e` landed, or {@link UNSETTLED}
+   * when unset.
+   */
+  readonly forestEdgeWork: Int32Array;
+  /**
+   * `tree` from the last forest event on edge `e`, or {@link UNSETTLED} when unset.
+   */
+  readonly forestEdgeTree: Int32Array;
+  /** Count of edges currently marked {@link FOREST_EDGE_GROW} (live forest size). */
+  forestGrowCount: number;
+  /**
+   * Total cut events applied since playback start; not reset on recurse-in
+   * (cumulative narration counter).
+   */
+  forestCutCount: number;
+  /**
+   * Distinct `cut.tree` ids since the last recurse-in; length of the used prefix
+   * of {@link subtreeIds}.
+   */
+  subtreeCount: number;
+  /**
+   * Reconstructed D occupancy from dstruct `n`; 0 until TraceBuffer updates it.
+   */
+  sortedRegionSize: number;
+  /**
+   * Distinct `cut.tree` ids in the current recurse-in window; only indices
+   * `0..subtreeCount-1` are meaningful.
+   */
+  readonly subtreeIds: Int32Array;
+
+  /**
    * Allocate lane state for a graph with `n` vertices and `m` edges.
    *
    * @param n - Vertex count; must be an integer >= 0.
@@ -156,6 +213,12 @@ export class LaneState {
     this.pivotFlareWork = new Int32Array(n);
     this.bloomVertex = new Uint8Array(n);
     this.dBlockSizes = new Int32Array(D_BLOCK_CAP);
+    this.forestTree = new Int32Array(n);
+    this.forestHeadEdge = new Int32Array(n);
+    this.forestEdgeOp = new Uint8Array(m);
+    this.forestEdgeWork = new Int32Array(m);
+    this.forestEdgeTree = new Int32Array(m);
+    this.subtreeIds = new Int32Array(FOREST_SUBTREE_CAP);
     this.settledCount = 0;
     this.outOfOrderSettles = 0;
     this.maxSettledDist = -Infinity;
@@ -179,6 +242,10 @@ export class LaneState {
     this.bloomMaxY = -Infinity;
     this.bloomActive = 0;
     this.dBlockCount = 0;
+    this.forestGrowCount = 0;
+    this.forestCutCount = 0;
+    this.subtreeCount = 0;
+    this.sortedRegionSize = 0;
     this.reset();
   }
 
@@ -196,6 +263,12 @@ export class LaneState {
     this.pivotFlareWork.fill(UNSETTLED);
     this.bloomVertex.fill(0);
     this.dBlockSizes.fill(0);
+    this.forestTree.fill(UNSETTLED);
+    this.forestHeadEdge.fill(UNSETTLED);
+    this.forestEdgeOp.fill(0);
+    this.forestEdgeWork.fill(UNSETTLED);
+    this.forestEdgeTree.fill(UNSETTLED);
+    this.subtreeIds.fill(0);
     this.settledCount = 0;
     this.outOfOrderSettles = 0;
     this.maxSettledDist = -Infinity;
@@ -219,6 +292,10 @@ export class LaneState {
     this.bloomMaxY = -Infinity;
     this.bloomActive = 0;
     this.dBlockCount = 0;
+    this.forestGrowCount = 0;
+    this.forestCutCount = 0;
+    this.subtreeCount = 0;
+    this.sortedRegionSize = 0;
   }
 
   /**
@@ -259,6 +336,12 @@ export class LaneState {
     this.pivotFlareWork.set(other.pivotFlareWork);
     this.bloomVertex.set(other.bloomVertex);
     this.dBlockSizes.set(other.dBlockSizes);
+    this.forestTree.set(other.forestTree);
+    this.forestHeadEdge.set(other.forestHeadEdge);
+    this.forestEdgeOp.set(other.forestEdgeOp);
+    this.forestEdgeWork.set(other.forestEdgeWork);
+    this.forestEdgeTree.set(other.forestEdgeTree);
+    this.subtreeIds.set(other.subtreeIds);
     this.settledCount = other.settledCount;
     this.outOfOrderSettles = other.outOfOrderSettles;
     this.maxSettledDist = other.maxSettledDist;
@@ -282,5 +365,9 @@ export class LaneState {
     this.bloomMaxY = other.bloomMaxY;
     this.bloomActive = other.bloomActive;
     this.dBlockCount = other.dBlockCount;
+    this.forestGrowCount = other.forestGrowCount;
+    this.forestCutCount = other.forestCutCount;
+    this.subtreeCount = other.subtreeCount;
+    this.sortedRegionSize = other.sortedRegionSize;
   }
 }

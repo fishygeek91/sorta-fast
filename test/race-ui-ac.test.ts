@@ -108,8 +108,13 @@ function seekCompleteWithPhotoFinish(race: RaceScheduler, graph: Graph, source: 
 }
 
 describe("race UI acceptance — lanesFromSearch", () => {
-  it("defaults to two lanes; lane3=1 adds DMSY; lane3=dijkstra adds dijkstra-b stub", () => {
-    expect(lanesFromSearch("")).toHaveLength(2);
+  it("defaults to three-lane DMSY; lane3=1 adds DMSY; lane3=dijkstra adds dijkstra-b stub", () => {
+    const defaultLanes = lanesFromSearch("");
+    expect(defaultLanes).toHaveLength(3);
+    expect(defaultLanes.map((lane) => lane.id)).toEqual(["dijkstra", "bmssp", "dmsy"]);
+    expect(defaultLanes[2].algo).toBe("dmsy");
+    expect(defaultLanes[2].label).toBe("DMSY '26");
+    expect(defaultLanes[2].persona).toBe("moss");
 
     const dmsyLanes = lanesFromSearch("?lane3=1");
     expect(dmsyLanes).toHaveLength(3);

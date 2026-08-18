@@ -85,4 +85,11 @@ describe("issue #20 graph picker — lens.ts", () => {
     expect(lensSource).toContain('case "progress"');
     expect(lensSource).toContain("lens-gen-progress");
   });
+
+  it("includes dmsy algo and forest overlay toggles (#27)", () => {
+    expect(lensSource).toContain('"dmsy"');
+    expect(lensSource).toContain("Forest grow");
+    expect(lensSource).toContain("Forest cut");
+    expect(lensSource).toContain("Subtree patchwork");
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { cssColorForSettleOrder, PALETTE_STOPS, rgbAt } from "../src/render/palette.ts";
+import {
+  cssColorForSettleOrder,
+  cssColorForSubtree,
+  PALETTE_STOPS,
+  rgbAt,
+} from "../src/render/palette.ts";
 
 describe("palette", () => {
   it("precomputes 256 LUT stops", () => {
@@ -22,6 +27,14 @@ describe("palette", () => {
 
   it("cssColorForSettleOrder varies with settle order", () => {
     expect(cssColorForSettleOrder(0, 5)).not.toBe(cssColorForSettleOrder(4, 5));
+  });
+
+  it("cssColorForSubtree varies with tree id", () => {
+    expect(cssColorForSubtree(1)).not.toBe(cssColorForSubtree(2));
+  });
+
+  it("cssColorForSubtree is stable for the same tree id", () => {
+    expect(cssColorForSubtree(7)).toBe(cssColorForSubtree(7));
   });
 
   it("rejects invalid settle-order inputs", () => {

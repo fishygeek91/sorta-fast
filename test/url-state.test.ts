@@ -97,7 +97,7 @@ describe("parseLensUrl", () => {
     expect(parseLensUrl("?bmssp=paper")).toEqual({ ...DEFAULT_LENS_URL, bmssp: "paper" });
   });
 
-  it("round-trips dijkstra and bmssp algo values", () => {
+  it("round-trips dijkstra, bmssp, and dmsy algo values", () => {
     const dijkstra: LensUrlState = {
       g: "maze",
       n: 100,
@@ -116,8 +116,18 @@ describe("parseLensUrl", () => {
       bk: null,
       bt: null,
     };
+    const dmsy: LensUrlState = {
+      g: "maze",
+      n: 100,
+      seed: 1,
+      algo: "dmsy",
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+    };
     expect(parseLensUrl(serializeLensUrl(dijkstra))).toEqual(dijkstra);
     expect(parseLensUrl(serializeLensUrl(bmssp))).toEqual(bmssp);
+    expect(parseLensUrl(serializeLensUrl(dmsy))).toEqual(dmsy);
   });
 
   it("defaults algo to bmssp when missing or invalid", () => {
@@ -130,7 +140,8 @@ describe("parseLensUrl", () => {
       bk: null,
       bt: null,
     });
-    expect(parseLensUrl("?algo=dmsy")).toEqual(DEFAULT_LENS_URL);
+    expect(parseLensUrl("?algo=dmsy")).toEqual({ ...DEFAULT_LENS_URL, algo: "dmsy" });
+    expect(parseLensUrl("?algo=nope")).toEqual(DEFAULT_LENS_URL);
     expect(parseLensUrl("?algo=")).toEqual(DEFAULT_LENS_URL);
   });
 
@@ -236,7 +247,7 @@ describe("serializeLensUrl", () => {
         g: "maze",
         n: 1,
         seed: 1,
-        algo: "dmsy" as "bmssp",
+        algo: "nope" as "bmssp",
         bmssp: "demo",
         bk: null,
         bt: null,

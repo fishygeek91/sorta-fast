@@ -13,15 +13,16 @@ import {
 } from "../src/ui/storyScript.ts";
 
 /** Shipped tour slugs in canonical order. */
-const SHIPPED_IDS: readonly StoryStepId[] = ["wavefront", "sorting", "pivots", "race"];
+const SHIPPED_IDS: readonly StoryStepId[] = ["wavefront", "sorting", "pivots", "forest", "race"];
 
 describe("STORY_TOUR_IDS", () => {
-  it("equals wavefront, sorting, pivots, race in order", () => {
+  it("equals wavefront, sorting, pivots, forest, race in order", () => {
     expect([...STORY_TOUR_IDS]).toEqual([...SHIPPED_IDS]);
   });
 
-  it("excludes reserved forest slug", () => {
-    expect(STORY_TOUR_IDS).not.toContain("forest");
+  it("includes forest slug after pivots", () => {
+    const pivotsIndex = STORY_TOUR_IDS.indexOf("pivots");
+    expect(STORY_TOUR_IDS[pivotsIndex + 1]).toBe("forest");
   });
 });
 
@@ -30,8 +31,11 @@ describe("STORY_STEPS", () => {
     expect(STORY_STEPS.map((step) => step.id)).toEqual([...STORY_TOUR_IDS]);
   });
 
-  it("does not include forest beat", () => {
-    expect(STORY_STEPS.some((step) => step.id === "forest")).toBe(false);
+  it("includes forest beat after pivots", () => {
+    const forestIndex = STORY_STEPS.findIndex((step) => step.id === "forest");
+    expect(forestIndex).toBeGreaterThan(-1);
+    expect(STORY_STEPS[forestIndex - 1]?.id).toBe("pivots");
+    expect(STORY_STEPS[forestIndex + 1]?.id).toBe("race");
   });
 
   it("every caption length is in (0, 220]", () => {
@@ -51,9 +55,10 @@ describe("STORY_STEPS", () => {
     }
   });
 
-  it("wavefront layout dijkstra; pivots bmssp; race both", () => {
+  it("wavefront layout dijkstra; pivots bmssp; forest dmsy; race both", () => {
     expect(storyStepById("wavefront").layout).toBe("dijkstra");
     expect(storyStepById("pivots").layout).toBe("bmssp");
+    expect(storyStepById("forest").layout).toBe("dmsy");
     expect(storyStepById("race").layout).toBe("both");
   });
 });
@@ -71,8 +76,8 @@ describe("STORY_PRESET", () => {
 });
 
 describe("isShippedStoryStepId", () => {
-  it("returns false for forest", () => {
-    expect(isShippedStoryStepId("forest")).toBe(false);
+  it("returns true for forest", () => {
+    expect(isShippedStoryStepId("forest")).toBe(true);
   });
 
   it("returns true for each shipped beat", () => {
@@ -83,14 +88,25 @@ describe("isShippedStoryStepId", () => {
 });
 
 describe("storyStepById", () => {
-  it("throws for reserved forest slug", () => {
-    expect(() => storyStepById("forest")).toThrow(/not shipped/i);
+  it("returns forest beat definition", () => {
+    const forest = storyStepById("forest");
+    expect(forest.layout).toBe("dmsy");
+    expect(forest.startFrac).toBe(0);
+    expect(forest.endFrac).toBe(0.7);
   });
 });
 
 describe("nextStoryStepId", () => {
   it("returns sorting after wavefront", () => {
     expect(nextStoryStepId("wavefront")).toBe("sorting");
+  });
+
+  it("returns forest after pivots", () => {
+    expect(nextStoryStepId("pivots")).toBe("forest");
+  });
+
+  it("returns race after forest", () => {
+    expect(nextStoryStepId("forest")).toBe("race");
   });
 
   it("returns null after race", () => {
@@ -103,7 +119,11 @@ describe("prevStoryStepId", () => {
     expect(prevStoryStepId("wavefront")).toBeNull();
   });
 
-  it("returns pivots before race", () => {
-    expect(prevStoryStepId("race")).toBe("pivots");
+  it("returns forest before race", () => {
+    expect(prevStoryStepId("race")).toBe("forest");
+  });
+
+  it("returns pivots before forest", () => {
+    expect(prevStoryStepId("forest")).toBe("pivots");
   });
 });

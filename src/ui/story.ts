@@ -9,7 +9,7 @@ import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { mountModeNav } from "./modeNav.ts";
-import { formatBmsspNarration } from "./narration.ts";
+import { formatBmsspNarration, formatDmsyNarration } from "./narration.ts";
 import { raceCountersFromLane } from "./photoFinish.ts";
 import { DEFAULT_RACE_URL, serializeRaceUrl } from "./raceUrl.ts";
 import { applyStoryStep, type StoryDrive, type StoryLaneTotals } from "./storyDrive.ts";
@@ -83,9 +83,10 @@ export function mountStory(): void {
   const lanesEl = document.createElement("div");
   lanesEl.className = "race-lanes story-lanes";
   lanesEl.dataset.lanes = "1";
-  const laneUis: [StoryLaneUi, StoryLaneUi] = [
+  const laneUis: [StoryLaneUi, StoryLaneUi, StoryLaneUi] = [
     buildStoryLane(lanesEl, "Dijkstra", "marble", "story-dijkstra-comparisons"),
     buildStoryLane(lanesEl, "BMSSP", "ember", "story-bmssp-comparisons"),
+    buildStoryLane(lanesEl, "DMSY", "moss", "story-dmsy-comparisons"),
   ];
   const transport = document.createElement("div");
   transport.className = "story-nav";
@@ -154,13 +155,23 @@ export function mountStory(): void {
     nextBtn.disabled = !ready;
   }
   function syncNarration(): void {
-    if (race === null || storyState.step !== "pivots") {
+    if (race === null) {
       narrationEl.textContent = "";
       narrationEl.hidden = true;
       return;
     }
-    narrationEl.textContent = formatBmsspNarration(race.laneState(1));
-    narrationEl.hidden = false;
+    if (storyState.step === "pivots") {
+      narrationEl.textContent = formatBmsspNarration(race.laneState(1));
+      narrationEl.hidden = false;
+      return;
+    }
+    if (storyState.step === "forest") {
+      narrationEl.textContent = formatDmsyNarration(race.laneState(2));
+      narrationEl.hidden = false;
+      return;
+    }
+    narrationEl.textContent = "";
+    narrationEl.hidden = true;
   }
   function enterFreePlay(): void {
     teardown();
@@ -188,6 +199,7 @@ export function mountStory(): void {
     const totals: StoryLaneTotals = {
       dijkstraWork: race.laneTotalWork(0),
       bmsspWork: race.laneTotalWork(1),
+      dmsyWork: race.laneTotalWork(2),
     };
     const drive = applyStoryStep(storyState.step, totals);
     currentDrive = drive;
@@ -195,12 +207,15 @@ export function mountStory(): void {
     syncNarration();
     laneUis[0].laneEl.hidden = !drive.showDijkstra;
     laneUis[1].laneEl.hidden = !drive.showBmssp;
+    laneUis[2].laneEl.hidden = !drive.showDmsy;
     if (drive.callout === "comparisons") {
       laneUis[0].comparisonsBlock.dataset.callout = "comparisons";
     } else {
       delete laneUis[0].comparisonsBlock.dataset.callout;
     }
-    lanesEl.dataset.lanes = String((drive.showDijkstra ? 1 : 0) + (drive.showBmssp ? 1 : 0));
+    lanesEl.dataset.lanes = String(
+      (drive.showDijkstra ? 1 : 0) + (drive.showBmssp ? 1 : 0) + (drive.showDmsy ? 1 : 0),
+    );
     if (bootPendingT > 0) {
       race.seek(bootPendingT);
       bootPendingT = 0;
@@ -244,15 +259,18 @@ export function mountStory(): void {
     if (race === null) {
       return;
     }
-    for (let lane = 0; lane < 2; lane += 1) {
+    for (let lane = 0; lane < laneUis.length; lane += 1) {
       const ui = laneUis[lane];
+      if (ui.laneEl.hidden) {
+        continue;
+      }
       const state = race.laneState(lane);
       if (ui.renderer !== null) {
         ui.renderer.draw(state, { source: SOURCE_VERTEX });
       }
       ui.comparisonsValue.textContent = String(raceCountersFromLane(state).comparisons);
     }
-    if (storyState.step === "pivots") {
+    if (storyState.step === "pivots" || storyState.step === "forest") {
       syncNarration();
     }
   }
@@ -271,12 +289,12 @@ export function mountStory(): void {
       seed: storyState.seed,
       source: SOURCE_VERTEX,
       mode: "demo",
-      lanes: ["dijkstra", "bmssp"],
+      lanes: ["dijkstra", "bmssp", "dmsy"],
     };
     pool.start(spec, {
       onGraph: (graph, bmssp) => {
         const findPivotsK = findPivotsKFromEcho(graph.n, bmssp?.k, "demo", null, null);
-        race = new RaceScheduler(graph, 2, SOURCE_VERTEX, findPivotsK);
+        race = new RaceScheduler(graph, 3, SOURCE_VERTEX, findPivotsK);
         race.setSpeed(STORY_SPEED);
         for (const ui of laneUis) {
           ui.renderer = new Renderer({

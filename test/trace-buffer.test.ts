@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import { bmsspParams, paperBmsspParams } from "../src/core/bmssp/params.ts";
 import { generateGraph, packCsr } from "../src/core/graph.ts";
 import { type TraceChunk, type TraceEvent, TraceWriter } from "../src/core/trace.ts";
-import { D_BLOCK_CAP, LaneState, UNSETTLED } from "../src/harness/laneState.ts";
+import {
+  D_BLOCK_CAP,
+  FOREST_EDGE_CUT,
+  FOREST_EDGE_GROW,
+  FOREST_EDGE_NONE,
+  FOREST_SUBTREE_CAP,
+  LaneState,
+  UNSETTLED,
+} from "../src/harness/laneState.ts";
 import { KEYFRAME_OPS, TraceBuffer } from "../src/harness/traceBuffer.ts";
 import { drainRun } from "./dijkstra-helpers.ts";
 import { drainBmsspRun } from "./bmssp-helpers.ts";
@@ -36,6 +44,10 @@ function compareLane(a: LaneState, b: LaneState): void {
   expect(a.bloomMaxY).toBe(b.bloomMaxY);
   expect(a.bloomActive).toBe(b.bloomActive);
   expect(a.dBlockCount).toBe(b.dBlockCount);
+  expect(a.forestGrowCount).toBe(b.forestGrowCount);
+  expect(a.forestCutCount).toBe(b.forestCutCount);
+  expect(a.subtreeCount).toBe(b.subtreeCount);
+  expect(a.sortedRegionSize).toBe(b.sortedRegionSize);
 
   for (let v = 0; v < a.n; v += 1) {
     const aOrder = a.settleOrder[v];
@@ -67,6 +79,9 @@ function compareLane(a: LaneState, b: LaneState): void {
     expect(aBloom).toBe(bBloom);
 
     expect(a.outOfOrder[v]).toBe(b.outOfOrder[v]);
+
+    expect(a.forestTree[v]).toBe(b.forestTree[v]);
+    expect(a.forestHeadEdge[v]).toBe(b.forestHeadEdge[v]);
   }
 
   for (let i = 0; i < D_BLOCK_CAP; i += 1) {
@@ -79,6 +94,14 @@ function compareLane(a: LaneState, b: LaneState): void {
     const aRelaxWork = a.lastRelaxWork[e];
     const bRelaxWork = b.lastRelaxWork[e];
     expect(aRelaxWork).toBe(bRelaxWork);
+
+    expect(a.forestEdgeOp[e]).toBe(b.forestEdgeOp[e]);
+    expect(a.forestEdgeWork[e]).toBe(b.forestEdgeWork[e]);
+    expect(a.forestEdgeTree[e]).toBe(b.forestEdgeTree[e]);
+  }
+
+  for (let i = 0; i < FOREST_SUBTREE_CAP; i += 1) {
+    expect(a.subtreeIds[i]).toBe(b.subtreeIds[i]);
   }
 }
 
@@ -783,6 +806,218 @@ describe("BMSSP overlay state", () => {
     buf.seekWork(midT);
 
     compareLane(buf.state, forward.state);
+  });
+});
+
+describe("forest overlay state", () => {
+  it("grow last-per-head: newer edge supersedes prior grow on same head", () => {
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: 1 },
+        { from: 2, to: 1, weight: 1 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const chunks = chunksFromEvents([
+      { k: "forest", op: "grow", e: 0, tree: 5 },
+      { k: "forest", op: "grow", e: 1, tree: 7 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.forestGrowCount).toBe(1);
+    expect(buf.state.forestEdgeOp[0]).toBe(FOREST_EDGE_NONE);
+    expect(buf.state.forestEdgeOp[1]).toBe(FOREST_EDGE_GROW);
+    expect(buf.state.forestTree[1]).toBe(7);
+    expect(buf.state.forestHeadEdge[1]).toBe(1);
+  });
+
+  it("corrective re-grow on same edge keeps forestGrowCount at 1", () => {
+    const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0, 1], [0, 0]);
+    const chunks = chunksFromEvents([
+      { k: "forest", op: "grow", e: 0, tree: 3 },
+      { k: "forest", op: "grow", e: 0, tree: 9 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.forestGrowCount).toBe(1);
+    expect(buf.state.forestEdgeOp[0]).toBe(FOREST_EDGE_GROW);
+    expect(buf.state.forestTree[1]).toBe(9);
+  });
+
+  it("cut after grow marks edge CUT and clears grow count", () => {
+    const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0, 1], [0, 0]);
+    const cutTree = 5;
+    const chunks = chunksFromEvents([
+      { k: "forest", op: "grow", e: 0, tree: 2 },
+      { k: "forest", op: "cut", e: 0, tree: cutTree },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.forestEdgeOp[0]).toBe(FOREST_EDGE_CUT);
+    expect(buf.state.forestTree[0]).toBe(cutTree);
+    expect(buf.state.forestTree[1]).toBe(cutTree);
+    expect(buf.state.forestGrowCount).toBe(0);
+    expect(buf.state.forestCutCount).toBe(1);
+    expect(buf.state.subtreeCount).toBe(1);
+    expect(buf.state.subtreeIds[0]).toBe(cutTree);
+  });
+
+  it("distinct subtree ids dedupe repeated cut.tree values", () => {
+    const graph = packCsr(
+      4,
+      [
+        { from: 0, to: 1, weight: 1 },
+        { from: 2, to: 3, weight: 1 },
+      ],
+      [0, 1, 2, 3],
+      [0, 0, 0, 0],
+    );
+    const chunks = chunksFromEvents([
+      { k: "forest", op: "cut", e: 0, tree: 0 },
+      { k: "forest", op: "cut", e: 1, tree: 1 },
+      { k: "forest", op: "cut", e: 0, tree: 0 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.subtreeCount).toBe(2);
+    expect(buf.state.subtreeIds[0]).toBe(0);
+    expect(buf.state.subtreeIds[1]).toBe(1);
+    expect(buf.state.forestCutCount).toBe(3);
+  });
+
+  it("recurse in resets subtreeCount but preserves forestCutCount and forestTree", () => {
+    const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0, 1], [0, 0]);
+    const cutTree = 3;
+    const chunks = chunksFromEvents([
+      { k: "recurse", dir: "in", level: 0, bound: 10 },
+      { k: "forest", op: "cut", e: 0, tree: cutTree },
+      { k: "recurse", dir: "in", level: 1, bound: 20 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.subtreeCount).toBe(0);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.subtreeCount).toBe(1);
+    expect(buf.state.forestCutCount).toBe(1);
+    expect(buf.state.forestTree[0]).toBe(cutTree);
+    expect(buf.state.forestTree[1]).toBe(cutTree);
+
+    expect(buf.stepEvent()).toBe(true);
+    expect(buf.state.subtreeCount).toBe(0);
+    expect(buf.state.forestCutCount).toBe(1);
+    expect(buf.state.forestTree[0]).toBe(cutTree);
+    expect(buf.state.forestTree[1]).toBe(cutTree);
+  });
+
+  it("dstruct insert, merge, and pull update sortedRegionSize with clamp", () => {
+    const graph = packCsr(1, [], [0], [0]);
+    const chunks = chunksFromEvents([
+      { k: "dstruct", op: "insert", n: 1, cmps: 1 },
+      { k: "dstruct", op: "merge", n: 3, cmps: 1 },
+      { k: "dstruct", op: "pull", n: 2, cmps: 1 },
+      { k: "dstruct", op: "pull", n: 10, cmps: 1 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+
+    buf.seekWork(1);
+    expect(buf.state.sortedRegionSize).toBe(1);
+
+    buf.seekWork(2);
+    expect(buf.state.sortedRegionSize).toBe(4);
+
+    buf.seekWork(3);
+    expect(buf.state.sortedRegionSize).toBe(2);
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.sortedRegionSize).toBe(0);
+  });
+
+  it("seekWork(0) after forest events resets overlay via keyframe", () => {
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: 1 },
+        { from: 1, to: 2, weight: 1 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const chunks = chunksFromEvents([
+      { k: "heap", op: "push", cmps: 1 },
+      { k: "recurse", dir: "in", level: 0, bound: 15 },
+      { k: "forest", op: "grow", e: 0, tree: 2 },
+      { k: "dstruct", op: "insert", n: 2, cmps: 1 },
+      { k: "forest", op: "cut", e: 1, tree: 4 },
+      { k: "dstruct", op: "pull", n: 1, cmps: 1 },
+      { k: "recurse", dir: "out", level: 0, bound: 99 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const fresh = new TraceBuffer(graph, chunks).state;
+
+    buf.seekWork(buf.totalWork);
+    expect(buf.state.forestCutCount).toBe(1);
+    expect(buf.state.sortedRegionSize).toBe(1);
+
+    buf.seekWork(0);
+    compareLane(buf.state, fresh);
+  });
+
+  it("forward seek to mid T matches scrub-back via compareLane", () => {
+    const graph = packCsr(
+      3,
+      [
+        { from: 0, to: 1, weight: 1 },
+        { from: 2, to: 1, weight: 1 },
+      ],
+      [0, 1, 2],
+      [0, 0, 0],
+    );
+    const chunks = chunksFromEvents([
+      { k: "recurse", dir: "in", level: 0, bound: 12 },
+      { k: "forest", op: "grow", e: 0, tree: 1 },
+      { k: "dstruct", op: "insert", n: 3, cmps: 0 },
+      { k: "forest", op: "grow", e: 1, tree: 2 },
+      { k: "forest", op: "cut", e: 0, tree: 5 },
+      { k: "dstruct", op: "merge", n: 2, cmps: 0 },
+      { k: "recurse", dir: "out", level: 0, bound: 50 },
+    ]);
+    const buf = new TraceBuffer(graph, chunks);
+    const midT = Math.floor(buf.totalWork / 2);
+
+    const forward = new TraceBuffer(graph, chunks);
+    forward.seekWork(midT);
+
+    buf.seekWork(buf.totalWork);
+    buf.seekWork(midT);
+
+    compareLane(buf.state, forward.state);
+  });
+
+  it("invalid forest op throws", () => {
+    const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0, 1], [0, 0]);
+    const chunks = chunksFromEvents([{ k: "forest", op: "grow", e: 0, tree: 0 }]);
+    const chunk = chunks[0];
+    if (chunk === undefined) {
+      throw new Error("expected one forest chunk");
+    }
+    chunk.aux0[0] = 99;
+
+    expect(() => new TraceBuffer(graph, chunks)).toThrow(/invalid forest op/);
+  });
+
+  it("forest edge out of range throws", () => {
+    const graph = packCsr(2, [{ from: 0, to: 1, weight: 1 }], [0, 1], [0, 0]);
+    const chunks = chunksFromEvents([{ k: "forest", op: "grow", e: 99, tree: 0 }]);
+
+    expect(() => new TraceBuffer(graph, chunks)).toThrow(/forest edge 99 out of range/);
   });
 });
 
