@@ -1,41 +1,43 @@
-# Launch checklist (v1.0)
+# Launch checklist
+
+## v1.0 — "The Race" (Dijkstra vs BMSSP)
 
 Sorta Fast v1.0 "The Race" (Dijkstra vs BMSSP). Issue #21.
 
-## Pages live
+### Pages live
 
 - [x] `https://fishygeek91.github.io/sorta-fast/` — GitHub Pages from `deploy.yml` (issue #4). Evidence: OG canonical URL in `index.html`; `test/pages-base.test.ts`. Bench page path `/sorta-fast/bench/` emits from Vite MPA in this PR (`dist/bench/index.html`); goes live on merge to main.
 
-## Social unfurl (OG)
+### Social unfurl (OG)
 
 - [x] OG/Twitter meta + og-card.png shipped (#17); live URL `https://fishygeek91.github.io/sorta-fast/og-card.png`
 - [x] OG platform verify: 2026-08-13 live Pages HTML contains og:image + twitter:summary_large_image; og-card.png HTTP 200 image/png (curl). Third-party debuggers (opengraph.xyz) redirected without a scrape; Facebook/Twitter validators need a browser session.
 
-## Exports
+### Exports
 
 - [x] PNG photo-finish and WebM/mp4 via MediaRecorder (#18). Seed and share URL baked in (`src/ui/exportMeta.ts`). Tests: `test/export-*.test.ts`. GIF encoder remains deferred; README hero is an offline ffmpeg conversion.
 
-## Seeds reproduce
+### Seeds reproduce
 
-- [x] Full race state in URL (`src/ui/raceUrl.ts`). Same `?g=&n=&seed=` → byte-identical traces (`test/race-url-repro.test.ts`). Hero seed: `?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp`.
+- [x] Full race state in URL (`src/ui/raceUrl.ts`). Same `?g=&n=&seed=` → byte-identical traces (`test/race-url-repro.test.ts`). Hero seed: `?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy`.
 
-## CI green
+### CI green
 
 - [x] Local gate: `npm run typecheck && npm test && npm run lint` before PR. CI Vitest 1M-event guard is 200ms with sequential files; the 100ms claim is `npm run bench:trace` (#35).
 - [x] Story browser smoke: `npm run test:e2e` (Playwright Chromium); separate CI job from Node Vitest (#61).
 
-## Fairness panel accurate
+### Fairness panel accurate
 
 - [x] `FAIRNESS_COSTS` deep-equals `OP_COST` (`test/site-copy.test.ts`). Cost table: `src/core/trace.ts`. Honesty copy discloses Dijkstra often wins wall-clock at small n.
 
-## Hero GIF recipe
+### Hero GIF recipe
 
 Hero seed URL:
 
-`https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp`
+`https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy`
 
 1. Record from a **local preview** of a build that includes the export-banner gate and in-app banner hold (`npm run build && npm run preview`). Do not use a cut-short take from an older or production-only build.
-2. Open that hero seed URL, wait until both lanes are photo-frozen and `#race-export-webm` is enabled, then set a high transport speed and click WebM export. WebM export holds ~1.5s on the completed banner before stopping MediaRecorder; whole clip ≤ ~10s. Export captions always show the canonical Pages URL (`https://fishygeek91.github.io/sorta-fast/…`), never `127.0.0.1` or `localhost`.
+2. Open that hero seed URL, wait until all three lanes are photo-frozen and `#race-export-webm` is enabled, then set a high transport speed and click WebM export. WebM export holds ~1.5s on the completed banner before stopping MediaRecorder; whole clip ≤ ~10s. Export captions always show the canonical Pages URL (`https://fishygeek91.github.io/sorta-fast/…`), never `127.0.0.1` or `localhost`.
 3. Save as `docs/assets/hero.webm`.
 4. Optional backup only — in-app hold should already pad the banner frame; if the clip still ends too early, pad the last frame ~1.5s before palette encode:
 
@@ -51,9 +53,60 @@ ffmpeg -i docs/assets/hero-padded.webm -i docs/assets/palette.png -lavfi "fps=20
 ```
 
 6. Target < 8–10 MB. Delete `docs/assets/palette.png` and `docs/assets/hero-padded.webm` (do not commit them). Commit `docs/assets/hero.gif` and `docs/assets/hero.webm`.
-7. On the default seed (`sparse` / 25k / 4), the **completed** photo-finish banner names **Dijkstra** (race to the marked target). That is expected; BMSSP still wins settle-all work-clock. README caption must match the banner — do not claim the GIF shows a BMSSP photo-finish win.
+7. Re-verify the **completed** photo-finish banner on the 3-way take before shipping. README caption must match the banner — do not invent a new photo-finish winner. (v1.0's 2-way take named **Dijkstra** for the marked target; confirm the same holds on the 3-way seed before claiming it in copy.)
 8. - [x] Hero GIF path `docs/assets/hero.gif` referenced from README (asset added in this PR).
 
-## Bench page
+### Bench page
 
 - [x] Wall-clock page at `https://fishygeek91.github.io/sorta-fast/bench/` after merge; Vite MPA input `bench/index.html`.
+
+## Round 2 (v2.0 / issue #28)
+
+DMSY announcement kit — three-lane race (Dijkstra vs BMSSP vs DMSY). First public implementation of arXiv 2602.07868.
+
+### Pages live
+
+- [ ] `https://fishygeek91.github.io/sorta-fast/` serves the 3-way default race after merge to main.
+
+### Social unfurl (OG)
+
+- [ ] 3-way OG card: capture via #18 exporter at 1200×630 (`sips -z 630 1200` or equivalent), then compress with oxipng, pngquant, or `sips -s format jpeg` — no new npm dependency. Replace `og-card.png` (#51).
+- [ ] Twitter/OG debugger verify on the live URL after deploy.
+
+### Exports
+
+- [ ] PNG photo-finish and WebM/mp4 still via MediaRecorder (#18); 3-way seed baked into export captions (`src/ui/exportMeta.ts`).
+
+### Seeds reproduce
+
+- [ ] Full 3-way race state in URL (`src/ui/raceUrl.ts`). Same `?g=&n=&seed=&race=` → byte-identical traces (`test/race-url-repro.test.ts`).
+- [ ] Default hero / announcement seed: `?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy`
+- [ ] Story seed (city graph): `?g=city&n=500&seed=1729&mode=race&race=dijkstra,bmssp,dmsy`
+- [ ] Maze seed (Dijkstra work-clock win): `?g=maze&n=500&seed=0&mode=race&race=dijkstra,bmssp,dmsy`
+
+### CI green
+
+- [ ] Local gate: `npm run typecheck && npm test && npm run lint` before PR.
+- [ ] `test/dmsy-fuzz.test.ts` differential fuzz passes in CI.
+
+### Fairness panel accurate
+
+- [ ] `FAIRNESS_COSTS` deep-equals `OP_COST`; honesty copy covers all three lanes. Paper params remain the default for BMSSP and DMSY — **#54 (DMSY demo params sweep) is OUT OF SCOPE** for this issue; do not copy BMSSP `k=max(4, paper k)` onto DMSY.
+
+### Hero GIF recipe
+
+Committed hero (`docs/assets/hero.gif` / `hero.webm`) was recorded from the story city seed (`g=city&n=500&seed=1729&mode=race&race=dijkstra,bmssp,dmsy`) because sparse 25k WebM replay is too long for the announcement PR; the sparse 25k seed 4 URL remains the default live race.
+
+- [ ] README 3-way hero GIF links the city seed URL above; caption matches the completed banner on that take (Dijkstra: 9,815; BMSSP '25: 14,328; DMSY '26: 69,899).
+- [ ] README claims first public implementation of DMSY (arXiv 2602.07868).
+- [ ] ffmpeg palette encode per v1.0 recipe; target < 8–10 MB.
+
+### Bench page
+
+- [ ] Wall-clock bench at `/sorta-fast/bench/` includes DMSY columns alongside Dijkstra and BMSSP.
+
+### Announcement
+
+- [ ] Blog drafted at `docs/blog/implementing-dmsy.md` from `docs/paper-notes.md`.
+- [ ] Post targets: Hacker News, Papers We Love / arXiv 2602.07868 readers, Twitter/X with OG card link.
+- [ ] Tag **v2.0** only after an explicit human ask — do not bump `package.json` in this issue.

@@ -11,8 +11,10 @@ type WallClockCell = {
   seed: number;
   dijkstraWallMs: number;
   bmsspWallMs: number;
+  dmsyWallMs: number;
   dijkstraWork: number;
   bmsspWork: number;
+  dmsyWork: number;
 };
 
 /** Imported benchmark artifact written by `npm run bench:wall-clock`. */
@@ -25,7 +27,7 @@ type WallClockResults = {
 };
 
 const LIVE_RACE_URL =
-  "https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp";
+  "https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy";
 const COST_TABLE_URL = "https://github.com/fishygeek91/sorta-fast/blob/main/src/core/trace.ts";
 const WORK_CLOCK_SWEEP_URL =
   "https://github.com/fishygeek91/sorta-fast/blob/main/bench/bmssp-kt-sweep.md";
@@ -101,8 +103,10 @@ function parseWallClockResults(value: unknown): WallClockResults {
       seed: readNumber(item, "seed", `${path}.seed`),
       dijkstraWallMs: readNumber(item, "dijkstraWallMs", `${path}.dijkstraWallMs`),
       bmsspWallMs: readNumber(item, "bmsspWallMs", `${path}.bmsspWallMs`),
+      dmsyWallMs: readNumber(item, "dmsyWallMs", `${path}.dmsyWallMs`),
       dijkstraWork: readNumber(item, "dijkstraWork", `${path}.dijkstraWork`),
       bmsspWork: readNumber(item, "bmsspWork", `${path}.bmsspWork`),
+      dmsyWork: readNumber(item, "dmsyWork", `${path}.dmsyWork`),
     });
   }
 
@@ -152,13 +156,15 @@ function renderIntro(): string {
     </p>
     <p>
       At small graph sizes (S and M presets), Dijkstra with a binary heap often wins
-      <strong>wall-clock</strong> time even when BMSSP carries fancier structure. That is
-      expected and honest — we publish those numbers here instead of hiding them.
+      <strong>wall-clock</strong> time even when BMSSP and DMSY carry fancier structure.
+      That is expected and honest — we publish those numbers here instead of hiding them.
     </p>
     <p>
       <strong>Crossover</strong> is subtler than a single n. On the work clock, BMSSP with
       this demo&apos;s swept parameters (k&nbsp;=&nbsp;4) beats Dijkstra on sparse
       n&nbsp;=&nbsp;25,000, seed&nbsp;=&nbsp;4, while paper k&nbsp;=&nbsp;2 does not.
+      DMSY (Feb 2026) is the third lane in the live race; its wall-clock and work-clock
+      rows sit beside Dijkstra and BMSSP below.
       Asymptotic k from the BMSSP paper stays at 2 until n&nbsp;≈&nbsp;2<sup>27</sup>, so
       browser-scale races need the swept k to show where the algorithm actually wins.
     </p>
@@ -201,8 +207,10 @@ function renderCellRow(cell: WallClockCell): string {
       <td class="num">${formatNumber(cell.seed)}</td>
       <td class="num">${formatNumber(cell.dijkstraWallMs)}</td>
       <td class="num">${formatNumber(cell.bmsspWallMs)}</td>
+      <td class="num">${formatNumber(cell.dmsyWallMs)}</td>
       <td class="num">${formatNumber(cell.dijkstraWork)}</td>
       <td class="num">${formatNumber(cell.bmsspWork)}</td>
+      <td class="num">${formatNumber(cell.dmsyWork)}</td>
     </tr>
   `;
 }
@@ -231,8 +239,10 @@ function renderResultsTable(data: WallClockResults): string {
           <th scope="col">Seed</th>
           <th scope="col">Dijkstra ms</th>
           <th scope="col">BMSSP ms</th>
+          <th scope="col">DMSY ms</th>
           <th scope="col">Dijkstra work</th>
           <th scope="col">BMSSP work</th>
+          <th scope="col">DMSY work</th>
         </tr>
       </thead>
       <tbody>

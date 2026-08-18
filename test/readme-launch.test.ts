@@ -15,7 +15,7 @@ function includesIgnoreCase(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
 
-describe("issue #21 README launch copy", () => {
+describe("issue #21 / #28 README launch copy", () => {
   const readme = readFileSync(README_PATH, "utf8");
 
   it("links the hero GIF and live GitHub Pages URL", () => {
@@ -41,9 +41,23 @@ describe("issue #21 README launch copy", () => {
     expect(readme).toContain("test/dijkstra-fuzz.test.ts");
     expect(readme).toContain("test/bmssp-fuzz.test.ts");
     expect(readme).toContain("test/bmssp-crosscheck.test.ts");
+    expect(readme).toContain("test/dmsy-fuzz.test.ts");
+  });
+
+  it("advertises the default 3-way race URL", () => {
+    expect(readme).toContain("race=dijkstra,bmssp,dmsy");
+  });
+
+  it("claims first public DMSY implementation with blog companion", () => {
+    expect(includesIgnoreCase(readme, "first public implementation")).toBe(true);
+    expect(readme).toContain("docs/blog/implementing-dmsy.md");
   });
 
   it("does not advertise the site as under construction", () => {
     expect(includesIgnoreCase(readme, "under construction")).toBe(false);
+  });
+
+  it("does not defer DMSY to a future release", () => {
+    expect(includesIgnoreCase(readme, "planned for v2.0")).toBe(false);
   });
 });

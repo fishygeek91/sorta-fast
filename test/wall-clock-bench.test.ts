@@ -85,8 +85,10 @@ function parseWallClockResultsJson(raw: string): { cells: WallClockCell[] } {
       seed: requireCellNumber(item, "seed", index),
       dijkstraWallMs: requireCellNumber(item, "dijkstraWallMs", index),
       bmsspWallMs: requireCellNumber(item, "bmsspWallMs", index),
+      dmsyWallMs: requireCellNumber(item, "dmsyWallMs", index),
       dijkstraWork: requireCellNumber(item, "dijkstraWork", index),
       bmsspWork: requireCellNumber(item, "bmsspWork", index),
+      dmsyWork: requireCellNumber(item, "dmsyWork", index),
     });
   }
 
@@ -94,18 +96,22 @@ function parseWallClockResultsJson(raw: string): { cells: WallClockCell[] } {
 }
 
 /**
- * Assert a benchmark cell row has finite timings and billed work for both lanes.
+ * Assert a benchmark cell row has finite timings and billed work for all three lanes.
  */
 function assertCompleteCell(cell: WallClockCell): void {
   expect(cell.kind).toBe("sparse");
   expect(Number.isFinite(cell.dijkstraWallMs)).toBe(true);
   expect(Number.isFinite(cell.bmsspWallMs)).toBe(true);
+  expect(Number.isFinite(cell.dmsyWallMs)).toBe(true);
   expect(cell.dijkstraWallMs).toBeGreaterThanOrEqual(0);
   expect(cell.bmsspWallMs).toBeGreaterThanOrEqual(0);
+  expect(cell.dmsyWallMs).toBeGreaterThanOrEqual(0);
   expect(Number.isFinite(cell.dijkstraWork)).toBe(true);
   expect(Number.isFinite(cell.bmsspWork)).toBe(true);
+  expect(Number.isFinite(cell.dmsyWork)).toBe(true);
   expect(cell.dijkstraWork).toBeGreaterThan(0);
   expect(cell.bmsspWork).toBeGreaterThan(0);
+  expect(cell.dmsyWork).toBeGreaterThan(0);
 }
 
 describe("issue #21 wall-clock bench", () => {
@@ -151,7 +157,7 @@ describe("issue #21 wall-clock bench", () => {
   });
 
   describe("measureCell", () => {
-    it("returns finite positive work and non-negative wall ms for both lanes", () => {
+    it("returns finite positive work and non-negative wall ms for all three lanes", () => {
       const cell = measureCell("sparse", 32, 4);
 
       expect(cell.kind).toBe("sparse");
@@ -162,7 +168,7 @@ describe("issue #21 wall-clock bench", () => {
   });
 
   describe("wall-clock-results.json", () => {
-    it("requires committed S–XL sparse rows with both wall and work fields", () => {
+    it("requires committed S–XL sparse rows with wall and work fields for all lanes", () => {
       const resultsPath = defaultResultsPath();
       const raw = readFileSync(resultsPath, "utf8");
       const data = parseWallClockResultsJson(raw);
@@ -200,6 +206,7 @@ describe("issue #21 wall-clock bench", () => {
       expect(includesIgnoreCase(combined, "misleading")).toBe(true);
       expect(includesIgnoreCase(combined, "crossover")).toBe(true);
       expect(includesIgnoreCase(combined, "Dijkstra")).toBe(true);
+      expect(includesIgnoreCase(combined, "DMSY")).toBe(true);
       expect(includesIgnoreCase(combined, "S and M") || includesIgnoreCase(combined, "small")).toBe(
         true,
       );
@@ -208,6 +215,7 @@ describe("issue #21 wall-clock bench", () => {
     it("does not import core algorithm modules in wall-clock-page.ts", () => {
       expect(pageSource).not.toContain("src/core/dijkstra");
       expect(pageSource).not.toContain("src/core/bmssp");
+      expect(pageSource).not.toContain("src/core/dmsy");
     });
   });
 

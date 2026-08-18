@@ -9,6 +9,10 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- 3-way OG card (`public/og-card.png` 1200×630) and hero GIF/WebM from the #18 exporter on city n=500 seed 1729 (#28).
+- Companion blog `docs/blog/implementing-dmsy.md` drafted from paper-notes ambiguity log (tie-break, gallery-n degeneracy, selected DMSY-P decisions) (#28).
+- Wall-clock bench harness/page now include DMSY ms and work columns; live race link is the 3-way default (#28).
+- Round-2 announcement checklist section in `docs/launch-checklist.md` (post targets, 3-way seeds, v2.0 tag is human-ask) (#28).
 - `assertDmsySettleFinality` classifies post-settle improving relaxes (strict-length / lex-only / equal-label) and is wired into DMSY unit/fuzz plus a city-seed-0 {k:2,t:2} golden (#92).
 - Renderer forest overlays: moss grow/cut edge strokes with work-clock pulse; subtree patchwork fill keyed on `forestTree` (settle-order LUT fallback); aggregated L/XL skips per-edge forest strokes but keeps patchwork. Default 3-way race is Dijkstra vs BMSSP vs DMSY (`DEFAULT_RACE_URL.race`, empty `?`). Lens accepts `algo=dmsy` with forest counters, `formatDmsyNarration`, and forest overlay toggles. Story ships `forest` beat after pivots with 3-lane workers; race beat stays Dijkstra+BMSSP; free-play loads the new 3-way default. M-size replay and 3-lane stall tests stay under 50ms (`test/replay-perf.test.ts`, `test/race-dmsy-perf.test.ts`) (#27).
 - DMSY fuzz now includes 400 dense integer-weight digraphs (n 4–12, p≈0.4, weights in {1,2}) so the public-vs-instrumented lex predecessor check is load-bearing. (#26)
@@ -33,6 +37,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- README, `index.html` meta, and `package.json` description now advertise the shipped 3-way race (Dijkstra vs BMSSP vs DMSY) and the first-public-implementation claim for arXiv 2602.07868 (#28).
 - Deleted the unused `relax()` wrapper so production callers cannot emit paper-accept as `improved` (#92).
 - paper-notes DMSY-P32: trace `improved` is a strict 4-tuple decrease; paper Relax accept still includes `"="` (#92).
 - Empty `?` loads the 3-way DMSY race (`race=dijkstra,bmssp,dmsy`); URL codec serializes `race=` instead of `lane3=1` (`race=dmsy` accepted; `lane3=1` still parsed) (#27).

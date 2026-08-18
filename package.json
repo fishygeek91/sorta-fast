@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "In-browser race of shortest-path algorithms: Dijkstra vs BMSSP",
+  "description": "In-browser race of shortest-path algorithms: Dijkstra vs BMSSP vs DMSY",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

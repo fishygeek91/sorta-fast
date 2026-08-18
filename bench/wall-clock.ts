@@ -1,5 +1,5 @@
 /**
- * Node bench: wall-clock timing for Dijkstra vs BMSSP trace drains (issue #21).
+ * Node bench: wall-clock timing for Dijkstra vs BMSSP vs DMSY trace drains (issue #21 / #28).
  *
  * Headless — seeded graphs only, no DOM. Graph generation is outside the timed
  * region; only TraceWriter drain + scanCosts is measured. No Math.random() /
@@ -13,6 +13,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { run as runBmssp } from "../src/core/bmssp/bmssp.ts";
+import { run as runDmsy } from "../src/core/dmsy/dmsy.ts";
 import { run as runDijkstra } from "../src/core/dijkstra.ts";
 import {
   CITY_MAX_N,
@@ -32,8 +33,10 @@ export type WallClockCell = {
   seed: number;
   dijkstraWallMs: number;
   bmsspWallMs: number;
+  dmsyWallMs: number;
   dijkstraWork: number;
   bmsspWork: number;
+  dmsyWork: number;
 };
 
 /** JSON artifact written by the CLI entry point. */
@@ -137,10 +140,11 @@ function assertCellInputs(n: number, seed: number): void {
 }
 
 /**
- * Measure wall-clock drain time and billed work for Dijkstra and BMSSP on one graph.
+ * Measure wall-clock drain time and billed work for Dijkstra, BMSSP, and DMSY on one graph.
  *
  * Graph is generated once; each lane is timed independently via `performance.now()`.
  * BMSSP uses demo defaults (`bmsspParams(n)` when params are omitted).
+ * DMSY uses paper defaults (`paperDmsyParams` / default `run()` when params are omitted).
  */
 export function measureCell(kind: GraphKind, n: number, seed: number): WallClockCell {
   if (shouldSkipWallClockCell(kind, n)) {
@@ -160,10 +164,16 @@ export function measureCell(kind: GraphKind, n: number, seed: number): WallClock
   const bmsspWork = drainLaneWork(runBmssp(graph, SOURCE));
   const bmsspWallMs = performance.now() - bmsspT0;
 
+  const dmsyT0 = performance.now();
+  const dmsyWork = drainLaneWork(runDmsy(graph, SOURCE));
+  const dmsyWallMs = performance.now() - dmsyT0;
+
   assertPositiveFiniteWork("dijkstra", dijkstraWork);
   assertPositiveFiniteWork("bmssp", bmsspWork);
+  assertPositiveFiniteWork("dmsy", dmsyWork);
   assertFiniteWallMs("dijkstra", dijkstraWallMs);
   assertFiniteWallMs("bmssp", bmsspWallMs);
+  assertFiniteWallMs("dmsy", dmsyWallMs);
 
   return {
     kind,
@@ -171,8 +181,10 @@ export function measureCell(kind: GraphKind, n: number, seed: number): WallClock
     seed,
     dijkstraWallMs,
     bmsspWallMs,
+    dmsyWallMs,
     dijkstraWork,
     bmsspWork,
+    dmsyWork,
   };
 }
 
@@ -215,7 +227,8 @@ function formatCellSummary(cell: WallClockCell): string {
   return (
     `wall-clock: kind=${cell.kind} n=${String(cell.n)} seed=${String(cell.seed)} ` +
     `dijkstra=${cell.dijkstraWallMs.toFixed(2)}ms/${String(cell.dijkstraWork)} ` +
-    `bmssp=${cell.bmsspWallMs.toFixed(2)}ms/${String(cell.bmsspWork)}`
+    `bmssp=${cell.bmsspWallMs.toFixed(2)}ms/${String(cell.bmsspWork)} ` +
+    `dmsy=${cell.dmsyWallMs.toFixed(2)}ms/${String(cell.dmsyWork)}`
   );
 }
 

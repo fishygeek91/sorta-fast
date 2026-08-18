@@ -33,4 +33,9 @@ describe("issue #17 Open Graph meta", () => {
     expect(html).toContain("https://fishygeek91.github.io/sorta-fast/");
     expect(html).toContain('data-theme="dark"');
   });
+
+  it("mentions DMSY in og:description for the 3-way race", () => {
+    expect(html).toContain("og:description");
+    expect(html).toContain("DMSY");
+  });
 });
