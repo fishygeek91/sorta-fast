@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { packCsr, type Graph } from "../src/core/graph.ts";
@@ -151,30 +154,35 @@ function overlayGhostStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
   );
 }
 
-function overlayForestGrowStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
-  return overlayCalls(overlay).filter(
-    (call) =>
-      call.op === "stroke" &&
-      call.strokeStyle === MOSS_STROKE &&
-      call.lineWidth === GHOST_LINE_WIDTH,
-  );
-}
-
-function overlayForestCutStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
-  return overlayCalls(overlay).filter(
-    (call) =>
-      call.op === "stroke" &&
-      call.strokeStyle === MOSS_STROKE &&
-      call.lineWidth === FOREST_CUT_LINE_WIDTH,
-  );
-}
-
 /** Edge line width in CSS pixels — must match renderer.ts (issue #80). */
 const EDGE_LINE_WIDTH = 1;
 /** Frontier ring line width in CSS pixels — must match renderer.ts (issue #80). */
 const FRONTIER_LINE_WIDTH = 1.5;
 const GHOST_LINE_WIDTH = 1.5;
+/** Forest grow line width in CSS pixels — must match renderer.ts (issue #98). */
+const FOREST_GROW_LINE_WIDTH = 1.5;
+/** Forest cut line width in CSS pixels — must match renderer.ts (issue #98). */
 const FOREST_CUT_LINE_WIDTH = 2.5;
+
+function overlayForestGrowStrokeCalls(
+  overlay: FakeCanvasSurface,
+  lineWidth: number = FOREST_GROW_LINE_WIDTH,
+): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) =>
+      call.op === "stroke" && call.strokeStyle === MOSS_STROKE && call.lineWidth === lineWidth,
+  );
+}
+
+function overlayForestCutStrokeCalls(
+  overlay: FakeCanvasSurface,
+  lineWidth: number = FOREST_CUT_LINE_WIDTH,
+): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) =>
+      call.op === "stroke" && call.strokeStyle === MOSS_STROKE && call.lineWidth === lineWidth,
+  );
+}
 
 /** Pivot flare ring stroke — must match renderer.ts ember rgba stroke. */
 const PIVOT_FLARE_STROKE = `rgba(${EMBER_RGB}, 0.85)`;
@@ -243,7 +251,9 @@ function strokeDirtyPadForScale(pixelScale: number): number {
   const edge = EDGE_LINE_WIDTH * pixelScale;
   const frontier = FRONTIER_LINE_WIDTH * pixelScale;
   const ghost = GHOST_LINE_WIDTH * pixelScale;
-  return Math.ceil(Math.max(mark, photo, edge, frontier, ghost) / 2);
+  const forestGrow = FOREST_GROW_LINE_WIDTH * pixelScale;
+  const forestCut = FOREST_CUT_LINE_WIDTH * pixelScale;
+  return Math.ceil(Math.max(mark, photo, edge, frontier, ghost, forestGrow, forestCut) / 2);
 }
 
 /**
@@ -1104,6 +1114,75 @@ describe("Renderer", () => {
     for (const call of ghostScale2) {
       expect(call.lineWidth).toBe(GHOST_LINE_WIDTH * 2);
     }
+  });
+
+  it("scales forest grow stroke lineWidth with pixelScale", () => {
+    const drawGrow = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+      const state = new LaneState(2, graph.m);
+      state.forestEdgeOp[0] = FOREST_EDGE_GROW;
+      state.forestEdgeWork[0] = 0;
+      state.work = 1;
+      renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+      return overlay;
+    };
+
+    const overlayScale1 = drawGrow(1);
+    const growScale1 = overlayForestGrowStrokeCalls(overlayScale1, FOREST_GROW_LINE_WIDTH);
+    expect(growScale1.length).toBeGreaterThan(0);
+    for (const call of growScale1) {
+      expect(call.lineWidth).toBe(FOREST_GROW_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawGrow(2);
+    const growScale2 = overlayForestGrowStrokeCalls(overlayScale2, FOREST_GROW_LINE_WIDTH * 2);
+    expect(growScale2.length).toBeGreaterThan(0);
+    for (const call of growScale2) {
+      expect(call.lineWidth).toBe(FOREST_GROW_LINE_WIDTH * 2);
+    }
+  });
+
+  it("scales forest cut stroke lineWidth with pixelScale", () => {
+    const drawCut = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+      const state = new LaneState(2, graph.m);
+      state.forestEdgeOp[0] = FOREST_EDGE_CUT;
+      state.forestEdgeWork[0] = 0;
+      state.work = 1;
+      renderer.draw(state, { frontier: false, relaxedEdges: false, pivotFlares: false });
+      return overlay;
+    };
+
+    const overlayScale1 = drawCut(1);
+    const cutScale1 = overlayForestCutStrokeCalls(overlayScale1, FOREST_CUT_LINE_WIDTH);
+    expect(cutScale1.length).toBeGreaterThan(0);
+    for (const call of cutScale1) {
+      expect(call.lineWidth).toBe(FOREST_CUT_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawCut(2);
+    const cutScale2 = overlayForestCutStrokeCalls(overlayScale2, FOREST_CUT_LINE_WIDTH * 2);
+    expect(cutScale2.length).toBeGreaterThan(0);
+    for (const call of cutScale2) {
+      expect(call.lineWidth).toBe(FOREST_CUT_LINE_WIDTH * 2);
+    }
+  });
+
+  it("strokeDirtyPad Math.max includes forest grow and cut line widths", () => {
+    const rendererSource = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/render/renderer.ts"),
+      "utf8",
+    );
+    expect(rendererSource).toContain("this.forestGrowLineWidth");
+    expect(rendererSource).toContain("this.forestCutLineWidth");
+    const padAssign = rendererSource.slice(
+      rendererSource.indexOf("this.strokeDirtyPad = Math.ceil("),
+    );
+    const padBlock = padAssign.slice(0, padAssign.indexOf(");") + 2);
+    expect(padBlock).toContain("this.forestGrowLineWidth");
+    expect(padBlock).toContain("this.forestCutLineWidth");
   });
 
   it("pivot flare rings use the scaled frontier width", () => {

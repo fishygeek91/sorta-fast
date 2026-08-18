@@ -40,6 +40,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Forest grow/cut overlay strokes now scale with the Race backing-store DPR (`pixelScale`), and those widths are included in the vertex dirty-radius pad so HiDPI forest strokes keep CSS-px weight (#98).
 - Edge, frontier, and ghost strokes now scale with the Race backing-store DPR (`pixelScale`), and the vertex dirty radius pads for scaled stroke overhang so HiDPI partial composites leave no residue rings (#80).
 - README hero caption DMSY photo-finish / settle-all totals updated for demo-default k (city n=500 seed 1729) (#54).
 - DMSY omitted-params / worker default is now demo (swept k) not paper; paper stays selectable via `dmsy=paper` (#54).
