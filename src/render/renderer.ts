@@ -46,10 +46,10 @@ const FRONTIER_LINE_WIDTH = 1.5;
 /** Ghost edge line width in CSS pixels (issue #80). Backing-store width is devicePx of this × pixelScale. */
 const GHOST_LINE_WIDTH = 1.5;
 
-/** Forest grow edge line width in CSS pixels (issue #27). Not scaled by pixelScale. */
+/** Forest grow edge line width in CSS pixels (issue #98). Backing-store width is devicePx of this × pixelScale. */
 const FOREST_GROW_LINE_WIDTH = 1.5;
 
-/** Forest cut edge line width in CSS pixels (issue #27). Not scaled by pixelScale. */
+/** Forest cut edge line width in CSS pixels (issue #98). Backing-store width is devicePx of this × pixelScale. */
 const FOREST_CUT_LINE_WIDTH = 2.5;
 
 /** Full circle arc in radians. */
@@ -381,6 +381,10 @@ export class Renderer {
   private readonly frontierLineWidth: number;
   /** Cached relaxed-edge ghost stroke width in backing-store pixels (issue #80). */
   private readonly ghostLineWidth: number;
+  /** Cached forest grow stroke width in backing-store pixels (issue #98). */
+  private readonly forestGrowLineWidth: number;
+  /** Cached forest cut stroke width in backing-store pixels (issue #98). */
+  private readonly forestCutLineWidth: number;
   /** Dirty-radius pad covering half the widest scaled stroke overhang (issue #80). */
   private readonly strokeDirtyPad: number;
   /** Last drawn settle-diff bucket per vertex (issue #68); 0 = {@link SETTLE_DIFF_NEITHER}. */
@@ -422,6 +426,8 @@ export class Renderer {
     this.edgeLineWidth = devicePx(EDGE_LINE_WIDTH, pixelScale);
     this.frontierLineWidth = devicePx(FRONTIER_LINE_WIDTH, pixelScale);
     this.ghostLineWidth = devicePx(GHOST_LINE_WIDTH, pixelScale);
+    this.forestGrowLineWidth = devicePx(FOREST_GROW_LINE_WIDTH, pixelScale);
+    this.forestCutLineWidth = devicePx(FOREST_CUT_LINE_WIDTH, pixelScale);
     this.strokeDirtyPad = Math.ceil(
       Math.max(
         this.markLineWidth,
@@ -429,6 +435,8 @@ export class Renderer {
         this.edgeLineWidth,
         this.frontierLineWidth,
         this.ghostLineWidth,
+        this.forestGrowLineWidth,
+        this.forestCutLineWidth,
       ) / 2,
     );
 
@@ -1609,7 +1617,7 @@ export class Renderer {
       const srcOfEdge = this.srcOfEdge;
 
       ctx.strokeStyle = this.mossStroke;
-      ctx.lineWidth = FOREST_GROW_LINE_WIDTH;
+      ctx.lineWidth = this.forestGrowLineWidth;
       ctx.beginPath();
 
       let drewGrow = false;
@@ -1643,7 +1651,7 @@ export class Renderer {
       const srcOfEdge = this.srcOfEdge;
 
       ctx.strokeStyle = this.mossStroke;
-      ctx.lineWidth = FOREST_CUT_LINE_WIDTH;
+      ctx.lineWidth = this.forestCutLineWidth;
       ctx.beginPath();
 
       let drewCut = false;
