@@ -37,13 +37,13 @@ export const AGGREGATED_RENDER_MIN_N = SIZE_PRESETS.L;
 /** Aggregated node footprint in CSS pixels (2×2 squares; issue #79). Backing-store size is devicePxInt of this × pixelScale. */
 export const AGGREGATED_NODE_PX = 2;
 
-/** Edge line width in CSS pixels (issue #79). Not scaled by pixelScale. */
+/** Edge line width in CSS pixels (issue #80). Backing-store width is devicePx of this × pixelScale. */
 const EDGE_LINE_WIDTH = 1;
 
-/** Frontier ring line width in CSS pixels (issue #79). Not scaled by pixelScale. */
+/** Frontier ring line width in CSS pixels (issue #80). Backing-store width is devicePx of this × pixelScale. */
 const FRONTIER_LINE_WIDTH = 1.5;
 
-/** Ghost edge line width in CSS pixels (issue #79). Not scaled by pixelScale. */
+/** Ghost edge line width in CSS pixels (issue #80). Backing-store width is devicePx of this × pixelScale. */
 const GHOST_LINE_WIDTH = 1.5;
 
 /** Forest grow edge line width in CSS pixels (issue #27). Not scaled by pixelScale. */
@@ -375,6 +375,14 @@ export class Renderer {
   private readonly dstructStripHeight: number;
   /** Cached aggregated node footprint in backing-store pixels (issue #79). */
   private readonly aggregatedNodePx: number;
+  /** Cached static edge stroke width in backing-store pixels (issue #80). */
+  private readonly edgeLineWidth: number;
+  /** Cached frontier/pivot ring stroke width in backing-store pixels (issue #80). */
+  private readonly frontierLineWidth: number;
+  /** Cached relaxed-edge ghost stroke width in backing-store pixels (issue #80). */
+  private readonly ghostLineWidth: number;
+  /** Dirty-radius pad covering half the widest scaled stroke overhang (issue #80). */
+  private readonly strokeDirtyPad: number;
   /** Last drawn settle-diff bucket per vertex (issue #68); 0 = {@link SETTLE_DIFF_NEITHER}. */
   private lastDiff: Uint8Array;
   /** Last drawn out-of-order tick flag per vertex (issue #68). */
@@ -411,6 +419,18 @@ export class Renderer {
     this.photoFinishLineWidth = devicePx(PHOTO_FINISH_LINE_WIDTH, pixelScale);
     this.dstructStripHeight = devicePxInt(DSTRUCT_STRIP_HEIGHT, pixelScale);
     this.aggregatedNodePx = devicePxInt(AGGREGATED_NODE_PX, pixelScale);
+    this.edgeLineWidth = devicePx(EDGE_LINE_WIDTH, pixelScale);
+    this.frontierLineWidth = devicePx(FRONTIER_LINE_WIDTH, pixelScale);
+    this.ghostLineWidth = devicePx(GHOST_LINE_WIDTH, pixelScale);
+    this.strokeDirtyPad = Math.ceil(
+      Math.max(
+        this.markLineWidth,
+        this.photoFinishLineWidth,
+        this.edgeLineWidth,
+        this.frontierLineWidth,
+        this.ghostLineWidth,
+      ) / 2,
+    );
 
     this.target = opts.target;
     this.graph = opts.graph;
@@ -967,7 +987,7 @@ export class Renderer {
     ctx.fillRect(0, 0, width, height);
 
     ctx.strokeStyle = this.edgeStroke;
-    ctx.lineWidth = EDGE_LINE_WIDTH;
+    ctx.lineWidth = this.edgeLineWidth;
     ctx.beginPath();
 
     const n = graph.n;
@@ -1012,10 +1032,11 @@ export class Renderer {
   }
 
   /**
-   * Dirty-rect radius for one vertex: cached aggregated footprint above threshold, camera circle below.
+   * Dirty-rect radius for one vertex: aggregated footprint or camera circle, padded by half the widest scaled stroke so HiDPI ring overhang is covered (issue #80).
    */
   private nodeDirtyRadius(): number {
-    return this.usesAggregated() ? this.aggregatedNodePx : this.camera.radius;
+    const base = this.usesAggregated() ? this.aggregatedNodePx : this.camera.radius;
+    return base + this.strokeDirtyPad;
   }
 
   /**
@@ -1528,7 +1549,7 @@ export class Renderer {
         }
       } else {
         ctx.strokeStyle = this.frontierStroke;
-        ctx.lineWidth = FRONTIER_LINE_WIDTH;
+        ctx.lineWidth = this.frontierLineWidth;
 
         for (let v = 0; v < n; v += 1) {
           const onFrontier = frontier[v];
@@ -1554,7 +1575,7 @@ export class Renderer {
       const srcOfEdge = this.srcOfEdge;
 
       ctx.strokeStyle = this.ghostStroke;
-      ctx.lineWidth = GHOST_LINE_WIDTH;
+      ctx.lineWidth = this.ghostLineWidth;
       ctx.beginPath();
 
       let drewGhost = false;
@@ -1669,7 +1690,7 @@ export class Renderer {
         const outerRadius = radius * PIVOT_FLARE_OUTER_SCALE;
 
         ctx.strokeStyle = `rgba(${this.emberRgb}, 0.85)`;
-        ctx.lineWidth = FRONTIER_LINE_WIDTH;
+        ctx.lineWidth = this.frontierLineWidth;
 
         for (let v = 0; v < n; v += 1) {
           if (!this.shouldDrawPivotFlare(v, state)) {

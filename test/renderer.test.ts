@@ -169,8 +169,15 @@ function overlayForestCutStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
   );
 }
 
+/** Edge line width in CSS pixels — must match renderer.ts (issue #80). */
+const EDGE_LINE_WIDTH = 1;
+/** Frontier ring line width in CSS pixels — must match renderer.ts (issue #80). */
+const FRONTIER_LINE_WIDTH = 1.5;
 const GHOST_LINE_WIDTH = 1.5;
 const FOREST_CUT_LINE_WIDTH = 2.5;
+
+/** Pivot flare ring stroke — must match renderer.ts ember rgba stroke. */
+const PIVOT_FLARE_STROKE = `rgba(${EMBER_RGB}, 0.85)`;
 
 function overlayLineToCount(overlay: FakeCanvasSurface): number {
   return overlayCalls(overlay).filter((call) => call.op === "lineTo").length;
@@ -207,6 +214,61 @@ function dstructStripFillRects(
 ): DrawCall[] {
   const stripY = CANVAS_SIZE - stripHeight;
   return fxFillRects(fx).filter((call) => call.args[1] === stripY && call.args[3] === stripHeight);
+}
+
+function edgeStrokeCalls(edge: FakeCanvasSurface): DrawCall[] {
+  return getFakeContext(edge).calls.filter(
+    (call) => call.op === "stroke" && call.strokeStyle === THEMES.dark.hairline,
+  );
+}
+
+function overlayFrontierStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) => call.op === "stroke" && call.strokeStyle === THEMES.dark.frontier,
+  );
+}
+
+function overlayPivotFlareStrokeCalls(overlay: FakeCanvasSurface): DrawCall[] {
+  return overlayCalls(overlay).filter(
+    (call) => call.op === "stroke" && call.strokeStyle === PIVOT_FLARE_STROKE,
+  );
+}
+
+/**
+ * Half the widest scaled stroke overhang — mirrors renderer.ts strokeDirtyPad (issue #80).
+ */
+function strokeDirtyPadForScale(pixelScale: number): number {
+  const mark = MARK_LINE_WIDTH * pixelScale;
+  const photo = PHOTO_FINISH_LINE_WIDTH * pixelScale;
+  const edge = EDGE_LINE_WIDTH * pixelScale;
+  const frontier = FRONTIER_LINE_WIDTH * pixelScale;
+  const ghost = GHOST_LINE_WIDTH * pixelScale;
+  return Math.ceil(Math.max(mark, photo, edge, frontier, ghost) / 2);
+}
+
+/**
+ * Inclusive pixel AABB for an incremental composite blit after a vertex dirty mark.
+ *
+ * Radius is node draw radius plus stroke dirty pad; bounds match dirtyRect clippedNodeAabb.
+ */
+function expectedVertexDirtyBlit(
+  cx: number,
+  cy: number,
+  nodeRadius: number,
+  strokeDirtyPad: number,
+  canvasSize: number,
+): { sx: number; sy: number; sw: number; sh: number } {
+  const dirtyRadius = nodeRadius + strokeDirtyPad;
+  const x0 = Math.max(0, Math.floor(cx - dirtyRadius - 1));
+  const y0 = Math.max(0, Math.floor(cy - dirtyRadius - 1));
+  const x1 = Math.min(canvasSize - 1, Math.floor(cx + dirtyRadius + 1));
+  const y1 = Math.min(canvasSize - 1, Math.floor(cy + dirtyRadius + 1));
+  return {
+    sx: x0,
+    sy: y0,
+    sw: x1 - x0 + 1,
+    sh: y1 - y0 + 1,
+  };
 }
 
 function sourceFinishMarkStrokes(overlay: FakeCanvasSurface): DrawCall[] {
@@ -949,6 +1011,173 @@ describe("Renderer", () => {
     for (const call of stripScale2) {
       expect(call.args[3]).toBe(stripHeightScale2);
     }
+  });
+
+  it("scales edge stroke lineWidth with pixelScale", () => {
+    const drawEdges = (pixelScale?: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, edge } =
+        pixelScale === undefined
+          ? createRendererWithLayers(graph)
+          : createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      renderer.draw(state);
+
+      return edge;
+    };
+
+    const edgeDefault = drawEdges();
+    const strokesDefault = edgeStrokeCalls(edgeDefault);
+    expect(strokesDefault.length).toBeGreaterThan(0);
+    for (const call of strokesDefault) {
+      expect(call.lineWidth).toBe(EDGE_LINE_WIDTH);
+    }
+
+    const edgeScale1 = drawEdges(1);
+    const strokesScale1 = edgeStrokeCalls(edgeScale1);
+    expect(strokesScale1.length).toBeGreaterThan(0);
+    for (const call of strokesScale1) {
+      expect(call.lineWidth).toBe(EDGE_LINE_WIDTH);
+    }
+
+    const edgeScale2 = drawEdges(2);
+    const strokesScale2 = edgeStrokeCalls(edgeScale2);
+    expect(strokesScale2.length).toBeGreaterThan(0);
+    for (const call of strokesScale2) {
+      expect(call.lineWidth).toBe(EDGE_LINE_WIDTH * 2);
+    }
+  });
+
+  it("scales frontier ring lineWidth with pixelScale", () => {
+    const drawFrontier = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      state.frontier[1] = 1;
+
+      renderer.draw(state, { relaxedEdges: false, pivotFlares: false });
+
+      return overlay;
+    };
+
+    const overlayScale1 = drawFrontier(1);
+    const frontierScale1 = overlayFrontierStrokeCalls(overlayScale1);
+    expect(frontierScale1.length).toBeGreaterThan(0);
+    for (const call of frontierScale1) {
+      expect(call.lineWidth).toBe(FRONTIER_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawFrontier(2);
+    const frontierScale2 = overlayFrontierStrokeCalls(overlayScale2);
+    expect(frontierScale2.length).toBeGreaterThan(0);
+    for (const call of frontierScale2) {
+      expect(call.lineWidth).toBe(FRONTIER_LINE_WIDTH * 2);
+    }
+  });
+
+  it("scales ghost stroke lineWidth with pixelScale", () => {
+    const drawGhost = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      state.lastRelaxWork[0] = 0;
+      state.work = 1;
+
+      renderer.draw(state, { frontier: false, pivotFlares: false });
+
+      return overlay;
+    };
+
+    const overlayScale1 = drawGhost(1);
+    const ghostScale1 = overlayGhostStrokeCalls(overlayScale1);
+    expect(ghostScale1.length).toBeGreaterThan(0);
+    for (const call of ghostScale1) {
+      expect(call.lineWidth).toBe(GHOST_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawGhost(2);
+    const ghostScale2 = overlayGhostStrokeCalls(overlayScale2);
+    expect(ghostScale2.length).toBeGreaterThan(0);
+    for (const call of ghostScale2) {
+      expect(call.lineWidth).toBe(GHOST_LINE_WIDTH * 2);
+    }
+  });
+
+  it("pivot flare rings use the scaled frontier width", () => {
+    const drawPivotFlare = (pixelScale: number): FakeCanvasSurface => {
+      const graph = tinyGraph();
+      const { renderer, overlay } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      state.pivotFlareWork[0] = 0;
+      state.work = 0;
+
+      renderer.draw(state, { frontier: false, pivotFlares: true });
+
+      return overlay;
+    };
+
+    const overlayScale1 = drawPivotFlare(1);
+    const flareScale1 = overlayPivotFlareStrokeCalls(overlayScale1);
+    expect(flareScale1.length).toBeGreaterThan(0);
+    for (const call of flareScale1) {
+      expect(call.lineWidth).toBe(FRONTIER_LINE_WIDTH);
+    }
+
+    const overlayScale2 = drawPivotFlare(2);
+    const flareScale2 = overlayPivotFlareStrokeCalls(overlayScale2);
+    expect(flareScale2.length).toBeGreaterThan(0);
+    for (const call of flareScale2) {
+      expect(call.lineWidth).toBe(FRONTIER_LINE_WIDTH * 2);
+    }
+  });
+
+  it("dirty blit covers scaled stroke overhang at pixelScale 2", () => {
+    const assertFrontierDirtyBlit = (pixelScale: number, expectedPad: number): void => {
+      const graph = tinyGraph();
+      const { renderer, target } = createRendererWithLayers(graph, { pixelScale });
+
+      const state = new LaneState(2, graph.m);
+      renderer.draw(state);
+
+      const ctx = getFakeContext(target);
+      const afterFirst = ctx.calls.length;
+
+      state.frontier[1] = 1;
+      renderer.draw(state);
+
+      const incremental = ctx.calls.slice(afterFirst).filter((call) => call.op === "drawImage");
+      expect(incremental).toHaveLength(4);
+
+      const camera = fitCamera(graph, CANVAS_SIZE, CANVAS_SIZE);
+      const vx = graph.x[1];
+      const vy = graph.y[1];
+      if (vx === undefined || vy === undefined) {
+        throw new Error("tinyGraph missing vertex 1 coordinates");
+      }
+      const cx = projectX(camera, vx);
+      const cy = projectY(camera, vy);
+      const pad = strokeDirtyPadForScale(pixelScale);
+      expect(pad).toBe(expectedPad);
+      const expected = expectedVertexDirtyBlit(cx, cy, camera.radius, pad, CANVAS_SIZE);
+
+      for (const call of incremental) {
+        expect(call.args[1]).toBe(expected.sx);
+        expect(call.args[2]).toBe(expected.sy);
+        expect(call.args[3]).toBe(expected.sw);
+        expect(call.args[4]).toBe(expected.sh);
+        expect(call.args[5]).toBe(expected.sx);
+        expect(call.args[6]).toBe(expected.sy);
+        expect(call.args[7]).toBe(expected.sw);
+        expect(call.args[8]).toBe(expected.sh);
+      }
+    };
+
+    assertFrontierDirtyBlit(1, 2);
+    assertFrontierDirtyBlit(2, 3);
   });
 
   it("aggregated node footprint is 2×2 at pixelScale 1 and 4×4 at pixelScale 2", () => {
