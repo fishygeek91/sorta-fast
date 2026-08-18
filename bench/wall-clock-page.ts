@@ -163,10 +163,13 @@ function renderIntro(): string {
       <strong>Crossover</strong> is subtler than a single n. On the work clock, BMSSP with
       this demo&apos;s swept parameters (k&nbsp;=&nbsp;4) beats Dijkstra on sparse
       n&nbsp;=&nbsp;25,000, seed&nbsp;=&nbsp;4, while paper k&nbsp;=&nbsp;2 does not.
-      DMSY (Feb 2026) is the third lane in the live race; its wall-clock and work-clock
-      rows sit beside Dijkstra and BMSSP below.
       Asymptotic k from the BMSSP paper stays at 2 until n&nbsp;≈&nbsp;2<sup>27</sup>, so
       browser-scale races need the swept k to show where the algorithm actually wins.
+    </p>
+    <p>
+      DMSY (Feb 2026) is the third lane. It runs the paper&apos;s k/t/δ (no demo sweep
+      — see issue #54). BMSSP&apos;s column uses the swept k=4 above. The two
+      barrier-breaker columns are not parameter-matched.
     </p>
   `;
 }

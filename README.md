@@ -2,7 +2,7 @@
 
 [![Sorta Fast photo-finish](docs/assets/hero.gif)](https://fishygeek91.github.io/sorta-fast/?g=city&n=500&seed=1729&mode=race&race=dijkstra,bmssp,dmsy)
 
-This **3-way photo-finish** race clip is from the story city seed (n=500, seed 1729): **Dijkstra wins the work clock** — 9,815 comparisons vs BMSSP '25: 14,328 and DMSY '26: 69,899 on this graph. Sparse 25k and other presets are tabulated in the [wall-clock bench](https://fishygeek91.github.io/sorta-fast/bench/) and [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md); the default live 3-way race (sparse 25k, seed 4) is in the table below.
+This **3-way photo-finish** race clip is from the story city seed (n=500, seed 1729): **Dijkstra wins the photo-finish** — 9,815 comparisons vs BMSSP '25: 14,328 and DMSY '26: 69,899 to the marked target. On the same graph the **settle-all work clock** is Dijkstra 9,830 · BMSSP 17,419 · DMSY 73,506 (Dijkstra still leads). The default live race is sparse 25k seed 4 in the table below — that is where both barrier-breakers win settle-all. See the [wall-clock bench](https://fishygeek91.github.io/sorta-fast/bench/) and [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md).
 
 *Shortest paths that only sorta sort. That's not a joke, that's the algorithm.*
 
@@ -20,10 +20,10 @@ The headline metric is a **work clock** (total comparisons), not wall-clock mill
 
 | Preset | What to look for |
 |---|---|
-| [Default 3-way race (sparse 25k, seed 4)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy) | 3-way photo-finish; Dijkstra often wins the marked target. Settle-all work-clock winner among BMSSP and DMSY is not tabulated here — see the bench. |
+| [Default 3-way race (sparse 25k, seed 4)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy) | Both barrier-breakers beat Dijkstra on settle-all comparisons (BMSSP 495,618 · DMSY 513,213 · Dijkstra 519,411); Dijkstra still wins the photo-finish to the marked target. |
 | [Story preset](https://fishygeek91.github.io/sorta-fast/?g=city&n=500&seed=1729) | City layout at n=500 — good for watching wavefronts. |
 | [Dijkstra work-clock win (easy)](https://fishygeek91.github.io/sorta-fast/?g=maze&n=500&seed=0) | Maze graph — Dijkstra wins the work clock here. |
-| [Paper-k Dijkstra win on the default graph](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp&bmssp=paper) | Same sparse 25k seed as the hero, but BMSSP uses paper k/t — Dijkstra takes comparisons. |
+| [Paper-k Dijkstra win on the default graph](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp&bmssp=paper) | Same sparse 25k seed as the default race, but BMSSP uses paper k/t — Dijkstra takes comparisons. |
 
 ## Seed challenge
 

@@ -212,6 +212,12 @@ describe("issue #21 wall-clock bench", () => {
       );
     });
 
+    it("discloses that DMSY paper params are not matched to BMSSP demo k", () => {
+      expect(includesIgnoreCase(pageSource, "not parameter-matched")).toBe(true);
+      expect(pageSource).toContain("#54");
+      expect(includesIgnoreCase(pageSource, "paper")).toBe(true);
+    });
+
     it("does not import core algorithm modules in wall-clock-page.ts", () => {
       expect(pageSource).not.toContain("src/core/dijkstra");
       expect(pageSource).not.toContain("src/core/bmssp");

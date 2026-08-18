@@ -26,6 +26,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- README hero caption names photo-finish work vs the settle-all work clock; the bench page discloses unmatched BMSSP demo k vs DMSY paper params; the Round-2 checklist no longer claims paper params as BMSSP's default (#28).
 - Instrumented DMSY no longer emits `relax.improved: true` for identical-label Algorithm 1 `"="` accepts (parent step 5.6 re-scans). Hunt on gallery+dense graphs found only equal-label no-ops, not Lemma 3.7 completeness failures (#92).
 - Story Playwright smoke now walks the five-beat tour including `forest` (#27).
 - Public `run()` predecessor projection now picks the 4-tuple lex-min reduced copy (`compareLabels` on ⟨length, nEdges, curr, pred⟩), not min length + lowest copy id. Cycle copies of one original share length but differ in hop count. (#26)
