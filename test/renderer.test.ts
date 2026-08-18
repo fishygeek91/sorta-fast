@@ -1170,6 +1170,11 @@ describe("Renderer", () => {
     }
   });
 
+  /**
+   * Source-grep pin: PHOTO_FINISH_LINE_WIDTH (3) dominates FOREST_CUT_LINE_WIDTH (2.5)
+   * at every pixelScale, so including forest widths never changes strokeDirtyPad.
+   * A behavioral pad assertion cannot exist until a forest width exceeds photo-finish.
+   */
   it("strokeDirtyPad Math.max includes forest grow and cut line widths", () => {
     const rendererSource = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../src/render/renderer.ts"),
