@@ -49,3 +49,21 @@ describe("issue #21 launch checklist", () => {
     }
   });
 });
+
+describe("issue #28 launch checklist (Round 2)", () => {
+  const checklist = readLaunchChecklist();
+
+  it("documents the v2.0 announcement kit with 3-way race content", () => {
+    expect(
+      includesIgnoreCase(checklist, "round 2") || includesIgnoreCase(checklist, "round-2"),
+      "launch checklist must include a Round 2 section",
+    ).toBe(true);
+    expect(
+      includesIgnoreCase(checklist, "announcement"),
+      'launch checklist must mention "announcement"',
+    ).toBe(true);
+    expect(checklist.includes("3-way"), 'launch checklist must mention "3-way" (hyphenated)').toBe(
+      true,
+    );
+  });
+});

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-13T23:45:15.934Z",
+  "generatedAt": "2026-08-18T02:09:33.298Z",
   "node": "v24.8.0",
   "platform": "darwin",
   "arch": "arm64",
@@ -8,37 +8,45 @@
       "kind": "sparse",
       "n": 500,
       "seed": 4,
-      "dijkstraWallMs": 1.719332999999999,
-      "bmsspWallMs": 7.027290999999998,
+      "dijkstraWallMs": 2.2490410000000054,
+      "bmsspWallMs": 8.069041999999996,
+      "dmsyWallMs": 18.143041999999994,
       "dijkstraWork": 5498,
-      "bmsspWork": 9910
+      "bmsspWork": 9910,
+      "dmsyWork": 10746
     },
     {
       "kind": "sparse",
       "n": 5000,
       "seed": 4,
-      "dijkstraWallMs": 5.021709000000001,
-      "bmsspWallMs": 40.612792,
+      "dijkstraWallMs": 3.242457999999999,
+      "bmsspWallMs": 38.50779200000001,
+      "dmsyWallMs": 190.06375000000003,
       "dijkstraWork": 82326,
-      "bmsspWork": 105601
+      "bmsspWork": 105601,
+      "dmsyWork": 106266
     },
     {
       "kind": "sparse",
       "n": 25000,
       "seed": 4,
-      "dijkstraWallMs": 10.819290999999993,
-      "bmsspWallMs": 203.08004199999996,
+      "dijkstraWallMs": 10.952458999999976,
+      "bmsspWallMs": 194.25425000000007,
+      "dmsyWallMs": 2657.946792,
       "dijkstraWork": 519411,
-      "bmsspWork": 495618
+      "bmsspWork": 495618,
+      "dmsyWork": 513213
     },
     {
       "kind": "sparse",
       "n": 100000,
       "seed": 4,
-      "dijkstraWallMs": 44.58170899999999,
-      "bmsspWallMs": 1132.268958,
+      "dijkstraWallMs": 57.21416700000009,
+      "bmsspWallMs": 1237.6539170000005,
+      "dmsyWallMs": 50802.903915999996,
       "dijkstraWork": 2413981,
-      "bmsspWork": 2044058
+      "bmsspWork": 2044058,
+      "dmsyWork": 2209925
     }
   ]
 }
