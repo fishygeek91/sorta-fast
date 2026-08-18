@@ -689,6 +689,8 @@ export class TraceBuffer {
       if (oldOp === FOREST_EDGE_GROW) {
         target.forestGrowCount -= 1;
       }
+      // Intentional: re-grow to the same head clears a prior cut marker — the head
+      // pointer is not cleared on cut, but the vertex re-entered play.
       target.forestEdgeOp[oldHead] = FOREST_EDGE_NONE;
     }
 

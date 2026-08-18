@@ -21,6 +21,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Story Playwright smoke now walks the five-beat tour including `forest` (#27).
 - Public `run()` predecessor projection now picks the 4-tuple lex-min reduced copy (`compareLabels` on ⟨length, nEdges, curr, pred⟩), not min length + lowest copy id. Cycle copies of one original share length but differ in hop count. (#26)
 - DMSY 10k fuzz decorrelates graph kind from `n` so every kind sees sizes 8–47; lex tie-break checker cross-checks public `run()` distances and predecessors against mapped `runInstrumented()` on the reduced graph (#26).
 - Race pool sends BMSSP `k`/`t` only to the BMSSP worker and ignores DMSY `k`/`t` echoes for FindPivots narration (#26).
