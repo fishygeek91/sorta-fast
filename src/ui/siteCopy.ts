@@ -84,7 +84,7 @@ export const FAIRNESS_COPY: FairnessCopy = {
   params:
     "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). Select bmssp=paper in the URL to race with the paper formula.",
   dmsyParams:
-    "DMSY's paper parameters (arXiv 2602.07868) use paper k and t (Lemma 3.9) and implementation δ; at every gallery n, degree reduction yields δ = 3. FindPivots local searches use a binary heap rather than the paper's Fibonacci heap (DMSY-P07) — same O(log k) class at |K| ≤ k.",
+    "DMSY's paper parameters (arXiv 2602.07868, Lemma 3.9) set t = ⌈√(log₂ n · log₂ log₂ n / δ)⌉ and k = ⌈t / log₂ t⌉; at every gallery size, degree reduction uses implementation δ = 3, so paper k is 2–3 across S–XL. With k = 2–3, FindPivots local searches rarely reach Θ(k)-size subtrees at browser n, so DMSY pays structure overhead without the asymptotic win — and at S and M it still loses the work-clock race even at swept k (see bench/dmsy-kt-sweep.md). This demo defaults to swept parameters — k = max(6, paper k) with paper t — because paper k is degenerate at browser scale; on sparse n = 25,000, seed = 4, that choice beats Dijkstra on total comparisons (ratio 0.9865 in the sweep), while paper k alone barely breaks even. Select dmsy=paper in the URL to race with the paper formula. FindPivots local searches use a binary heap rather than the paper's Fibonacci heap (DMSY-P07) — same O(log k) class at |K| ≤ k.",
   sourceLead: "The authoritative cost table lives in the core trace module:",
 };
 
@@ -220,6 +220,7 @@ export type RaceChromeCopy = {
   };
   diceTitle: string;
   bmsspSelectTitle: string;
+  dmsySelectTitle: string;
   settledLabel: string;
   stubPersonaTitle: string;
   stepEventTitle: string;
@@ -251,6 +252,7 @@ export const RACE_CHROME_COPY: RaceChromeCopy = {
   },
   diceTitle: "Roll a new random seed",
   bmsspSelectTitle: "Demo uses browser-scale k; Paper uses the paper formula. See Fairness rules.",
+  dmsySelectTitle: "Demo uses browser-scale k; Paper uses the paper formula. See Fairness rules.",
   settledLabel: "settled",
   stubPersonaTitle: "Duplicate Dijkstra lane",
   stepEventTitle: "advance one trace event",

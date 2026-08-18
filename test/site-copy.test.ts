@@ -98,6 +98,7 @@ describe("siteCopy", () => {
 
     it("fairness prose discloses DMSY params and dstruct.merge billing", () => {
       const prose = joinFairnessCopy();
+      const dmsy = FAIRNESS_COPY.dmsyParams;
 
       expect(
         prose.includes("2602.07868") ||
@@ -107,6 +108,18 @@ describe("siteCopy", () => {
       expect(includesIgnoreCase(prose, "dstruct.merge") || includesIgnoreCase(prose, "merge")).toBe(
         true,
       );
+      expect(
+        includesIgnoreCase(dmsy, "demo") ||
+          includesIgnoreCase(dmsy, "browser-scale") ||
+          includesIgnoreCase(dmsy, "browser scale"),
+      ).toBe(true);
+      expect(includesIgnoreCase(dmsy, "bench/dmsy-kt-sweep.md")).toBe(true);
+      expect(includesIgnoreCase(dmsy, "dmsy=paper")).toBe(true);
+      expect(
+        dmsy.includes("k = 6") ||
+          includesIgnoreCase(dmsy, "max(6") ||
+          includesIgnoreCase(dmsy, "k=6"),
+      ).toBe(true);
     });
   });
 

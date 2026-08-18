@@ -203,6 +203,7 @@ Estimated effort: v1.0 ≈ 4–6 focused days; DMSY is the long pole of v2.0 (bu
 | DMSY (2026) is misimplemented — no reference exists | Test-first from the paper; invariants + differential fuzzing (§5); ship behind flag; publish the test suite so others can check us. |
 | "Rigged" accusations re: speed | Work-clock fairness panel, open cost table, honest wall-clock page where Dijkstra wins small. |
 | BMSSP constants make batches look *slower* early on small graphs | The deficit is size-invariant under paper k=2 (FindPivots abort). Demo uses k=max(4, paper k); default race is sparse n=25000 seed=4 where BMSSP wins comparisons; Fairness panel discloses the deviation. |
+| DMSY paper k/t at browser n lose or barely break even | Demo uses k=max(6, paper k) and paper t; Fairness discloses; paper mode stays selectable (`dmsy=paper`). |
 | Canvas perf on XL graphs | Aggregated rendering path (§4.4); XL is a labeled "stress" option, not the default. |
 | Paper ambiguities (tie-breaking, base cases) | Decisions logged in `docs/paper-notes.md` with section citations; becomes the companion blog post. |
 

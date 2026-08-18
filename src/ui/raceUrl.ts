@@ -1,7 +1,7 @@
 /**
  * Race URL codec for graph gallery + race mode state (issue #14, #15, #27).
  *
- * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&lane3=&target=&t=&bmssp=&bk=&bt=&view=` — no DOM.
+ * Pure parse/serialize of `?g=&n=&seed=&mode=&race=&lane3=&target=&t=&bmssp=&bk=&bt=&dmsy=&dk=&dt=&view=` — no DOM.
  * Legacy `lane3=dijkstra` and alias `lane3=1` (DMSY third lane) apply when `race=` is absent.
  * Graph kind / size / seed parsing mirrors Lens (`src/ui/urlState.ts`).
  *
@@ -15,8 +15,9 @@ import {
   parseOptionalBlockParam,
   type BmsspUrlMode,
 } from "./bmsspUrl.ts";
+import { isDmsyUrlMode, parseDmsyMode, type DmsyUrlMode } from "./dmsyUrl.ts";
 
-export type { BmsspUrlMode };
+export type { BmsspUrlMode, DmsyUrlMode };
 
 /** View mode encoded in the `mode` query param. */
 export type RaceMode = "race" | "lens";
@@ -45,6 +46,12 @@ export type RaceUrlState = {
   bk: number | null;
   /** BMSSP block count `t`; `null` when omitted (demo or paper mode default). */
   bt: number | null;
+  /** DMSY block-parameter mode; `demo` when omitted from the URL. */
+  dmsy: DmsyUrlMode;
+  /** DMSY block size `k`; `null` when omitted (demo or paper mode default). */
+  dk: number | null;
+  /** DMSY block count `t`; `null` when omitted (demo or paper mode default). */
+  dt: number | null;
   /** Race canvas layout; `lanes` is side-by-side default, `diff` is the settle-diff overlay. */
   view: RaceView;
 };
@@ -61,6 +68,9 @@ export const DEFAULT_RACE_URL: RaceUrlState = {
   bmssp: "demo",
   bk: null,
   bt: null,
+  dmsy: "demo",
+  dk: null,
+  dt: null,
   view: "lanes",
 };
 
@@ -269,6 +279,9 @@ export function parseRaceUrl(search: string | URLSearchParams): RaceUrlState {
     bmssp: parseBmsspMode(params.get("bmssp")),
     bk: parseOptionalBlockParam(params.get("bk")),
     bt: parseOptionalBlockParam(params.get("bt")),
+    dmsy: parseDmsyMode(params.get("dmsy")),
+    dk: parseOptionalBlockParam(params.get("dk")),
+    dt: parseOptionalBlockParam(params.get("dt")),
     view: parseRaceView(params.get("view")),
   };
 }
@@ -319,6 +332,19 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
       throw new Error(`bt must be a positive integer or null, got ${String(state.bt)}`);
     }
   }
+  if (!isDmsyUrlMode(state.dmsy)) {
+    throw new Error(`Invalid dmsy mode: ${state.dmsy}`);
+  }
+  if (state.dk !== null) {
+    if (!Number.isFinite(state.dk) || !Number.isInteger(state.dk) || state.dk < 1) {
+      throw new Error(`dk must be a positive integer or null, got ${String(state.dk)}`);
+    }
+  }
+  if (state.dt !== null) {
+    if (!Number.isFinite(state.dt) || !Number.isInteger(state.dt) || state.dt < 1) {
+      throw new Error(`dt must be a positive integer or null, got ${String(state.dt)}`);
+    }
+  }
   if (state.view !== "lanes" && state.view !== "diff") {
     throw new Error(`Invalid race view: ${state.view}`);
   }
@@ -331,6 +357,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
  * `race=` is written for all lane presets (including the default DMSY triple).
  * `target` is included only when non-null; `t` only when greater than zero.
  * `bmssp` is included only when `paper`; `bk` and `bt` only when non-null.
+ * `dmsy` is included only when `paper`; `dk` and `dt` only when non-null.
  * `view` is included only when `diff`; omitted when `lanes`.
  *
  * @param state - Valid race URL state.
@@ -358,6 +385,15 @@ export function serializeRaceUrl(state: RaceUrlState): string {
   }
   if (state.bt !== null) {
     params.set("bt", String(state.bt));
+  }
+  if (state.dmsy === "paper") {
+    params.set("dmsy", "paper");
+  }
+  if (state.dk !== null) {
+    params.set("dk", String(state.dk));
+  }
+  if (state.dt !== null) {
+    params.set("dt", String(state.dt));
   }
   if (state.view === "diff") {
     params.set("view", "diff");

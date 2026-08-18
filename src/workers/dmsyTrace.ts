@@ -15,11 +15,11 @@ self.onmessage = (event: MessageEvent<TraceRunRequest>): void => {
     return;
   }
 
-  const { kind, n, seed, source, k, t } = request;
+  const { kind, n, seed, source, mode, k, t } = request;
 
   try {
     runDmsyTraceJob(
-      { kind, n, seed, source, k, t },
+      { kind, n, seed, source, mode, k, t },
       {
         onGraph(graph, params) {
           const offsets = graph.offsets.slice();

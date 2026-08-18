@@ -6,6 +6,7 @@
  */
 
 import { type BmsspParamMode } from "../core/bmssp/params.ts";
+import { type DmsyParamMode } from "../core/dmsy/dmsy.ts";
 import { GRAPH_KINDS, type Graph, type GraphKind } from "../core/graph.ts";
 import { type TraceChunk } from "../core/trace.ts";
 import {
@@ -27,6 +28,12 @@ export type RaceSpec = {
   k?: number;
   /** BMSSP only: optional block parameter t; omitted → mode default. Dijkstra ignores. */
   t?: number;
+  /** DMSY only: "demo" or "paper"; omitted → demo. Dijkstra/BMSSP ignore. */
+  dmsyMode?: DmsyParamMode;
+  /** DMSY only: optional k override. */
+  dk?: number;
+  /** DMSY only: optional t override. */
+  dt?: number;
   /** Lane algorithms in race order; length 2 or 3. */
   lanes: readonly TraceAlgo[];
 };
@@ -134,6 +141,17 @@ export class RaceWorkerPool {
         }
         if (spec.t !== undefined) {
           runMessage.t = spec.t;
+        }
+      }
+      if (algo === "dmsy") {
+        if (spec.dmsyMode !== undefined) {
+          runMessage.mode = spec.dmsyMode;
+        }
+        if (spec.dk !== undefined) {
+          runMessage.k = spec.dk;
+        }
+        if (spec.dt !== undefined) {
+          runMessage.t = spec.dt;
         }
       }
       worker.postMessage(runMessage);

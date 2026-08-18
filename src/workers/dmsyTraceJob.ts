@@ -5,7 +5,7 @@
  */
 
 import { degreeReduce } from "../core/dmsy/degreeReduce.ts";
-import { paperDmsyParams, run, type DmsyParams } from "../core/dmsy/dmsy.ts";
+import { dmsyParams, run, type DmsyParamMode, type DmsyParams } from "../core/dmsy/dmsy.ts";
 import { generateGraph, type Graph, type GraphKind } from "../core/graph.ts";
 import { TraceWriter, type TraceChunk } from "../core/trace.ts";
 
@@ -15,9 +15,11 @@ export type DmsyTraceSpec = {
   n: number;
   seed: number;
   source: number;
-  /** Optional level parameter k; omitted → paper default for graph n. */
+  /** Optional `"demo"` or `"paper"`; omitted → demo {@link dmsyParams}(n). */
+  mode?: DmsyParamMode;
+  /** Optional level parameter k; omitted → mode default. */
   k?: number;
-  /** Optional block parameter t; omitted → paper default for graph n. */
+  /** Optional block parameter t; omitted → mode default. */
   t?: number;
   /** Optional TraceWriter slab capacity (tests may use a small value). */
   chunkCapacity?: number;
@@ -36,29 +38,33 @@ export type JobSink = {
 };
 
 /**
- * Resolve paper k/t for the original gallery graph (matches {@link run} defaults).
+ * Resolve DMSY k/t for the gallery graph (matches {@link run} defaults).
  *
  * @param graph - CSR graph about to be traced.
  * @param k - Optional level override.
  * @param t - Optional block override.
+ * @param mode - Optional `"demo"` or `"paper"`; omitted → demo.
  */
-export function resolveDmsyTraceParams(graph: Graph, k?: number, t?: number): DmsyParams {
+export function resolveDmsyTraceParams(
+  graph: Graph,
+  k?: number,
+  t?: number,
+  mode?: DmsyParamMode,
+): DmsyParams {
   const reduced = degreeReduce(graph);
   const delta = reduced.delta ?? 3;
-  const paper = paperDmsyParams(graph.n, delta);
-  if (k === undefined && t === undefined) {
-    return paper;
-  }
-  return {
-    k: k ?? paper.k,
-    t: t ?? paper.t,
-  };
+  return dmsyParams(graph.n, {
+    mode: mode ?? "demo",
+    k,
+    t,
+    delta,
+  });
 }
 
 /**
  * Validate {@link DmsyTraceSpec} before graph generation.
  *
- * @throws When `n`, `seed`, `source`, `k`, or `t` are out of range; `kind` is checked by {@link generateGraph}.
+ * @throws When `n`, `seed`, `source`, `mode`, `k`, or `t` are out of range; `kind` is checked by {@link generateGraph}.
  */
 function validateSpec(spec: DmsyTraceSpec): void {
   if (!Number.isInteger(spec.n) || spec.n < 1) {
@@ -69,6 +75,9 @@ function validateSpec(spec: DmsyTraceSpec): void {
   }
   if (!Number.isInteger(spec.source) || spec.source < 0 || spec.source >= spec.n) {
     throw new Error(`source must be an integer in [0, n), got ${String(spec.source)}`);
+  }
+  if (spec.mode !== undefined && spec.mode !== "demo" && spec.mode !== "paper") {
+    throw new Error(`mode must be "demo" or "paper", got ${String(spec.mode)}`);
   }
   if (spec.k !== undefined) {
     if (!Number.isInteger(spec.k) || spec.k < 1) {
@@ -91,14 +100,14 @@ function validateSpec(spec: DmsyTraceSpec): void {
  * Generate graph, run DMSY, stream completed slabs via drainCompleted,
  * then takeChunks remainder. Calls onGraph once (with resolved k/t), onChunk zero or more times.
  *
- * @param spec - Graph kind, size, seed, source, optional k/t overrides, and optional writer capacity.
+ * @param spec - Graph kind, size, seed, source, optional mode/k/t overrides, and optional writer capacity.
  * @param sink - Receives the CSR graph and resolved DMSY params once, then each trace chunk in order.
  */
 export function runDmsyTraceJob(spec: DmsyTraceSpec, sink: JobSink): void {
   validateSpec(spec);
 
   const graph = generateGraph(spec.kind, spec.n, spec.seed, sink.onProgress);
-  const params = resolveDmsyTraceParams(graph, spec.k, spec.t);
+  const params = resolveDmsyTraceParams(graph, spec.k, spec.t, spec.mode);
   sink.onGraph(graph, params);
 
   const writer = new TraceWriter(spec.chunkCapacity);

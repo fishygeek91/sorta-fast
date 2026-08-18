@@ -16,6 +16,7 @@ import { createDomSurface, wrapDomCanvas } from "../render/domSurface.ts";
 import { Renderer, type DiffPersona } from "../render/renderer.ts";
 import { THEMES, type ThemeMode } from "../render/theme.ts";
 import { isBmsspUrlMode } from "./bmsspUrl.ts";
+import { isDmsyUrlMode } from "./dmsyUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import {
   captureCanvasPng,
@@ -273,6 +274,23 @@ export function mountRace(): void {
   bmsspSelect.title = RACE_CHROME_COPY.bmsspSelectTitle;
   bmsspLabel.append(bmsspSelect);
 
+  const dmsyLabel = document.createElement("label");
+  dmsyLabel.className = "lens-graph-field";
+  dmsyLabel.textContent = "DMSY ";
+
+  const dmsySelect = document.createElement("select");
+  dmsySelect.id = "race-dmsy-select";
+  dmsySelect.setAttribute("aria-label", "DMSY parameter mode");
+  const dmsyDemoOption = document.createElement("option");
+  dmsyDemoOption.value = "demo";
+  dmsyDemoOption.textContent = "Demo (browser-scale)";
+  const dmsyPaperOption = document.createElement("option");
+  dmsyPaperOption.value = "paper";
+  dmsyPaperOption.textContent = "Paper (asymptotic)";
+  dmsySelect.append(dmsyDemoOption, dmsyPaperOption);
+  dmsySelect.title = RACE_CHROME_COPY.dmsySelectTitle;
+  dmsyLabel.append(dmsySelect);
+
   const diffButton = document.createElement("button");
   diffButton.type = "button";
   diffButton.id = "race-diff-toggle";
@@ -287,6 +305,7 @@ export function mountRace(): void {
     diceButton,
     lanesLabel,
     bmsspLabel,
+    dmsyLabel,
     diffButton,
   );
   header.append(graphControls);
@@ -561,6 +580,7 @@ export function mountRace(): void {
     seedInput.value = String(raceState.seed);
     lanesSelect.value = lanesKeyForRace(raceState.race);
     bmsspSelect.value = raceState.bmssp;
+    dmsySelect.value = raceState.dmsy;
     syncCityXlOption();
   }
 
@@ -941,6 +961,7 @@ export function mountRace(): void {
     diceButton.disabled = disabled;
     lanesSelect.disabled = disabled;
     bmsspSelect.disabled = disabled;
+    dmsySelect.disabled = disabled;
     speedSelect.disabled = disabled;
     skipStartBtn.disabled = disabled;
     stepBackBtn.disabled = disabled;
@@ -1331,6 +1352,7 @@ export function mountRace(): void {
       seed: raceState.seed,
       source: SOURCE_VERTEX,
       mode: raceState.bmssp,
+      dmsyMode: raceState.dmsy,
       lanes: configs.map((config) => config.algo),
     };
     if (raceState.bk !== null) {
@@ -1338,6 +1360,12 @@ export function mountRace(): void {
     }
     if (raceState.bt !== null) {
       spec.t = raceState.bt;
+    }
+    if (raceState.dk !== null) {
+      spec.dk = raceState.dk;
+    }
+    if (raceState.dt !== null) {
+      spec.dt = raceState.dt;
     }
 
     pool.start(spec, {
@@ -1660,6 +1688,16 @@ export function mountRace(): void {
       return;
     }
     applyRaceState({ ...raceState, bmssp: raw });
+  });
+
+  dmsySelect.addEventListener("change", () => {
+    const raw = dmsySelect.value;
+    if (!isDmsyUrlMode(raw)) {
+      showStatus(`invalid dmsy mode: ${raw}`);
+      syncGalleryControls();
+      return;
+    }
+    applyRaceState({ ...raceState, dmsy: raw });
   });
 
   diffButton.addEventListener("click", () => {
@@ -2065,7 +2103,10 @@ function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
     !raceCompositionEqual(prev.race, next.race) ||
     prev.bmssp !== next.bmssp ||
     prev.bk !== next.bk ||
-    prev.bt !== next.bt
+    prev.bt !== next.bt ||
+    prev.dmsy !== next.dmsy ||
+    prev.dk !== next.dk ||
+    prev.dt !== next.dt
   );
 }
 

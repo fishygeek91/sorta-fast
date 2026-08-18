@@ -16,6 +16,7 @@
     "bench:trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/trace-write.ts",
     "bench:replay": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/replay-5k.ts",
     "bench:bmssp-kt": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/bmssp-kt-sweep.ts",
+    "bench:dmsy-kt": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/dmsy-kt-sweep.ts",
     "bench:wall-clock": "node --experimental-strip-types --disable-warning=ExperimentalWarning bench/wall-clock.ts",
     "test:build": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/build-workers.ts"
   },

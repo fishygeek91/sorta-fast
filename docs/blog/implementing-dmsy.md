@@ -97,7 +97,7 @@ After pivots, about `|S| / k` keys should live in the sorted region of `D` (Lemm
 
 ## Demo parameters are not BMSSP parameters
 
-Issue **#54** owns the billed-work `scanCosts` sweep and whatever becomes the default race preset. **`paperDmsyParams`** — the paper's `δ`, `t`, `k`, `l`, and `M` formulas — stays selectable in the UI (**DMSY-P16**).
+Issue **#54** locked demo `k = max(6, paper k)` with paper `t`; evidence `bench/dmsy-kt-sweep.md`; **`paperDmsyParams`** stays selectable (`dmsy=paper`, **DMSY-P16**).
 
 We did **not** copy BMSSP's demo trick `k = max(4, paper k)` (**DMSY-P17**). DMSY's `k` is `⌈t / log₂ t⌉`, not `⌊(log n)^{1/3}⌋`. The formulas differ; the demo floors differ. Paper formulas remain the documented defaults; the sweep chooses what actually looks fair on a work clock at browser scale.
 

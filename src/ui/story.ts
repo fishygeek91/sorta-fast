@@ -188,6 +188,9 @@ export function mountStory(): void {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     });
     history.replaceState(null, "", lensQuery + "&mode=lens" + window.location.hash);
     window.location.reload();
