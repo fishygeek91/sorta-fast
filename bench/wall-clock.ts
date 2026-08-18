@@ -144,7 +144,7 @@ function assertCellInputs(n: number, seed: number): void {
  *
  * Graph is generated once; each lane is timed independently via `performance.now()`.
  * BMSSP uses demo defaults (`bmsspParams(n)` when params are omitted).
- * DMSY uses paper defaults (`paperDmsyParams` / default `run()` when params are omitted).
+ * DMSY uses demo defaults (`dmsyParams(n)` / default `run()` when params are omitted); paper via `run(graph, source, paperDmsyParams(n))`.
  */
 export function measureCell(kind: GraphKind, n: number, seed: number): WallClockCell {
   if (shouldSkipWallClockCell(kind, n)) {

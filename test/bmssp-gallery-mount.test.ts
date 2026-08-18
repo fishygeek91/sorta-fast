@@ -39,7 +39,13 @@ describe("issue #52 BMSSP gallery wiring", () => {
     expect(lensSource).toContain("applyLensState({ ...lensState, bmssp: raw })");
     expect(lensSource).toContain("findPivotsKFromEcho");
     expect(lensSource).not.toContain("resolveBmsspRunParams(lensState.n");
-    expect(lensSource).toContain("mode: lensState.bmssp");
+    expect(lensSource).toContain("runMessage.mode = lensState.bmssp");
+  });
+
+  it("lens.ts and race.ts mount Demo vs Paper DMSY selects", () => {
+    expect(lensSource).toContain("lens-dmsy-select");
+    expect(raceSource).toContain("race-dmsy-select");
+    expect(raceSource).toContain("dmsyMode: raceState.dmsy");
   });
 
   it("story.ts resolves FindPivots k from worker echo, not URL n", () => {

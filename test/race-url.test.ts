@@ -29,6 +29,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
@@ -48,6 +51,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     });
   });
@@ -64,6 +70,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
@@ -82,12 +91,39 @@ describe("parseRaceUrl", () => {
       bmssp: "paper",
       bk: 8,
       bt: 3,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
     expect(query).toContain("bmssp=paper");
     expect(query).toContain("bk=8");
     expect(query).toContain("bt=3");
+    expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("round-trips dmsy paper mode with dk and dt block params", () => {
+    const state: RaceUrlState = {
+      g: "sparse",
+      n: 25000,
+      seed: 4,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+      dmsy: "paper",
+      dk: 6,
+      dt: 5,
+      view: "lanes",
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).toContain("dmsy=paper");
+    expect(query).toContain("dk=6");
+    expect(query).toContain("dt=5");
     expect(parseRaceUrl(query)).toEqual(state);
   });
 
@@ -103,12 +139,39 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
     expect(query).not.toContain("bmssp=");
     expect(query).not.toContain("bk=");
     expect(query).not.toContain("bt=");
+    expect(parseRaceUrl(query)).toEqual(state);
+  });
+
+  it("omits dmsy when demo and omits dk/dt when null", () => {
+    const state: RaceUrlState = {
+      g: "sparse",
+      n: 25000,
+      seed: 4,
+      mode: "race",
+      target: null,
+      race: ["dijkstra", "bmssp"],
+      t: 0,
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
+      view: "lanes",
+    };
+    const query = serializeRaceUrl(state);
+    expect(query).not.toContain("dmsy=");
+    expect(query).not.toContain("dk=");
+    expect(query).not.toContain("dt=");
     expect(parseRaceUrl(query)).toEqual(state);
   });
 
@@ -129,6 +192,13 @@ describe("parseRaceUrl", () => {
     expect(parseRaceUrl("?bt=abc")).toEqual({ ...DEFAULT_RACE_URL, bt: null });
   });
 
+  it("nulls invalid dk and dt block params", () => {
+    expect(parseRaceUrl("?dk=0")).toEqual({ ...DEFAULT_RACE_URL, dk: null });
+    expect(parseRaceUrl("?dt=0")).toEqual({ ...DEFAULT_RACE_URL, dt: null });
+    expect(parseRaceUrl("?dk=1.5")).toEqual({ ...DEFAULT_RACE_URL, dk: null });
+    expect(parseRaceUrl("?dt=abc")).toEqual({ ...DEFAULT_RACE_URL, dt: null });
+  });
+
   it("defaults bmssp to demo when missing, empty, or invalid", () => {
     expect(parseRaceUrl("?bmssp=demo")).toEqual({ ...DEFAULT_RACE_URL, bmssp: "demo" });
     expect(parseRaceUrl("?bmssp=")).toEqual(DEFAULT_RACE_URL);
@@ -137,6 +207,16 @@ describe("parseRaceUrl", () => {
 
   it("parses bmssp=paper", () => {
     expect(parseRaceUrl("?bmssp=paper")).toEqual({ ...DEFAULT_RACE_URL, bmssp: "paper" });
+  });
+
+  it("defaults dmsy to demo when missing, empty, or invalid", () => {
+    expect(parseRaceUrl("?dmsy=demo")).toEqual({ ...DEFAULT_RACE_URL, dmsy: "demo" });
+    expect(parseRaceUrl("?dmsy=")).toEqual(DEFAULT_RACE_URL);
+    expect(parseRaceUrl("?dmsy=invalid")).toEqual(DEFAULT_RACE_URL);
+  });
+
+  it("parses dmsy=paper", () => {
+    expect(parseRaceUrl("?dmsy=paper")).toEqual({ ...DEFAULT_RACE_URL, dmsy: "paper" });
   });
 
   it("omits t from serialize when zero and parses missing t as zero", () => {
@@ -151,6 +231,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
@@ -183,6 +266,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     });
     expect(parseRaceUrl("?mode=race")).toEqual({
@@ -269,6 +355,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     });
   });
@@ -310,6 +399,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     expect(parseRaceUrl(serializeRaceUrl(state))).toEqual(state);
@@ -327,6 +419,9 @@ describe("parseRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     };
     const query = serializeRaceUrl(state);
@@ -348,6 +443,9 @@ describe("serializeRaceUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     });
     expect(query.startsWith("?")).toBe(true);
@@ -372,6 +470,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "lanes",
       }),
     ).toThrow(/n must be an integer/);
@@ -387,6 +488,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "lanes",
       }),
     ).toThrow(/seed must be a finite integer/);
@@ -402,6 +506,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "lanes",
       }),
     ).toThrow(/target must be a non-negative integer/);
@@ -417,6 +524,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "lanes",
       }),
     ).toThrow(/t must be a non-negative integer/);
@@ -432,6 +542,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "lanes",
       }),
     ).toThrow(/race must have length 2 or 3/);
@@ -447,6 +560,9 @@ describe("serializeRaceUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
         view: "invalid" as "lanes",
       }),
     ).toThrow(/Invalid race view/);

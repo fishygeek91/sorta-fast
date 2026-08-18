@@ -23,6 +23,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     });
   });
 
@@ -35,6 +38,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     const query = serializeLensUrl(state);
     expect(query).toContain("g=adversarial");
@@ -50,6 +56,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     const query = serializeLensUrl(state);
     expect(parseLensUrl(query)).toEqual(state);
@@ -64,11 +73,34 @@ describe("parseLensUrl", () => {
       bmssp: "paper",
       bk: 8,
       bt: 3,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     const query = serializeLensUrl(state);
     expect(query).toContain("bmssp=paper");
     expect(query).toContain("bk=8");
     expect(query).toContain("bt=3");
+    expect(parseLensUrl(query)).toEqual(state);
+  });
+
+  it("round-trips dmsy paper mode with dk and dt block params", () => {
+    const state: LensUrlState = {
+      g: "sparse",
+      n: 25000,
+      seed: 4,
+      algo: "dmsy",
+      bmssp: "demo",
+      bk: null,
+      bt: null,
+      dmsy: "paper",
+      dk: 6,
+      dt: 5,
+    };
+    const query = serializeLensUrl(state);
+    expect(query).toContain("dmsy=paper");
+    expect(query).toContain("dk=6");
+    expect(query).toContain("dt=5");
     expect(parseLensUrl(query)).toEqual(state);
   });
 
@@ -80,11 +112,26 @@ describe("parseLensUrl", () => {
     expect(parseLensUrl(query)).toEqual(DEFAULT_LENS_URL);
   });
 
+  it("omits dmsy when demo and omits dk/dt when null", () => {
+    const query = serializeLensUrl(DEFAULT_LENS_URL);
+    expect(query).not.toContain("dmsy=");
+    expect(query).not.toContain("dk=");
+    expect(query).not.toContain("dt=");
+    expect(parseLensUrl(query)).toEqual(DEFAULT_LENS_URL);
+  });
+
   it("nulls invalid bk and bt block params", () => {
     expect(parseLensUrl("?bk=0")).toEqual({ ...DEFAULT_LENS_URL, bk: null });
     expect(parseLensUrl("?bt=0")).toEqual({ ...DEFAULT_LENS_URL, bt: null });
     expect(parseLensUrl("?bk=1.5")).toEqual({ ...DEFAULT_LENS_URL, bk: null });
     expect(parseLensUrl("?bt=abc")).toEqual({ ...DEFAULT_LENS_URL, bt: null });
+  });
+
+  it("nulls invalid dk and dt block params", () => {
+    expect(parseLensUrl("?dk=0")).toEqual({ ...DEFAULT_LENS_URL, dk: null });
+    expect(parseLensUrl("?dt=0")).toEqual({ ...DEFAULT_LENS_URL, dt: null });
+    expect(parseLensUrl("?dk=1.5")).toEqual({ ...DEFAULT_LENS_URL, dk: null });
+    expect(parseLensUrl("?dt=abc")).toEqual({ ...DEFAULT_LENS_URL, dt: null });
   });
 
   it("defaults bmssp to demo when missing, empty, or invalid", () => {
@@ -97,6 +144,16 @@ describe("parseLensUrl", () => {
     expect(parseLensUrl("?bmssp=paper")).toEqual({ ...DEFAULT_LENS_URL, bmssp: "paper" });
   });
 
+  it("defaults dmsy to demo when missing, empty, or invalid", () => {
+    expect(parseLensUrl("?dmsy=demo")).toEqual({ ...DEFAULT_LENS_URL, dmsy: "demo" });
+    expect(parseLensUrl("?dmsy=")).toEqual(DEFAULT_LENS_URL);
+    expect(parseLensUrl("?dmsy=invalid")).toEqual(DEFAULT_LENS_URL);
+  });
+
+  it("parses dmsy=paper", () => {
+    expect(parseLensUrl("?dmsy=paper")).toEqual({ ...DEFAULT_LENS_URL, dmsy: "paper" });
+  });
+
   it("round-trips dijkstra, bmssp, and dmsy algo values", () => {
     const dijkstra: LensUrlState = {
       g: "maze",
@@ -106,6 +163,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     const bmssp: LensUrlState = {
       g: "maze",
@@ -115,6 +175,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     const dmsy: LensUrlState = {
       g: "maze",
@@ -124,6 +187,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     };
     expect(parseLensUrl(serializeLensUrl(dijkstra))).toEqual(dijkstra);
     expect(parseLensUrl(serializeLensUrl(bmssp))).toEqual(bmssp);
@@ -139,6 +205,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     });
     expect(parseLensUrl("?algo=dmsy")).toEqual({ ...DEFAULT_LENS_URL, algo: "dmsy" });
     expect(parseLensUrl("?algo=nope")).toEqual(DEFAULT_LENS_URL);
@@ -186,6 +255,9 @@ describe("parseLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     });
   });
 });
@@ -200,6 +272,9 @@ describe("serializeLensUrl", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
     });
     expect(query.startsWith("?")).toBe(true);
     expect(query).toContain("g=clusters");
@@ -218,6 +293,9 @@ describe("serializeLensUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
       }),
     ).toThrow(/n must be an integer/);
     expect(() =>
@@ -229,6 +307,9 @@ describe("serializeLensUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
       }),
     ).toThrow(/n must be an integer/);
     expect(() =>
@@ -240,6 +321,9 @@ describe("serializeLensUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
       }),
     ).toThrow(/seed must be a finite integer/);
     expect(() =>
@@ -251,6 +335,9 @@ describe("serializeLensUrl", () => {
         bmssp: "demo",
         bk: null,
         bt: null,
+        dmsy: "demo",
+        dk: null,
+        dt: null,
       }),
     ).toThrow(/Invalid lens algo/);
   });

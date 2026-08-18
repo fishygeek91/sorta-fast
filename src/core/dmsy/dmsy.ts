@@ -116,6 +116,75 @@ export function paperDmsyParams(n: number, delta = 3): DmsyParams {
   return { k, t };
 }
 
+/** Parameter source for {@link dmsyParams}; default is `"demo"`. */
+export type DmsyParamMode = "demo" | "paper";
+
+/** Optional overrides for {@link dmsyParams}; omitted fields keep base values. */
+export type DmsyParamOptions = {
+  mode?: DmsyParamMode;
+  k?: number;
+  t?: number;
+  delta?: number;
+};
+
+/**
+ * Demo-scale DMSY parameters for browser races (issue #54).
+ *
+ * Starts from {@link paperDmsyParams} then raises `k` to at least 6 (not BMSSP
+ * `k = 4`); `t` follows arXiv 2602.07868 Lemma 3.9 via the paper formula.
+ * Sweep evidence: bench/dmsy-kt-sweep.md (sparse L confirm, paper-t + k ≥ 6).
+ *
+ * @param n - Vertex count; must be an integer >= 1.
+ * @param delta - Degree bound used in the t formula; defaults to 3.
+ */
+export function demoDmsyParams(n: number, delta = 3): DmsyParams {
+  const paper = paperDmsyParams(n, delta);
+  return { k: Math.max(6, paper.k), t: paper.t };
+}
+
+/**
+ * DMSY parameters for `n` vertices, optionally overriding demo or paper defaults.
+ *
+ * Default mode is `"demo"` ({@link demoDmsyParams}). Use `mode: "paper"` for
+ * {@link paperDmsyParams} (arXiv 2602.07868 Lemma 3.9 for `t`). Replaces `k`
+ * and/or `t` when provided in `options`; each override must be an integer >= 1.
+ * `delta` defaults to 3. Sweep evidence: bench/dmsy-kt-sweep.md (issue #54).
+ *
+ * @param n - Vertex count; must be an integer >= 1.
+ * @param options - Optional mode, `delta`, and `k` / `t` overrides.
+ */
+export function dmsyParams(n: number, options?: DmsyParamOptions): DmsyParams {
+  const mode = options?.mode ?? "demo";
+
+  if (mode !== "demo" && mode !== "paper") {
+    throw new Error(`mode must be "demo" or "paper"`);
+  }
+
+  const delta = options?.delta ?? 3;
+
+  const params = mode === "paper" ? paperDmsyParams(n, delta) : demoDmsyParams(n, delta);
+
+  if (options === undefined) {
+    return params;
+  }
+
+  if (options.k !== undefined) {
+    if (!Number.isInteger(options.k) || options.k < 1) {
+      throw new Error(`k must be an integer >= 1, got ${String(options.k)}`);
+    }
+    params.k = options.k;
+  }
+
+  if (options.t !== undefined) {
+    if (!Number.isInteger(options.t) || options.t < 1) {
+      throw new Error(`t must be an integer >= 1, got ${String(options.t)}`);
+    }
+    params.t = options.t;
+  }
+
+  return params;
+}
+
 /**
  * Top recursion depth l_top = ⌈log₂ n / t⌉ (Lemma 3.1).
  *
@@ -179,7 +248,7 @@ export function dmsyWorkloadCap(l: number, t: number): number {
 }
 
 /**
- * Validate caller-supplied parameters or derive paper defaults.
+ * Validate caller-supplied parameters or derive demo defaults via {@link dmsyParams}.
  */
 function resolveParams(
   n: number,
@@ -187,7 +256,7 @@ function resolveParams(
   delta: number,
 ): { k: number; t: number } {
   if (params === undefined) {
-    return paperDmsyParams(n, delta);
+    return dmsyParams(n, { mode: "demo", delta });
   }
   if (!Number.isInteger(params.k) || params.k < 1) {
     throw new Error(`k must be an integer >= 1, got ${String(params.k)}`);
@@ -756,7 +825,8 @@ function* dmsy(
  *
  * @param graph - CSR directed graph with non-negative weights.
  * @param source - Source vertex in `0 .. graph.n - 1`.
- * @param params - Optional k/t parameters; defaults to {@link paperDmsyParams}(n).
+ * @param params - Optional k/t parameters; when omitted, {@link resolveParams} uses
+ *   demo defaults via {@link dmsyParams} with `delta = 3`.
  */
 export function* runInstrumented(
   graph: Graph,
@@ -798,8 +868,8 @@ export function* runInstrumented(
  *
  * @param graph - Original CSR directed graph.
  * @param source - Source vertex on the original graph.
- * @param params - Optional k/t parameters; when omitted, δ for the t formula is
- *   `degreeReduce(...).delta ?? 3` evaluated on the original `graph.n`.
+ * @param params - Optional k/t parameters; when omitted, {@link resolveParams} uses
+ *   demo defaults via {@link dmsyParams} with `delta = degreeReduce(...).delta ?? 3`.
  */
 export function* run(
   graph: Graph,

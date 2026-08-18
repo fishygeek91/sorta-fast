@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { run, type DmsyParams } from "../src/core/dmsy/dmsy.ts";
+import { degreeReduce } from "../src/core/dmsy/degreeReduce.ts";
+import { dmsyParams, paperDmsyParams, run, type DmsyParams } from "../src/core/dmsy/dmsy.ts";
 import { type Graph } from "../src/core/graph.ts";
-import { type TraceChunk, tally } from "../src/core/trace.ts";
+import { scanCosts, type TraceChunk, tally } from "../src/core/trace.ts";
 import { Playback } from "../src/harness/playback.ts";
 import { TraceBuffer } from "../src/harness/traceBuffer.ts";
 import {
@@ -155,16 +156,55 @@ describe("runDmsyTraceJob validation", () => {
 });
 
 describe("runDmsyTraceJob resolved params echo", () => {
-  it("default spec echoes resolveDmsyTraceParams(graph) and preserves n", () => {
+  it("default spec echoes demo dmsyParams(graph.n, { mode: demo, delta }) and preserves n", () => {
     const { graph, params } = runJob(SMALL_MAZE_SPEC);
+    const delta = degreeReduce(graph).delta ?? 3;
 
     expect(graph.n).toBe(SMALL_MAZE_SPEC.n);
+    expect(params).toEqual(dmsyParams(graph.n, { mode: "demo", delta }));
     expect(params).toEqual(resolveDmsyTraceParams(graph));
   });
 
-  it("k/t overrides echo resolveDmsyTraceParams(graph, k, t)", () => {
+  it("paper mode echoes paperDmsyParams(graph.n, delta) with degreeReduce delta", () => {
+    const { graph, params } = runJob({ ...SMALL_MAZE_SPEC, mode: "paper" });
+    const delta = degreeReduce(graph).delta ?? 3;
+
+    expect(params).toEqual(paperDmsyParams(graph.n, delta));
+    expect(params).toEqual(resolveDmsyTraceParams(graph, undefined, undefined, "paper"));
+  });
+
+  it("k/t overrides echo resolveDmsyTraceParams(graph, k, t) on demo defaults", () => {
     const { graph, params } = runJob({ ...SMALL_MAZE_SPEC, k: 8, t: 3 });
 
     expect(params).toEqual(resolveDmsyTraceParams(graph, 8, 3));
+  });
+});
+
+describe("runDmsyTraceJob demo vs paper mode", () => {
+  it("paper mode bills different work than demo defaults on the same maze", () => {
+    const demo = runJob(SMALL_MAZE_SPEC);
+    const paper = runJob({ ...SMALL_MAZE_SPEC, mode: "paper" });
+
+    expect(demo.params.k).toBe(6);
+    expect(paper.params.k).toBe(2);
+    expect(demo.params.k).not.toBe(paper.params.k);
+
+    const demoWork = sumChunkTallies(demo.chunks).work;
+    const paperWork = sumChunkTallies(paper.chunks).work;
+    if (demo.params.k !== paper.params.k) {
+      expect(demoWork).not.toBe(paperWork);
+    }
+
+    let scanDemoWork = 0;
+    let scanPaperWork = 0;
+    for (const chunk of demo.chunks) {
+      scanDemoWork += scanCosts(chunk).work;
+    }
+    for (const chunk of paper.chunks) {
+      scanPaperWork += scanCosts(chunk).work;
+    }
+    if (demo.params.k !== paper.params.k) {
+      expect(scanDemoWork).not.toBe(scanPaperWork);
+    }
   });
 });

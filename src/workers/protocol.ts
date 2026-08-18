@@ -21,11 +21,11 @@ export type TraceRunRequest = {
   n: number;
   seed: number;
   source: number;
-  /** BMSSP only: `"demo"` or `"paper"`; omitted → demo {@link bmsspParams}(n). Dijkstra ignores. */
+  /** BMSSP and DMSY: `"demo"` or `"paper"`; omitted → demo. Dijkstra ignores. */
   mode?: BmsspParamMode;
-  /** BMSSP / DMSY only: optional level parameter k; omitted → mode or paper default. Dijkstra ignores. */
+  /** BMSSP / DMSY only: optional level parameter k; omitted → mode default. Dijkstra ignores. */
   k?: number;
-  /** BMSSP / DMSY only: optional block parameter t; omitted → mode or paper default. Dijkstra ignores. */
+  /** BMSSP / DMSY only: optional block parameter t; omitted → mode default. Dijkstra ignores. */
   t?: number;
 };
 

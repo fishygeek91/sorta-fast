@@ -2,7 +2,7 @@
 
 [![Sorta Fast photo-finish](docs/assets/hero.gif)](https://fishygeek91.github.io/sorta-fast/?g=city&n=500&seed=1729&mode=race&race=dijkstra,bmssp,dmsy)
 
-This **3-way photo-finish** race clip is from the story city seed (n=500, seed 1729): **Dijkstra wins the photo-finish** — 9,815 comparisons vs BMSSP '25: 14,328 and DMSY '26: 69,899 to the marked target. On the same graph the **settle-all work clock** is Dijkstra 9,830 · BMSSP 17,419 · DMSY 73,506 (Dijkstra still leads). The default live race is sparse 25k seed 4 in the table below — that is where both barrier-breakers win settle-all. See the [wall-clock bench](https://fishygeek91.github.io/sorta-fast/bench/) and [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md).
+This **3-way photo-finish** race clip is from the story city seed (n=500, seed 1729): **Dijkstra wins the photo-finish** — 9,815 comparisons vs BMSSP '25: 14,328 and DMSY '26: 63,250 to the marked target. On the same graph the **settle-all work clock** is Dijkstra 9,830 · BMSSP 17,419 · DMSY 66,866 (Dijkstra still leads). The default live race is sparse 25k seed 4 in the table below — that is where both barrier-breakers win settle-all. See the [wall-clock bench](https://fishygeek91.github.io/sorta-fast/bench/) and [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md).
 
 *Shortest paths that only sorta sort. That's not a joke, that's the algorithm.*
 
@@ -27,7 +27,7 @@ The headline metric is a **work clock** (total comparisons), not wall-clock mill
 
 ## Seed challenge
 
-Can you find a seed where **Dijkstra wins the work clock** on the default sparse 25k graph with BMSSP demo k (`k = max(4, paper k)`)? Seeds 0–9 at sparse L / demo k=4 are tabulated in [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md): all BMSSP work-clock wins; the best margin is seed 4. Maze graphs and `&bmssp=paper` already give Dijkstra wins — the hard case is sparse at large n with the in-browser BMSSP demo parameters. A DMSY demo-parameter sweep is tracked in [#54](https://github.com/fishygeek91/sorta-fast/issues/54).
+Can you find a seed where **Dijkstra wins the work clock** on the default sparse 25k graph with BMSSP demo k (`k = max(4, paper k)`)? Seeds 0–9 at sparse L / demo k=4 are tabulated in [`bench/bmssp-kt-sweep.md`](bench/bmssp-kt-sweep.md): all BMSSP work-clock wins; the best margin is seed 4. Maze graphs and `&bmssp=paper` already give Dijkstra wins — the hard case is sparse at large n with the in-browser BMSSP demo parameters. The DMSY demo-parameter sweep lives in [`bench/dmsy-kt-sweep.md`](bench/dmsy-kt-sweep.md); demo defaults use `k = max(6, paper k)` with paper `t` ([#54](https://github.com/fishygeek91/sorta-fast/issues/54)).
 
 ## Fairness
 

@@ -206,6 +206,9 @@ describe("race URL reproducibility — seek to parsed t", () => {
       bmssp: "demo",
       bk: null,
       bt: null,
+      dmsy: "demo",
+      dk: null,
+      dt: null,
       view: "lanes",
     });
     const parsed = parseRaceUrl(query);

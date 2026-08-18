@@ -31,6 +31,7 @@ const LIVE_RACE_URL =
 const COST_TABLE_URL = "https://github.com/fishygeek91/sorta-fast/blob/main/src/core/trace.ts";
 const WORK_CLOCK_SWEEP_URL =
   "https://github.com/fishygeek91/sorta-fast/blob/main/bench/bmssp-kt-sweep.md";
+const DMSY_SWEEP_URL = "https://github.com/fishygeek91/sorta-fast/blob/main/bench/dmsy-kt-sweep.md";
 const LIVE_APP_URL = "https://fishygeek91.github.io/sorta-fast/";
 
 /**
@@ -167,9 +168,13 @@ function renderIntro(): string {
       browser-scale races need the swept k to show where the algorithm actually wins.
     </p>
     <p>
-      DMSY (Feb 2026) is the third lane. It runs the paper&apos;s k/t/δ (no demo sweep
-      — see issue #54). BMSSP&apos;s column uses the swept k=4 above. The two
-      barrier-breaker columns are not parameter-matched.
+      DMSY (Feb 2026) is the third lane. Demo defaults use swept
+      k&nbsp;=&nbsp;max(6, paper&nbsp;k) with paper&nbsp;t (Lemma&nbsp;3.9);
+      evidence in <a href="${DMSY_SWEEP_URL}">bench/dmsy-kt-sweep.md</a>. On sparse
+      n&nbsp;=&nbsp;25,000, seed&nbsp;=&nbsp;4, that choice beats Dijkstra on the
+      work clock; S/M gallery sizes still lose. Select
+      <code>dmsy=paper</code> in the URL for paper k/t. BMSSP&apos;s column uses the swept
+      k=4 above. The two barrier-breaker columns are not parameter-matched.
     </p>
   `;
 }
@@ -264,7 +269,8 @@ function renderLinks(): string {
       <ul>
         <li><a href="${LIVE_RACE_URL}">Live race — sparse n=25000 seed=4</a></li>
         <li><a href="${COST_TABLE_URL}">Op cost table (trace.ts)</a></li>
-        <li><a href="${WORK_CLOCK_SWEEP_URL}">Work-clock k/t sweep notes</a></li>
+        <li><a href="${WORK_CLOCK_SWEEP_URL}">BMSSP work-clock k/t sweep notes</a></li>
+        <li><a href="${DMSY_SWEEP_URL}">DMSY work-clock k/t sweep notes</a></li>
         <li><a href="${LIVE_APP_URL}">Back to the live app</a></li>
       </ul>
     </nav>

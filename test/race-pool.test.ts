@@ -465,4 +465,65 @@ describe("RaceWorkerPool validation", () => {
     expect(bmsspMessage.k).toBe(8);
     expect(bmsspMessage.t).toBe(3);
   });
+
+  it("forwards DMSY mode, dk, and dt independently of BMSSP mode, k, and t", () => {
+    const { spawn, records } = createFakeSpawn();
+    const pool = new RaceWorkerPool(spawn);
+
+    pool.start(
+      {
+        ...BASE_SPEC,
+        lanes: ["dijkstra", "bmssp", "dmsy"],
+        mode: "demo",
+        k: 8,
+        t: 3,
+        dmsyMode: "paper",
+        dk: 6,
+        dt: 5,
+      },
+      {
+        onGraph: () => {},
+        onChunk: () => {},
+        onLaneDone: () => {},
+        onError: () => {},
+      },
+    );
+
+    expect(records).toHaveLength(3);
+
+    const dijkstra = records[0];
+    const bmssp = records[1];
+    const dmsy = records[2];
+    if (dijkstra === undefined || bmssp === undefined || dmsy === undefined) {
+      throw new Error("expected three fake workers");
+    }
+
+    expect(dijkstra.posts).toHaveLength(1);
+    expect(dijkstra.posts[0]).toEqual({
+      type: "run",
+      algo: "dijkstra",
+      kind: BASE_SPEC.kind,
+      n: BASE_SPEC.n,
+      seed: BASE_SPEC.seed,
+      source: BASE_SPEC.source,
+    });
+
+    expect(bmssp.posts).toHaveLength(1);
+    const bmsspMessage = bmssp.posts[0];
+    if (bmsspMessage === undefined) {
+      throw new Error("expected BMSSP run message");
+    }
+    expect(bmsspMessage.mode).toBe("demo");
+    expect(bmsspMessage.k).toBe(8);
+    expect(bmsspMessage.t).toBe(3);
+
+    expect(dmsy.posts).toHaveLength(1);
+    const dmsyMessage = dmsy.posts[0];
+    if (dmsyMessage === undefined) {
+      throw new Error("expected DMSY run message");
+    }
+    expect(dmsyMessage.mode).toBe("paper");
+    expect(dmsyMessage.k).toBe(6);
+    expect(dmsyMessage.t).toBe(5);
+  });
 });

@@ -14,6 +14,7 @@ import {
   type TraceRunRequest,
 } from "../workers/protocol.ts";
 import { isBmsspUrlMode } from "./bmsspUrl.ts";
+import { isDmsyUrlMode } from "./dmsyUrl.ts";
 import { mountDisclosures } from "./disclosures.ts";
 import { mountModeNav } from "./modeNav.ts";
 import { formatBmsspNarration, formatDmsyNarration } from "./narration.ts";
@@ -502,6 +503,23 @@ export function mountLens(): void {
   bmsspSelect.append(demoOption, paperOption);
   bmsspLabel.append(bmsspSelect);
 
+  const dmsyLabel = document.createElement("label");
+  dmsyLabel.className = "lens-graph-field";
+  dmsyLabel.textContent = "DMSY ";
+
+  const dmsySelect = document.createElement("select");
+  dmsySelect.id = "lens-dmsy-select";
+  dmsySelect.setAttribute("aria-label", "DMSY parameter mode");
+  const dmsyDemoOption = document.createElement("option");
+  dmsyDemoOption.value = "demo";
+  dmsyDemoOption.textContent = "Demo (browser-scale)";
+  const dmsyPaperOption = document.createElement("option");
+  dmsyPaperOption.value = "paper";
+  dmsyPaperOption.textContent = "Paper (asymptotic)";
+  dmsySelect.append(dmsyDemoOption, dmsyPaperOption);
+  dmsySelect.title = RACE_CHROME_COPY.dmsySelectTitle;
+  dmsyLabel.append(dmsySelect);
+
   const kindLabel = document.createElement("label");
   kindLabel.className = "lens-graph-field";
   kindLabel.textContent = "Graph ";
@@ -551,7 +569,15 @@ export function mountLens(): void {
 
   seedLabel.append(seedInput);
 
-  graphControls.append(algoLabel, bmsspLabel, kindLabel, sizeLabel, seedLabel, diceButton);
+  graphControls.append(
+    algoLabel,
+    bmsspLabel,
+    dmsyLabel,
+    kindLabel,
+    sizeLabel,
+    seedLabel,
+    diceButton,
+  );
 
   const genProgressWrap = document.createElement("div");
   genProgressWrap.className = "lens-gen-progress-wrap";
@@ -659,6 +685,7 @@ export function mountLens(): void {
   function syncGraphControls(): void {
     algoSelect.value = lensState.algo;
     bmsspSelect.value = lensState.bmssp;
+    dmsySelect.value = lensState.dmsy;
     kindSelect.value = lensState.g;
     sizeSelect.value = sizeKeyForN(lensState.n);
     seedInput.value = String(lensState.seed);
@@ -967,13 +994,23 @@ export function mountLens(): void {
       n: lensState.n,
       seed: lensState.seed,
       source: SOURCE_VERTEX,
-      mode: lensState.bmssp,
     };
-    if (lensState.bk !== null) {
-      runMessage.k = lensState.bk;
-    }
-    if (lensState.bt !== null) {
-      runMessage.t = lensState.bt;
+    if (lensState.algo === "bmssp") {
+      runMessage.mode = lensState.bmssp;
+      if (lensState.bk !== null) {
+        runMessage.k = lensState.bk;
+      }
+      if (lensState.bt !== null) {
+        runMessage.t = lensState.bt;
+      }
+    } else if (lensState.algo === "dmsy") {
+      runMessage.mode = lensState.dmsy;
+      if (lensState.dk !== null) {
+        runMessage.k = lensState.dk;
+      }
+      if (lensState.dt !== null) {
+        runMessage.t = lensState.dt;
+      }
     }
     nextWorker.postMessage(runMessage);
   }
@@ -1116,6 +1153,16 @@ export function mountLens(): void {
       return;
     }
     applyLensState({ ...lensState, bmssp: raw });
+  });
+
+  dmsySelect.addEventListener("change", () => {
+    const raw = dmsySelect.value;
+    if (!isDmsyUrlMode(raw)) {
+      showStatus(`invalid dmsy mode: ${raw}`);
+      syncGraphControls();
+      return;
+    }
+    applyLensState({ ...lensState, dmsy: raw });
   });
 
   kindSelect.addEventListener("change", () => {

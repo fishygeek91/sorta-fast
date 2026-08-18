@@ -9,6 +9,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- Headless DMSY k/t sweep (`bench/dmsy-kt-sweep.ts`, `npm run bench:dmsy-kt`) + committed scout/confirm TSV/md; locked demo `k = max(6, paper k)` with paper `t` (#54).
+- `resolveDmsyRunParams` / `dmsy=demo|paper` + `dk`/`dt` URL keys / Fairness disclosure (#54).
 - 3-way OG card (`public/og-card.png` 1200×630) and hero GIF/WebM from the #18 exporter on city n=500 seed 1729 (#28).
 - Companion blog `docs/blog/implementing-dmsy.md` drafted from paper-notes ambiguity log (tie-break, gallery-n degeneracy, selected DMSY-P decisions) (#28).
 - Wall-clock bench harness/page now include DMSY ms and work columns; live race link is the 3-way default (#28).
@@ -38,6 +40,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- README hero caption DMSY photo-finish / settle-all totals updated for demo-default k (city n=500 seed 1729) (#54).
+- DMSY omitted-params / worker default is now demo (swept k) not paper; paper stays selectable via `dmsy=paper` (#54).
 - `public/og-card.png` recompressed with pngquant + oxipng from 815,118 to 225,213 bytes (72% smaller, still 1200×630 so `og:image` meta stays correct); byte-ceiling and IHDR contract tests in `test/og-card.test.ts` and `test/build-workers.ts` (#51).
 - README, `index.html` meta, and `package.json` description now advertise the shipped 3-way race (Dijkstra vs BMSSP vs DMSY) and the first-public-implementation claim for arXiv 2602.07868 (#28).
 - Deleted the unused `relax()` wrapper so production callers cannot emit paper-accept as `improved` (#92).
