@@ -9,6 +9,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- `assertDmsySettleFinality` classifies post-settle improving relaxes (strict-length / lex-only / equal-label) and is wired into DMSY unit/fuzz plus a city-seed-0 {k:2,t:2} golden (#92).
 - Renderer forest overlays: moss grow/cut edge strokes with work-clock pulse; subtree patchwork fill keyed on `forestTree` (settle-order LUT fallback); aggregated L/XL skips per-edge forest strokes but keeps patchwork. Default 3-way race is Dijkstra vs BMSSP vs DMSY (`DEFAULT_RACE_URL.race`, empty `?`). Lens accepts `algo=dmsy` with forest counters, `formatDmsyNarration`, and forest overlay toggles. Story ships `forest` beat after pivots with 3-lane workers; race beat stays Dijkstra+BMSSP; free-play loads the new 3-way default. M-size replay and 3-lane stall tests stay under 50ms (`test/replay-perf.test.ts`, `test/race-dmsy-perf.test.ts`) (#27).
 - DMSY fuzz now includes 400 dense integer-weight digraphs (n 4–12, p≈0.4, weights in {1,2}) so the public-vs-instrumented lex predecessor check is load-bearing. (#26)
 - Instrumented DMSY lane (`src/core/dmsy/dmsy.ts`): Algorithms 3–4 composing degree reduction (#23), FindPivots (#24), and partial-sort D (#25); 4-tuple lex tie-break; degree-reduce trace un-map at the emission boundary; race lane behind `?lane3=1` with worker trace job/stream, URL codec round-trip, lane config (moss persona), and renderer settle-diff fill — `race=dmsy` tokens remain dropped until #27 (#26).
@@ -21,6 +22,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Instrumented DMSY no longer emits `relax.improved: true` for identical-label Algorithm 1 `"="` accepts (parent step 5.6 re-scans). Hunt on gallery+dense graphs found only equal-label no-ops, not Lemma 3.7 completeness failures (#92).
 - Story Playwright smoke now walks the five-beat tour including `forest` (#27).
 - Public `run()` predecessor projection now picks the 4-tuple lex-min reduced copy (`compareLabels` on ⟨length, nEdges, curr, pred⟩), not min length + lowest copy id. Cycle copies of one original share length but differ in hop count. (#26)
 - DMSY 10k fuzz decorrelates graph kind from `n` so every kind sees sizes 8–47; lex tie-break checker cross-checks public `run()` distances and predecessors against mapped `runInstrumented()` on the reduced graph (#26).
@@ -31,6 +33,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Deleted the unused `relax()` wrapper so production callers cannot emit paper-accept as `improved` (#92).
+- paper-notes DMSY-P32: trace `improved` is a strict 4-tuple decrease; paper Relax accept still includes `"="` (#92).
 - Empty `?` loads the 3-way DMSY race (`race=dijkstra,bmssp,dmsy`); URL codec serializes `race=` instead of `lane3=1` (`race=dmsy` accepted; `lane3=1` still parsed) (#27).
 - Fairness panel: DMSY params paragraph (paper k/t/δ, binary heap vs Fibonacci); `dstruct.merge` in billed prose; Forester blurb and forest vocabulary no longer "forthcoming" (#27).
 - paper-notes DMSY-P31: W′ `<B′` settles bypass `uCount`; `|U|` may exceed the workload cap by at most δ·|W′|. (#26)

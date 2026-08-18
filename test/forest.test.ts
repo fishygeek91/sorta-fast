@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyRelax,
   B_INFINITY,
   compareLabels,
   createDistanceStore,
   findPivotsForest,
   partitionTree,
-  relax,
   type DistanceLabel,
   type DistanceStore,
   type PartitionGroup,
@@ -122,10 +122,26 @@ describe("distance labels (paper-notes §2.4)", () => {
     });
   });
 
-  it("relax from source accepts equal-weight paths and rejects longer ones", () => {
+  it("applyRelax accepts equal-label re-scans without marking them improved", () => {
+    const dist = makeLabels(2, [0]);
+
+    expect(applyRelax(dist, 0, 1, 1, B_INFINITY)).toEqual({
+      accepted: true,
+      improved: true,
+    });
+    const afterFirst = readLabel(dist, 1);
+
+    expect(applyRelax(dist, 0, 1, 1, B_INFINITY)).toEqual({
+      accepted: true,
+      improved: false,
+    });
+    expect(readLabel(dist, 1)).toEqual(afterFirst);
+  });
+
+  it("applyRelax from source accepts equal-weight paths and rejects longer ones", () => {
     const dist = makeLabels(3, [0]);
 
-    expect(relax(dist, 0, 1, 1, B_INFINITY)).toBe(true);
+    expect(applyRelax(dist, 0, 1, 1, B_INFINITY).accepted).toBe(true);
     expect(readLabel(dist, 1)).toEqual({
       length: 1,
       nEdges: 1,
@@ -133,7 +149,7 @@ describe("distance labels (paper-notes §2.4)", () => {
       pred: 0,
     });
 
-    expect(relax(dist, 0, 2, 1, B_INFINITY)).toBe(true);
+    expect(applyRelax(dist, 0, 2, 1, B_INFINITY).accepted).toBe(true);
     expect(readLabel(dist, 2)).toEqual({
       length: 1,
       nEdges: 1,
@@ -143,8 +159,8 @@ describe("distance labels (paper-notes §2.4)", () => {
 
     expect(compareLabels(readLabel(dist, 1), readLabel(dist, 2))).toBe("<");
 
-    expect(relax(dist, 1, 2, 1, B_INFINITY)).toBe(false);
-    expect(relax(dist, 2, 1, 1, B_INFINITY)).toBe(false);
+    expect(applyRelax(dist, 1, 2, 1, B_INFINITY).accepted).toBe(false);
+    expect(applyRelax(dist, 2, 1, 1, B_INFINITY).accepted).toBe(false);
   });
 
   it("compareLabels breaks pred ties on length, nEdges, and curr", () => {

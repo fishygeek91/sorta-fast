@@ -9,6 +9,7 @@ import {
   auditDmsyLengthsFromTrace,
   assertDmsyBoundedSettle,
   assertDmsyLexTieBreak,
+  assertDmsySettleFinality,
   drainDmsyRun,
 } from "./dmsy-helpers.ts";
 
@@ -55,6 +56,11 @@ function buildDenseIntegerWeightGraph(seed: number): {
 }
 
 describe("dmsy differential fuzz", () => {
+  /**
+   * Public-lane settle-finality (`drainDmsyRun` events) was already clean
+   * before #92. Instrumented regression lives in `test/dmsy-settle-finality.test.ts`
+   * (city-seed-0 golden + 80-seed gallery) and in {@link assertDmsyLexTieBreak}.
+   */
   it("matches Dijkstra, BMSSP, and Bellman-Ford on 10000 seeded graphs with trace audit and invariants", () => {
     const violations: string[] = [];
 
@@ -91,6 +97,11 @@ describe("dmsy differential fuzz", () => {
       }
 
       for (const msg of assertDmsyBoundedSettle(events, result.distances)) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      // Public-lane check; instrumented cover is the #92 golden + lex-tie-break.
+      for (const msg of assertDmsySettleFinality(graph, events, source).messages) {
         violations.push(`${ctx}: ${msg}`);
       }
 
@@ -170,6 +181,11 @@ describe("dmsy differential fuzz", () => {
         violations.push(`${ctx}: ${msg}`);
       }
 
+      // Public-lane check; instrumented cover is the #92 golden + lex-tie-break.
+      for (const msg of assertDmsySettleFinality(graph, events, source).messages) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
       for (const msg of assertDmsyLexTieBreak(graph, source)) {
         violations.push(`${ctx}: ${msg}`);
       }
@@ -212,6 +228,11 @@ describe("dmsy differential fuzz", () => {
       }
 
       for (const msg of assertDmsyBoundedSettle(events, result.distances)) {
+        violations.push(`${ctx}: ${msg}`);
+      }
+
+      // Public-lane check; instrumented cover is the #92 golden + lex-tie-break.
+      for (const msg of assertDmsySettleFinality(graph, events, source).messages) {
         violations.push(`${ctx}: ${msg}`);
       }
 

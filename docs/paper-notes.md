@@ -157,7 +157,7 @@ AND
 Comparison(Addition(d[u], w_uv), B) = "<"
 ```
 
-On accept, `d[v] ← Addition(d[u], w_uv)`. Algorithm 1’s scalar `d[u] + w ≤ d[v]` and `< B` are **shorthand** for these Comparison calls (DMSY-P06). The `≤` vs `d[v]` is required: when `u = d[v].pred` and `d[u]` has improved, `d[v]` must update even if length/nEdges would otherwise look tied (§2.3).
+On accept, `d[v] ← Addition(d[u], w_uv)`. The boolean returned to **algorithm control flow** is paper accept (`Comparison ∈ {"<", "="}`). The trace event’s `improved` field is **only** `Comparison === "<"` (DMSY-P32): an `"="` accept writes the same 4-tuple and is not an improvement. Algorithm 1’s scalar `d[u] + w ≤ d[v]` and `< B` are **shorthand** for these Comparison calls (DMSY-P06). The `≤` vs `d[v]` is required: when `u = d[v].pred` and `d[u]` has improved, `d[v]` must update even if length/nEdges would otherwise look tied (§2.3).
 
 ### 2.3 Why four components suffice (§2.3)
 
@@ -428,7 +428,7 @@ Algorithms emit `TraceEvent`s only. The renderer never imports algorithm code. E
 
 | Kind | When | Cost |
 |---|---|---|
-| `relax` | Every Algorithm 1 test | `OP_COST.relax` (1), improved or not |
+| `relax` | Every Algorithm 1 test; `improved` iff the 4-tuple strictly decreased (`Comparison === "<"`), not paper accept (`"="` is a no-op write) | `OP_COST.relax` (1), improved or not |
 | `settle` | Vertex committed complete into `U` | `OP_COST.settle` (1) |
 | `heap` | Binary-heap ops in FindPivots local Dijkstra (**Algorithm 2 only**) | `cmps × OP_COST.comparison` |
 | `pivot` | Each `p_j` first inserted, and each full re-selection | `OP_COST.pivot` (0) |
@@ -516,7 +516,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P19 | §2.1 | Neighbor/id/coord order | Neighbors of v sorted by ascending id; slot k → cycle vertex floor(k/(δ−2)); reduced ids allocated v-major then cycle-index; split-copy (x,y) copy the original vertex. | Determinism (AGENTS.md); packCsr coords |
 | DMSY-P20 | §2.1; design §4.2 | How to un-map traces | Drop VIRTUAL_EDGE (cycle) relax/forest. First settle per original vertex wins; first pivot per original vertex wins (separate seen-sets). Pass through heap/batch/recurse/dstruct. Helpers only in degreeReduce.ts; harness/render unchanged. | Renderer sees original IDs; #26 wires the boundary |
 | DMSY-P21 | §2.1; `trace.ts` relax | Un-mapped `improved` flags | `createTraceUnmapper` preserves the reduced-graph `improved` bit. Two original edges can improve two different copies of `v` on G′; last-write replay on G is then wrong. Callers that replay on the original CSR (`TraceBuffer`, `auditDistancesFromTrace`) must recompute improvement. #26 does this at the emission boundary. | TraceBuffer last-write on `improved===1`; #23 tests rewrite in-test |
-| DMSY-P22 | §2.3; Algorithm 1; design §4.1 | Where do Comparison/Addition/Relax helpers live? | Exported from `src/core/dmsy/forest.ts` (#24). #26 may re-export. Do **not** add `labels.ts`. | #24 needs Algorithm 1 to run Algorithm 2; paper-notes forbade inventing a required `labels.ts` |
+| DMSY-P22 | §2.3; Algorithm 1; design §4.1 | Where do Comparison/Addition/Relax helpers live? | Exported from `src/core/dmsy/forest.ts` (#24) as `applyRelax` (#92). #26 may re-export. Do **not** add `labels.ts`. | #24 needs Algorithm 1 to run Algorithm 2; paper-notes forbade inventing a required `labels.ts` |
 | DMSY-P23 | §3.1 Algorithm 2 | Decrease-key vs browser heap | Binary heap with **lazy re-push**. If `v` already in `K`, replace the incoming tree edge, emit a corrective `forest` `grow`, and re-push; do not increase `\|K\|`. Replay uses **last grow per head vertex** within a search. | DMSY-P07; Dijkstra primitive; no Fibonacci decrease-key |
 | DMSY-P24 | §3.1; Appendix A.1; design §4.2 | How do `cut` events encode `{F_j}`? | One `forest` `cut` per tree-edge assigned to an `F_j` (`cut.tree` = `F_j` index). Replay groups cuts by `tree`. Edgeless singleton `F_j` (`k=1`) emits **no** `cut` (`e` must stay a real CSR id for the #23 unmapper). `grow.tree` is the **local-search id only** — after an overlap merge one `F̄` may span several `grow.tree` ids; `F̄`/`F_j` identity comes from `cut` events. `W_j` tree edges replay as last-grow-per-head (DMSY-P23). | Issue #24 audit AC; `createTraceUnmapper` rejects `e < 0` |
 | DMSY-P25 | Appendix A.1; Lemma A.1 | When to test `\|U\| >= s`? | After **each** child (inside the child loop), then leftover-merge. Reported groups stay in `[s, 2s)` before merge; last group `< 3s`. | §3.4 prose put the test after the loop; that overshoots `2s` on high-degree nodes. Lemma A.1 bound requires the per-child test. |
@@ -526,6 +526,7 @@ Extend this table in the same PR when a new gap appears. Do not decide silently.
 | DMSY-P29 | Lemma A.2 Merge | `t = 1` makes parent and child both `M = 1` so `other.M ≥ this.M` | Do not call `PartialSortD.merge`. Absorb leftover child keys via billed `insert` and emit one `dstruct.merge` with summed `n`/`cmps`. | Lemma A.2 assumes `M′ < M`; gallery-small `n` can have `t = 1` |
 | DMSY-P30 | Observation 3.5 | Throw if an edge is scanned or insert-banded twice in Algorithm 3? | **No runtime abort.** Parent and child both scan `U_i` edges; nested insert-band uses can both fire as labels move. Observation 3.5 is an analysis bound, not an implementation trap. | Analysis fact vs loop structure |
 | DMSY-P31 | §3.3 finalize / Lemma 3.7 | W′ relax landing strictly below B′ | Union that vertex into U and settle it (completeness). Insert into D only when Addition ≥ B′ (paper-notes §3.6.6.2). W′ `<B′` settles bypass `uCount`, so `\|U\|` may exceed the Lemma 3.1/3.8 workload cap by at most `δ · \|W′\|` (gallery `δ = 3`). | Hole would leave a vertex complete-below-B′ out of U and D |
+| DMSY-P32 | §2.3 Algorithm 1; §2.4; Lemma 3.7; issue #92 | Post-settle `improved: true` on instrumented traces | **Not a completeness violation.** Hunt (gallery+dense, paper and forced {2,2}) found only equal-label no-ops from Relax accepting `"="` (mostly Alg. 3 step 5.6 re-scans). Trace `improved` = strict 4-tuple `<`. Paper accept still includes `"="`. Public `run()` already recomputes scalar improvement (DMSY-P21). | #92 |
 
 ## 7. Lemma and cost-bound sanity checklist
 

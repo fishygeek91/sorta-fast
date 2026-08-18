@@ -388,32 +388,41 @@ function labelMatchesStore(dist: DistanceStore, v: VertexId, snapshot: DistanceL
   );
 }
 
+/** Outcome of a paper Relax attempt: accept vs strict label improvement. */
+export type RelaxResult = {
+  accepted: boolean;
+  improved: boolean;
+};
+
 /**
  * Relax(u, v, B) — arXiv 2602.07868 Algorithm 1.
  *
  * Does not emit trace events; the caller emits `relax` when appropriate.
  *
- * @returns Whether the candidate label was accepted into `dist[v]`.
+ * DMSY-P32: `improved` is strict `<`; `accepted` includes `"="` no-op writes.
+ *
+ * @returns Paper accept (`accepted`) and whether the 4-tuple strictly decreased (`improved`).
  */
-export function relax(
+export function applyRelax(
   dist: DistanceStore,
   u: VertexId,
   v: VertexId,
   weight: number,
   B: DistanceLabel,
-): boolean {
+): RelaxResult {
   const labelU = labelAt(dist, u);
   const candidate = addWeight(labelU, weight, v);
   const labelV = labelAt(dist, v);
   const vsCandidate = compareLabels(candidate, labelV);
   if (vsCandidate !== "<" && vsCandidate !== "=") {
-    return false;
+    return { accepted: false, improved: false };
   }
   if (compareLabels(candidate, B) !== "<") {
-    return false;
+    return { accepted: false, improved: false };
   }
   writeLabel(dist, v, candidate);
-  return true;
+  const improved = vsCandidate === "<";
+  return { accepted: true, improved };
 }
 
 /**
@@ -899,10 +908,10 @@ export function* findPivotsForest(
           throw new Error(`CSR arc ${e} missing`);
         }
 
-        const improved = relax(dist, u, v, w, B);
-        yield { k: "relax", e, improved, cost: 1 };
-
-        if (!improved) {
+        const outcome = applyRelax(dist, u, v, w, B);
+        // DMSY-P32: yield improved only on strict <; grow/merge still follow paper accept.
+        yield { k: "relax", e, improved: outcome.improved, cost: 1 };
+        if (!outcome.accepted) {
           continue;
         }
 

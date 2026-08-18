@@ -6,6 +6,7 @@
  * for lex tie-break checks against the live {@link DistanceStore}.
  * `auditDmsyLengthsFromTrace` replays improving relax events on the original CSR.
  * `assertDmsyBoundedSettle` and `assertDmsyLexTieBreak` validate trace invariants.
+ * `assertDmsySettleFinality` classifies post-settle improving relaxes by 4-tuple label replay.
  */
 
 import {
@@ -21,7 +22,14 @@ import {
   mapBackPredecessors,
   reducedSource,
 } from "../src/core/dmsy/degreeReduce.ts";
-import { labelAt, type DistanceLabel } from "../src/core/dmsy/forest.ts";
+import {
+  addWeight,
+  compareLabels,
+  createDistanceStore,
+  labelAt,
+  type DistanceLabel,
+  type DistanceStore,
+} from "../src/core/dmsy/forest.ts";
 import { type Graph, type VertexId } from "../src/core/graph.ts";
 import { SENTINEL, type TraceEvent } from "../src/core/trace.ts";
 
@@ -209,6 +217,270 @@ export function assertDmsyBoundedSettle(
   return violations;
 }
 
+/** Classification of a post-settle improving relax relative to the settled label. */
+export type DmsySettleImproveClass = "strict-length" | "lex-only" | "equal-label";
+
+/**
+ * Emission region inferred from recurse context at the finding.
+ *
+ * `after-child` is sticky: once a child returns (`lastRecurseDir === "out"`),
+ * later same-frame work — Algorithm 3 step 5.6 `U_i` re-scans *and* the W′
+ * finalize block (DMSY-P31) — shares this tag. Diagnostic only; it does not
+ * gate the settle-finality invariant.
+ */
+export type DmsySettleImproveRegion = "level-0" | "after-child" | "in-level";
+
+/** One post-settle improving relax witness from {@link assertDmsySettleFinality}. */
+export type DmsySettleImproveFinding = {
+  vertex: VertexId;
+  edge: number;
+  klass: DmsySettleImproveClass;
+  settleOrder: number;
+  region: DmsySettleImproveRegion;
+  recurseDepth: number;
+  activeLevel: number;
+  settleLabel: DistanceLabel;
+  candidateLabel: DistanceLabel;
+};
+
+/** Report from {@link assertDmsySettleFinality}: structured findings plus human messages. */
+export type DmsySettleFinalityReport = {
+  findings: DmsySettleImproveFinding[];
+  messages: string[];
+};
+
+type RecurseFrame = {
+  level: number;
+  bound: number;
+};
+
+/**
+ * Format a distance label as ⟨length, nEdges, curr, pred⟩ for violation messages.
+ */
+function formatDistanceLabel(label: DistanceLabel): string {
+  return `⟨${String(label.length)}, ${String(label.nEdges)}, ${String(label.curr)}, ${String(label.pred)}⟩`;
+}
+
+/**
+ * Copy a label into a {@link DistanceStore} at vertex `v` (columns only; no export of writeLabel).
+ */
+function applyLabel(store: DistanceStore, v: VertexId, label: DistanceLabel): void {
+  store.length[v] = label.length;
+  store.nEdges[v] = label.nEdges;
+  store.curr[v] = label.curr;
+  store.pred[v] = label.pred;
+}
+
+/**
+ * Shallow copy of a {@link DistanceLabel} so later store writes do not mutate findings.
+ */
+function copyLabel(label: DistanceLabel): DistanceLabel {
+  return {
+    length: label.length,
+    nEdges: label.nEdges,
+    curr: label.curr,
+    pred: label.pred,
+  };
+}
+
+/**
+ * Classify a post-settle improve: equal-label, strict-length, or lex-only.
+ *
+ * @throws If `improved: true` but the candidate is not ≤ the current label.
+ */
+function classifyPostSettleImprove(
+  candidate: DistanceLabel,
+  current: DistanceLabel,
+): DmsySettleImproveClass {
+  const cmp = compareLabels(candidate, current);
+  if (cmp === "=") {
+    return "equal-label";
+  }
+  if (candidate.length < current.length) {
+    return "strict-length";
+  }
+  if (cmp === "<") {
+    return "lex-only";
+  }
+  throw new Error(
+    `relax improved: true but candidate ${formatDistanceLabel(candidate)} is not ≤ current ${formatDistanceLabel(current)}`,
+  );
+}
+
+/**
+ * Derive emission region and recurse context at the moment of a post-settle finding.
+ */
+function settleImproveContext(
+  recurseStack: readonly RecurseFrame[],
+  lastRecurseDir: "in" | "out" | null,
+): { region: DmsySettleImproveRegion; recurseDepth: number; activeLevel: number } {
+  if (recurseStack.length === 0) {
+    return { region: "in-level", recurseDepth: 0, activeLevel: -1 };
+  }
+
+  const top = recurseStack[recurseStack.length - 1];
+  if (top === undefined) {
+    return { region: "in-level", recurseDepth: 0, activeLevel: -1 };
+  }
+
+  const recurseDepth = recurseStack.length;
+  const activeLevel = top.level;
+
+  if (top.level === 0) {
+    return { region: "level-0", recurseDepth, activeLevel };
+  }
+  if (lastRecurseDir === "out") {
+    // Sticky: step 5.6 and W′ finalize both sit after the last child `out`.
+    return { region: "after-child", recurseDepth, activeLevel };
+  }
+  return { region: "in-level", recurseDepth, activeLevel };
+}
+
+/**
+ * Build CSR tail column `tails[e] = from` for arc index `e`.
+ *
+ * @throws If any offset slot is missing.
+ */
+function buildCsrTails(graph: Graph): Uint32Array {
+  const { n, m, offsets } = graph;
+  const tails = new Uint32Array(m);
+  for (let v = 0; v < n; v += 1) {
+    const arcStart = offsets[v];
+    const arcEnd = offsets[v + 1];
+    if (arcStart === undefined || arcEnd === undefined) {
+      throw new Error(`offsets for vertex ${v} missing`);
+    }
+    for (let e = arcStart; e < arcEnd; e += 1) {
+      tails[e] = v;
+    }
+  }
+  return tails;
+}
+
+/**
+ * Replay a DMSY trace on a {@link DistanceStore} and report post-settle improving relaxes.
+ *
+ * Walks events in order, maintaining settled vertices and recurse/batch context. Each
+ * `relax` with `improved: true` on an already-settled target is classified as
+ * {@link DmsySettleImproveClass strict-length}, {@link DmsySettleImproveClass lex-only},
+ * or {@link DmsySettleImproveClass equal-label} from 4-tuple label replay.
+ *
+ * @param graph - Original CSR graph (offsets, targets, weights).
+ * @param events - DMSY trace events (public or instrumented lane).
+ * @param source - Source vertex; must be an integer in `[0, n)`.
+ * @returns Structured findings and one human-readable message per finding (empty when clean).
+ * @throws If `source` is out of range, CSR slots are missing, or an improving relax is not ≤ current.
+ */
+export function assertDmsySettleFinality(
+  graph: Graph,
+  events: readonly TraceEvent[],
+  source: VertexId,
+): DmsySettleFinalityReport {
+  const { n, targets, weights } = graph;
+
+  if (!Number.isInteger(source) || source < 0 || source >= n) {
+    throw new Error(`source must be an integer in [0, ${n}), got ${String(source)}`);
+  }
+
+  const tails = buildCsrTails(graph);
+  const store = createDistanceStore(n);
+  applyLabel(store, source, { length: 0, nEdges: 0, curr: source, pred: SENTINEL });
+
+  const settled = new Uint8Array(n);
+  const settleOrderAt = new Int32Array(n);
+  settleOrderAt.fill(-1);
+  const settleLabelAt: DistanceLabel[] = [];
+  let nextSettleOrder = 0;
+
+  const recurseStack: RecurseFrame[] = [];
+  let lastRecurseDir: "in" | "out" | null = null;
+
+  const findings: DmsySettleImproveFinding[] = [];
+  const messages: string[] = [];
+
+  for (const event of events) {
+    if (event.k === "recurse") {
+      if (event.dir === "in") {
+        recurseStack.push({ level: event.level, bound: event.bound });
+        lastRecurseDir = "in";
+      } else if (recurseStack.length === 0) {
+        messages.push("recurse out without matching recurse in");
+        lastRecurseDir = "out";
+      } else {
+        recurseStack.pop();
+        lastRecurseDir = "out";
+      }
+      continue;
+    }
+
+    if (event.k === "batch") {
+      continue;
+    }
+
+    if (event.k === "settle") {
+      const v = event.v;
+      if (settled[v] === 1) {
+        continue;
+      }
+      settled[v] = 1;
+      settleOrderAt[v] = nextSettleOrder;
+      nextSettleOrder += 1;
+      settleLabelAt[v] = copyLabel(labelAt(store, v));
+      continue;
+    }
+
+    if (event.k !== "relax" || !event.improved) {
+      continue;
+    }
+
+    const e = event.e;
+    const from = tails[e];
+    const to = targets[e];
+    const weight = weights[e];
+    if (from === undefined || to === undefined || weight === undefined) {
+      throw new Error(`CSR arc ${e} missing`);
+    }
+
+    const candidate = addWeight(labelAt(store, from), weight, to);
+    const current = labelAt(store, to);
+
+    if (settled[to] === 1) {
+      const klass = classifyPostSettleImprove(candidate, current);
+      const order = settleOrderAt[to];
+      if (order === undefined || order < 0) {
+        throw new Error(`settled vertex ${to} missing settle order`);
+      }
+      const settleLabel = settleLabelAt[to];
+      if (settleLabel === undefined) {
+        throw new Error(`settled vertex ${to} missing settle label snapshot`);
+      }
+      const { region, recurseDepth, activeLevel } = settleImproveContext(
+        recurseStack,
+        lastRecurseDir,
+      );
+      const finding: DmsySettleImproveFinding = {
+        vertex: to,
+        edge: e,
+        klass,
+        settleOrder: order,
+        region,
+        recurseDepth,
+        activeLevel,
+        settleLabel: copyLabel(settleLabel),
+        candidateLabel: copyLabel(candidate),
+      };
+      findings.push(finding);
+      messages.push(
+        `post-settle improve vertex ${String(to)} via edge ${String(e)}: ${klass} (region ${region}, depth ${String(recurseDepth)}, level ${String(activeLevel)}); settle ${formatDistanceLabel(settleLabel)} → ${formatDistanceLabel(candidate)}`,
+      );
+    }
+
+    applyLabel(store, to, candidate);
+  }
+
+  return { findings, messages };
+}
+
 /**
  * Whether a label matches the unreachable initialization ⟨Infinity, 0, v, SENTINEL⟩.
  */
@@ -236,6 +508,9 @@ function isUnreachableInitLabel(label: DistanceLabel, v: VertexId): boolean {
  * Distances and predecessors from public `run()` must match
  * {@link mapBackDistances} / {@link mapBackPredecessors} of the instrumented
  * result so a scalar pred replay cannot silently disagree with the live store.
+ *
+ * Also runs {@link assertDmsySettleFinality} on both public and instrumented traces
+ * (DMSY-P32: no post-settle `improved: true` on either lane).
  *
  * @returns Empty array when all checks pass; otherwise human-readable violation messages.
  */
@@ -311,6 +586,15 @@ export function assertDmsyLexTieBreak(
         `vertex ${v}: public pred ${String(pubPred)} !== mapped instrumented ${String(mappedPred)}`,
       );
     }
+  }
+
+  const pubFinality = assertDmsySettleFinality(graph, pub.events, source);
+  for (const msg of pubFinality.messages) {
+    violations.push(`public settle-finality: ${msg}`);
+  }
+  const instFinality = assertDmsySettleFinality(reduced.graph, inst.events, reducedSrc);
+  for (const msg of instFinality.messages) {
+    violations.push(`instrumented settle-finality: ${msg}`);
   }
 
   for (let v = 0; v < reduced.graph.n; v += 1) {
