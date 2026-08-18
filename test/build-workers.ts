@@ -3,7 +3,7 @@
  * Invoked by `npm run test:build` after `npm run build`.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +34,12 @@ function resolveRepoRoot(): string {
 function findWorkerChunk(files: readonly string[], token: string): string | undefined {
   return files.find((name) => name.includes(token) && name.endsWith(".js"));
 }
+
+/** PNG file signature per RFC 2083. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Regression ceiling from issue #51 (815,118 → 225,213 bytes after pngquant+oxipng). */
+const MAX_OG_CARD_BYTES = 400_000;
 
 /**
  * Assert production worker chunks and copied static assets exist under `dist/`.
@@ -104,6 +110,34 @@ function main(): void {
   const ogCardPath = join(distDir, "og-card.png");
   if (!existsSync(ogCardPath)) {
     fail("dist/og-card.png missing");
+    return;
+  }
+
+  const ogCardSize = statSync(ogCardPath).size;
+  if (ogCardSize >= MAX_OG_CARD_BYTES) {
+    fail(`dist/og-card.png is ${ogCardSize} bytes (max ${MAX_OG_CARD_BYTES})`);
+    return;
+  }
+
+  let ogCardBytes: Buffer;
+  try {
+    ogCardBytes = readFileSync(ogCardPath);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    fail(`failed to read dist/og-card.png: ${detail}`);
+    return;
+  }
+
+  if (!ogCardBytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    fail("dist/og-card.png does not have a valid PNG signature");
+    return;
+  }
+
+  // IHDR width/height at byte offsets 16 and 20 (must match og:image:width/height in index.html).
+  const ogCardWidth = ogCardBytes.readUInt32BE(16);
+  const ogCardHeight = ogCardBytes.readUInt32BE(20);
+  if (ogCardWidth !== 1200 || ogCardHeight !== 630) {
+    fail(`dist/og-card.png IHDR is ${ogCardWidth}×${ogCardHeight}, expected 1200×630`);
     return;
   }
 
