@@ -14,6 +14,9 @@ const LANE_COUNT = 3;
 /** Race lane canvas size (design.md §3.4). */
 const CANVAS_SIZE = 400;
 
+/** Race lane DPR cap — the 2× HiDPI backing store is CANVAS_SIZE × this (issue #80). */
+const HIDPI_PIXEL_SCALE = 2;
+
 /** Small streamed chunk — enough events to exercise append without a 100k Dijkstra trace. */
 const SETTLE_EVENT_COUNT = 1024;
 
@@ -86,6 +89,7 @@ describe("XL 3-lane append + draw stall budget (issue #20)", () => {
   let graph: Graph;
   let chunk: TraceChunk;
   let renderer: Renderer;
+  let hidpiRenderer: Renderer;
 
   beforeAll(() => {
     const n = SIZE_PRESETS.XL;
@@ -102,6 +106,17 @@ describe("XL 3-lane append + draw stall budget (issue #20)", () => {
       target,
       createSurface: createFakeSurface,
       graph,
+    });
+
+    const hidpiTarget = createFakeSurface(
+      CANVAS_SIZE * HIDPI_PIXEL_SCALE,
+      CANVAS_SIZE * HIDPI_PIXEL_SCALE,
+    );
+    hidpiRenderer = new Renderer({
+      target: hidpiTarget,
+      createSurface: createFakeSurface,
+      graph,
+      pixelScale: HIDPI_PIXEL_SCALE,
     });
 
     console.log(
@@ -124,6 +139,30 @@ describe("XL 3-lane append + draw stall budget (issue #20)", () => {
 
     console.log(
       `race-xl-stall: stallMs=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
+    );
+
+    expect(
+      best,
+      `stallMs=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
+    ).toBeLessThan(STALL_BUDGET_MS);
+  }, 300_000);
+
+  /** Issue #80 HiDPI datapoint — 50ms stall claim is load-bearing at 2× DPR (800×800 backing store). */
+  it("appendChunk on all lanes plus lane-0 draw stays under the 50ms stall budget at pixelScale 2 (800×800 backing store)", () => {
+    const measureAppendAndDraw = (): number => {
+      const race = new RaceScheduler(graph, LANE_COUNT);
+      const t0 = performance.now();
+      for (let lane = 0; lane < LANE_COUNT; lane += 1) {
+        race.appendChunk(lane, chunk);
+      }
+      hidpiRenderer.draw(race.laneState(0));
+      return performance.now() - t0;
+    };
+
+    const { best, times } = bestOfTimed(measureAppendAndDraw);
+
+    console.log(
+      `race-xl-stall: pixelScale=2 stallMs=[${times.map((t) => t.toFixed(2)).join(", ")}] best=${best.toFixed(2)}`,
     );
 
     expect(

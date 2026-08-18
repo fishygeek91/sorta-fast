@@ -40,6 +40,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Edge, frontier, and ghost strokes now scale with the Race backing-store DPR (`pixelScale`), and the vertex dirty radius pads for scaled stroke overhang so HiDPI partial composites leave no residue rings (#80).
 - README hero caption DMSY photo-finish / settle-all totals updated for demo-default k (city n=500 seed 1729) (#54).
 - DMSY omitted-params / worker default is now demo (swept k) not paper; paper stays selectable via `dmsy=paper` (#54).
 - `public/og-card.png` recompressed with pngquant + oxipng from 815,118 to 225,213 bytes (72% smaller, still 1200×630 so `og:image` meta stays correct); byte-ceiling and IHDR contract tests in `test/og-card.test.ts` and `test/build-workers.ts` (#51).
