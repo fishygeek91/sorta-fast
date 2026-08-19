@@ -28,6 +28,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Pivot-flare incremental composites now dirty `ceil(camera.radius × 2.2) + stroke pad` and mark one last frame on expiry so the outer ring leaves no residue (#101).
 - README hero caption names photo-finish work vs the settle-all work clock; the bench page discloses unmatched BMSSP demo k vs DMSY paper params; the Round-2 checklist no longer claims paper params as BMSSP's default (#28).
 - Instrumented DMSY no longer emits `relax.improved: true` for identical-label Algorithm 1 `"="` accepts (parent step 5.6 re-scans). Hunt on gallery+dense graphs found only equal-label no-ops, not Lemma 3.7 completeness failures (#92).
 - Story Playwright smoke now walks the five-beat tour including `forest` (#27).
