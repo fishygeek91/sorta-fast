@@ -20,6 +20,7 @@ The headline metric is a **work clock** (total comparisons), not wall-clock mill
 
 | Preset | What to look for |
 |---|---|
+| [The barrier falls (sparse XL, seed 4)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=100000&seed=4&mode=race&race=dijkstra,bmssp,dmsy&target=none) | BMSSP and DMSY beat Dijkstra on the settle-all work clock by a visible margin (BMSSP 2,044,058 · DMSY 2,208,892 · Dijkstra 2,413,981; ratios 0.8468 / 0.9150). No photo-finish cap (`target=none`). One-click button in the race gallery. |
 | [Default 3-way race (sparse 25k, seed 4)](https://fishygeek91.github.io/sorta-fast/?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy) | Both barrier-breakers beat Dijkstra on settle-all comparisons (BMSSP 495,618 · DMSY 513,213 · Dijkstra 519,411); Dijkstra still wins the photo-finish to the marked target. |
 | [Story preset](https://fishygeek91.github.io/sorta-fast/?g=city&n=500&seed=1729) | City layout at n=500 — good for watching wavefronts. |
 | [Dijkstra work-clock win (easy)](https://fishygeek91.github.io/sorta-fast/?g=maze&n=500&seed=0) | Maze graph — Dijkstra wins the work clock here. |

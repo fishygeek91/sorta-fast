@@ -6,6 +6,7 @@ import {
   runKtSweep,
   shouldSkipKtSweepCell,
   sweepCell,
+  xlKtSweepConfig,
 } from "../bench/bmssp-kt-sweep.ts";
 import { paperBmsspParams } from "../src/core/bmssp/params.ts";
 import { GRAPH_KINDS, SIZE_PRESETS } from "../src/core/graph.ts";
@@ -40,6 +41,22 @@ describe("bmssp k/t sweep bench", () => {
     expect(shouldSkipKtSweepCell("maze", SIZE_PRESETS.L)).toBe(false);
     expect(shouldSkipKtSweepCell("city", SIZE_PRESETS.XL)).toBe(true);
     expect(shouldSkipKtSweepCell("maze", SIZE_PRESETS.S)).toBe(false);
+  });
+
+  it("shouldSkipKtSweepCell allowXl bypasses XL only", () => {
+    expect(shouldSkipKtSweepCell("sparse", SIZE_PRESETS.XL)).toBe(true);
+    expect(shouldSkipKtSweepCell("sparse", SIZE_PRESETS.XL, true)).toBe(false);
+    expect(shouldSkipKtSweepCell("city", SIZE_PRESETS.L, true)).toBe(true);
+  });
+
+  it("xlKtSweepConfig is sparse XL confirm grid with demo k/t", () => {
+    const config = xlKtSweepConfig();
+
+    expect(config.kinds).toEqual(["sparse"]);
+    expect(config.sizes).toEqual([SIZE_PRESETS.XL]);
+    expect(config.seeds).toEqual([0, 1, 2, 3, 4]);
+    expect(config.kValues).toEqual([4]);
+    expect(config.tVariants).toEqual(["paper"]);
   });
 
   it("sweepCell drains both lanes with finite positive work", () => {

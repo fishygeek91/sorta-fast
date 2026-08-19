@@ -117,8 +117,13 @@ describe("issue #18 export meta", () => {
       expect(canExportPhotoFinish(true)).toBe(true);
     });
 
-    it("returns false when not all photo frozen", () => {
+    it("returns false when not all photo frozen and settle-all incomplete", () => {
       expect(canExportPhotoFinish(false)).toBe(false);
+      expect(canExportPhotoFinish(false, false)).toBe(false);
+    });
+
+    it("returns true when settle-all complete even if photo not frozen", () => {
+      expect(canExportPhotoFinish(false, true)).toBe(true);
     });
   });
 });

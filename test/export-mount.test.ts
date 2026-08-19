@@ -54,12 +54,12 @@ describe("issue #18 export mount wiring", () => {
     expect(buildExportIdx).toBeGreaterThanOrEqual(0);
 
     const buildExportBody = raceSource.slice(buildExportIdx);
-    const bannerIdx = buildExportBody.indexOf("banner:");
-    expect(bannerIdx).toBeGreaterThanOrEqual(0);
-
-    const bannerSlice = buildExportBody.slice(bannerIdx, bannerIdx + 400);
-    expect(bannerSlice).toContain("allPhotoFrozen()");
-    expect(bannerSlice).toContain("formatRaceBanner");
+    const nextFn = buildExportBody.indexOf("\n  function ", 1);
+    const buildExportSource = nextFn >= 0 ? buildExportBody.slice(0, nextFn) : buildExportBody;
+    expect(buildExportSource).toContain("allPhotoFrozen()");
+    expect(buildExportSource).toContain("formatRaceBanner");
+    expect(buildExportSource).toContain("allComplete");
+    expect(buildExportSource).toContain("formatSettleAllBanner");
   });
 
   it("race.ts shows a fallback status when video export is unsupported", () => {
@@ -81,9 +81,11 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("shareUrlForExport");
   });
 
-  it("race.ts holds WebM capture after photo-freeze before stopping recorder", () => {
+  it("race.ts holds WebM capture after photo-freeze or settle-all (target=none) before stopping recorder", () => {
     expect(raceSource).toContain("EXPORT_BANNER_HOLD_MS");
     expect(raceSource).toContain("recordingHoldUntilMs");
+    expect(raceSource).toContain("allPhotoFrozen()");
+    expect(raceSource).toContain('raceState.target === "none" && race.allComplete');
   });
 
   it("race.ts keeps drawing while recording after the photo-finish pause", () => {

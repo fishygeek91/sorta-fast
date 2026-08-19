@@ -11,6 +11,7 @@ import {
   shouldSkipInfiniteBlock,
   shouldSkipKtSweepCell,
   sweepCell,
+  xlKtSweepConfig,
   type DmsyKtTVariant,
 } from "../bench/dmsy-kt-sweep.ts";
 import {
@@ -57,6 +58,38 @@ describe("dmsy k/t sweep bench", () => {
     expect(shouldSkipKtSweepCell("maze", SIZE_PRESETS.L)).toBe(false);
     expect(shouldSkipKtSweepCell("city", SIZE_PRESETS.XL)).toBe(true);
     expect(shouldSkipKtSweepCell("maze", SIZE_PRESETS.S)).toBe(false);
+    expect(shouldSkipKtSweepCell("sparse", SIZE_PRESETS.XL)).toBe(true);
+  });
+
+  it("xlKtSweepConfig encodes issue #103 XL confirm grid", () => {
+    const config = xlKtSweepConfig();
+
+    expect(config.kinds).toEqual(["sparse"]);
+    expect(config.sizes).toEqual([SIZE_PRESETS.XL]);
+    expect(config.sizes[0]).toBe(100_000);
+    expect(config.seeds).toEqual([0, 1, 2, 3, 4]);
+    expect(config.kValues).toEqual([6]);
+    expect(config.tVariants).toEqual(["paper"]);
+  });
+
+  it("shouldSkipKtSweepCell skip matrix respects allowXl", () => {
+    for (const kind of GRAPH_KINDS) {
+      for (const n of [SIZE_PRESETS.S, SIZE_PRESETS.M, SIZE_PRESETS.L, SIZE_PRESETS.XL]) {
+        const defaultSkip = shouldSkipKtSweepCell(kind, n);
+        const xlAllowedSkip = shouldSkipKtSweepCell(kind, n, true);
+
+        if (kind === "city" && n === SIZE_PRESETS.L) {
+          expect(defaultSkip).toBe(true);
+          expect(xlAllowedSkip).toBe(true);
+        } else if (n === SIZE_PRESETS.XL) {
+          expect(defaultSkip).toBe(true);
+          expect(xlAllowedSkip).toBe(false);
+        } else {
+          expect(defaultSkip).toBe(false);
+          expect(xlAllowedSkip).toBe(false);
+        }
+      }
+    }
   });
 
   it("shouldSkipInfiniteBlock skips cells with non-finite block or cap", () => {

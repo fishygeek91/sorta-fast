@@ -89,21 +89,25 @@ describe("issue #63 race standing mount wiring", () => {
 
   it("race.ts keeps formatRaceBanner and allPhotoFrozen for banner sync", () => {
     expect(raceSource).toContain("formatRaceBanner");
+    expect(raceSource).toContain("formatSettleAllBanner");
 
     const syncBannerIdx = raceSource.indexOf("function syncBanner");
     expect(syncBannerIdx).toBeGreaterThanOrEqual(0);
-    const syncBannerBody = raceSource.slice(syncBannerIdx, syncBannerIdx + 500);
+    const syncBannerBody = raceSource.slice(syncBannerIdx, syncBannerIdx + 800);
     expect(syncBannerBody).toContain("allPhotoFrozen()");
     expect(syncBannerBody).toContain("formatRaceBanner");
+    expect(syncBannerBody).toContain("formatSettleAllBanner");
+    expect(syncBannerBody).toContain("allComplete");
 
     const buildExportIdx = raceSource.indexOf("function buildExportSheetSpec");
     expect(buildExportIdx).toBeGreaterThanOrEqual(0);
     const buildExportBody = raceSource.slice(buildExportIdx);
-    const bannerIdx = buildExportBody.indexOf("banner:");
-    expect(bannerIdx).toBeGreaterThanOrEqual(0);
-    const bannerSlice = buildExportBody.slice(bannerIdx, bannerIdx + 400);
-    expect(bannerSlice).toContain("allPhotoFrozen()");
-    expect(bannerSlice).toContain("formatRaceBanner");
+    const nextFn = buildExportBody.indexOf("\n  function ", 1);
+    const buildExportSource = nextFn >= 0 ? buildExportBody.slice(0, nextFn) : buildExportBody;
+    expect(buildExportSource).toContain("allPhotoFrozen()");
+    expect(buildExportSource).toContain("formatRaceBanner");
+    expect(buildExportSource).toContain("formatSettleAllBanner");
+    expect(buildExportSource).toContain("allComplete");
   });
 
   it("race.ts documents partial-freeze / invert settle leadership", () => {

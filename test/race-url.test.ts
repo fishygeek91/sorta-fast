@@ -4,6 +4,7 @@ import { generateGraph } from "../src/core/graph.ts";
 import { lanesFromSearch } from "../src/ui/raceLanes.ts";
 import {
   DEFAULT_RACE_URL,
+  FEATURED_RACE_URL,
   parseRaceUrl,
   serializeRaceUrl,
   type RaceUrlState,
@@ -329,6 +330,13 @@ describe("parseRaceUrl", () => {
     expect(parseRaceUrl("?target=")).toEqual(DEFAULT_RACE_URL);
   });
 
+  it("parses target=none as settle-all (no photo-finish cap)", () => {
+    expect(parseRaceUrl("?target=none")).toEqual({
+      ...DEFAULT_RACE_URL,
+      target: "none",
+    });
+  });
+
   it("falls back to default g on invalid graph kind", () => {
     expect(parseRaceUrl("?g=grid")).toEqual(DEFAULT_RACE_URL);
     expect(parseRaceUrl("?g=")).toEqual(DEFAULT_RACE_URL);
@@ -405,6 +413,24 @@ describe("parseRaceUrl", () => {
       view: "lanes",
     };
     expect(parseRaceUrl(serializeRaceUrl(state))).toEqual(state);
+  });
+
+  it("serializes FEATURED_RACE_URL with sparse XL seed 4 and target=none", () => {
+    const query = serializeRaceUrl(FEATURED_RACE_URL);
+    expect(query).toContain("g=sparse");
+    expect(query).toContain("n=100000");
+    expect(query).toContain("seed=4");
+    expect(query).toContain("target=none");
+    expect(parseRaceUrl(query)).toEqual(FEATURED_RACE_URL);
+  });
+
+  it("FEATURED_RACE_URL identity: sparse XL seed 4 settle-all with demo modes", () => {
+    expect(FEATURED_RACE_URL.g).toBe("sparse");
+    expect(FEATURED_RACE_URL.n).toBe(100000);
+    expect(FEATURED_RACE_URL.seed).toBe(4);
+    expect(FEATURED_RACE_URL.target).toBe("none");
+    expect(FEATURED_RACE_URL.bmssp).toBe("demo");
+    expect(FEATURED_RACE_URL.dmsy).toBe("demo");
   });
 
   it("includes target when set and round-trips", () => {
@@ -511,7 +537,7 @@ describe("serializeRaceUrl", () => {
         dt: null,
         view: "lanes",
       }),
-    ).toThrow(/target must be a non-negative integer/);
+    ).toThrow(/target must be a non-negative integer, "none", or null/);
     expect(() =>
       serializeRaceUrl({
         g: "maze",

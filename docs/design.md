@@ -92,6 +92,7 @@ At browser scale (10³–10⁵ nodes), Dijkstra + binary heap will often win **w
 - Per-lane overlays (toggleable): current frontier, relaxed edges (ghost trails), pivots (flare + ring), recursion depth (nested background tint), forest partition boundaries (DMSY), the D-structure as a live strip of blocks under the lane.
 - **Photo finish:** when a lane's source-to-target path settles, that lane freezes with the path drawn in gold and its counter locked. Final banner: "BMSSP beat Dijkstra by 17,133 comparisons on this graph."
 - After photo-finish, the winning lane is marked on the panel (lowest billed work) and best-in-class secondary counters are highlighted; while no lane is frozen, the live lead is settle-count at equal billed work.
+- Race also shows a **settle-all work-clock** banner line when every lane's trace is complete; featured preset (`target=none`) has no path-to-target freeze. Path-to-target totals are not called the work clock.
 - **Scrubbing is sacred:** the entire race is a precomputed trace, so the timeline slider scrubs forward *and backward* at any speed, including single-step. This turns the demo from a video into an instrument.
 
 ### 3.3 Modes
@@ -204,7 +205,7 @@ Estimated effort: v1.0 ≈ 4–6 focused days; DMSY is the long pole of v2.0 (bu
 | "Rigged" accusations re: speed | Work-clock fairness panel, open cost table, honest wall-clock page where Dijkstra wins small. |
 | BMSSP constants make batches look *slower* early on small graphs | The deficit is size-invariant under paper k=2 (FindPivots abort). Demo uses k=max(4, paper k); default race is sparse n=25000 seed=4 where BMSSP wins comparisons; Fairness panel discloses the deviation. |
 | DMSY paper k/t at browser n lose or barely break even | Demo uses k=max(6, paper k) and paper t; Fairness discloses; paper mode stays selectable (`dmsy=paper`). |
-| Canvas perf on XL graphs | Aggregated rendering path (§4.4); XL is a labeled "stress" option, not the default. |
+| Canvas perf on XL graphs | Aggregated rendering path (§4.4); XL stays labeled stress and is **not** the empty-URL default; the one-click featured race is sparse XL seed 4 where the work-clock win is ≥5%. |
 | Paper ambiguities (tie-breaking, base cases) | Decisions logged in `docs/paper-notes.md` with section citations; becomes the companion blog post. |
 
 ---

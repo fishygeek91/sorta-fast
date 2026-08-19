@@ -81,6 +81,7 @@ DMSY announcement kit — three-lane race (Dijkstra vs BMSSP vs DMSY). First pub
 
 - [x] Full 3-way race state in URL (`src/ui/raceUrl.ts`). Same `?g=&n=&seed=&race=` → byte-identical traces (`test/race-url-repro.test.ts`).
 - [x] Default live race seed: `?g=sparse&n=25000&seed=4&mode=race&race=dijkstra,bmssp,dmsy`
+- [x] Featured XL settle-all preset (gallery button): `?g=sparse&n=100000&seed=4&mode=race&race=dijkstra,bmssp,dmsy&target=none` — work-clock ratios confirmed in [`bench/sparse-xl-confirm.md`](../bench/sparse-xl-confirm.md). OG card recapture from the featured export sheet is a remaining human step (100k race too long for this PR to live-capture); city n=500 seed 1729 OG remains until then.
 - [x] Story seed (city graph): `?g=city&n=500&seed=1729&mode=race&race=dijkstra,bmssp,dmsy`
 - [x] Maze seed (Dijkstra work-clock win): `?g=maze&n=500&seed=0&mode=race&race=dijkstra,bmssp,dmsy`
 

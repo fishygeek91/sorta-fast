@@ -1,0 +1,6 @@
+kind	n	seed	k	t	tVariant	L	dijkstraWork	dmsyWork	ratio
+sparse	100000	0	6	5	paper	4	2408534	2204928	0.9155
+sparse	100000	1	6	5	paper	4	2406881	2202782	0.9152
+sparse	100000	2	6	5	paper	4	2416831	2213220	0.9158
+sparse	100000	3	6	5	paper	4	2416012	2205778	0.9130
+sparse	100000	4	6	5	paper	4	2413981	2208892	0.9150

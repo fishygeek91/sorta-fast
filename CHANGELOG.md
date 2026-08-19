@@ -9,6 +9,13 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- Fairness panel, README featured seed, and bench/sparse-xl-confirm.md publish XL sparse seed-4 settle-all ratios (BMSSP 0.8468, DMSY 0.9150) (#103).
+- CI pins FEATURED_RACE_URL (sparse XL seed 4, target=none): BMSSP and DMSY settle-all work / Dijkstra ≤ 0.95 (#103).
+- Race gallery "The barrier falls" featured XL preset, territory picker labels, and dual photo-finish / settle-all banner (#103).
+- Settle-all work-clock banner helper and featured gallery copy; photo-finish banner wording unchanged (#103).
+- Race URL accepts `target=none` (settle-all, no photo-finish cap) and exports `FEATURED_RACE_URL` (sparse XL seed 4) (#103).
+- BMSSP k/t sweep accepts `--xl` (sparse 100k, seeds 0–4, demo k/t) and can bypass the XL skip (#103).
+- DMSY k/t sweep accepts `--xl` (sparse 100k, seeds 0–4, demo k/t) and can bypass the XL skip (#103).
 - Headless DMSY k/t sweep (`bench/dmsy-kt-sweep.ts`, `npm run bench:dmsy-kt`) + committed scout/confirm TSV/md; locked demo `k = max(6, paper k)` with paper `t` (#54).
 - `resolveDmsyRunParams` / `dmsy=demo|paper` + `dk`/`dt` URL keys / Fairness disclosure (#54).
 - 3-way OG card (`public/og-card.png` 1200×630) and hero GIF/WebM from the #18 exporter on city n=500 seed 1729 (#28).
@@ -28,6 +35,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- WebM export hold also fires when a `target=none` featured race reaches settle-all, not only photo-freeze (#103).
 - Pivot-flare incremental composites now dirty `ceil(camera.radius × 2.2) + stroke pad` and mark one last frame on expiry so the outer ring leaves no residue (#101).
 - README hero caption names photo-finish work vs the settle-all work clock; the bench page discloses unmatched BMSSP demo k vs DMSY paper params; the Round-2 checklist no longer claims paper params as BMSSP's default (#28).
 - Instrumented DMSY no longer emits `relax.improved: true` for identical-label Algorithm 1 `"="` accepts (parent step 5.6 re-scans). Hunt on gallery+dense graphs found only equal-label no-ops, not Lemma 3.7 completeness failures (#92).
@@ -41,6 +49,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Race photo-finish banner stays path-to-target; a settle-all work-clock line is added when traces complete, and the featured XL preset races without a finish cap (#103).
 - Forest grow/cut overlay strokes now scale with the Race backing-store DPR (`pixelScale`), and those widths are included in the vertex dirty-radius pad so HiDPI forest strokes keep CSS-px weight (#98).
 - Edge, frontier, and ghost strokes now scale with the Race backing-store DPR (`pixelScale`), and the vertex dirty radius pads for scaled stroke overhang so HiDPI partial composites leave no residue rings (#80).
 - README hero caption DMSY photo-finish / settle-all totals updated for demo-default k (city n=500 seed 1729) (#54).

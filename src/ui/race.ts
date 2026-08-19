@@ -42,6 +42,7 @@ import { mountModeNav } from "./modeNav.ts";
 import {
   bestInClassSecondary,
   formatRaceBanner,
+  formatSettleAllBanner,
   raceCountersFromLane,
   rankLaneIndices,
   settleLead,
@@ -49,10 +50,16 @@ import {
 } from "./photoFinish.ts";
 import { mountStory } from "./story.ts";
 import { DEFAULT_STORY_URL, isStorySearch, serializeStoryUrl } from "./storyUrl.ts";
-import { RACE_CHROME_COPY, explainerMeaning, personaTitle } from "./siteCopy.ts";
+import {
+  GRAPH_KIND_PICKER_LABELS,
+  RACE_CHROME_COPY,
+  explainerMeaning,
+  personaTitle,
+} from "./siteCopy.ts";
 import { resolveRaceFinishVertex } from "./raceFinish.ts";
 import { lanesFromRaceList, type RaceLaneConfig } from "./raceLanes.ts";
 import {
+  FEATURED_RACE_URL,
   parseRaceUrl,
   serializeRaceUrl,
   type RaceAlgoSlug,
@@ -202,7 +209,7 @@ export function mountRace(): void {
   for (const kind of GRAPH_KINDS) {
     const option = document.createElement("option");
     option.value = kind;
-    option.textContent = kind;
+    option.textContent = GRAPH_KIND_PICKER_LABELS[kind];
     kindSelect.append(option);
   }
   kindLabel.append(kindSelect);
@@ -241,6 +248,13 @@ export function mountRace(): void {
   diceButton.textContent = "Dice";
   diceButton.setAttribute("aria-label", "Roll a new seed");
   diceButton.title = RACE_CHROME_COPY.diceTitle;
+
+  const featuredButton = document.createElement("button");
+  featuredButton.type = "button";
+  featuredButton.id = "race-featured-button";
+  featuredButton.textContent = RACE_CHROME_COPY.featuredButton;
+  featuredButton.title = RACE_CHROME_COPY.featuredButtonTitle;
+  featuredButton.setAttribute("aria-label", RACE_CHROME_COPY.featuredButtonTitle);
 
   const lanesLabel = document.createElement("label");
   lanesLabel.className = "lens-graph-field";
@@ -303,6 +317,7 @@ export function mountRace(): void {
     sizeLabel,
     seedLabel,
     diceButton,
+    featuredButton,
     lanesLabel,
     bmsspLabel,
     dmsyLabel,
@@ -737,22 +752,46 @@ export function mountRace(): void {
   }
 
   /**
-   * Update photo-finish banner visibility and text.
+   * Update photo-finish and settle-all banner visibility and text.
    */
   function syncBanner(): void {
-    if (race === null || finishVertex === null || !race.allPhotoFrozen()) {
+    if (race === null) {
+      bannerEl.hidden = true;
+      return;
+    }
+
+    const activeRace = race;
+    const lines: string[] = [];
+
+    if (finishVertex !== null && activeRace.allPhotoFrozen()) {
+      lines.push(
+        formatRaceBanner(
+          configs.map((config, lane) => ({
+            label: config.label,
+            work: activeRace.laneState(lane).work,
+          })),
+        ),
+      );
+    }
+
+    if (activeRace.allComplete) {
+      lines.push(
+        formatSettleAllBanner(
+          configs.map((config, lane) => ({
+            label: config.label,
+            work: activeRace.laneTotalWork(lane),
+          })),
+        ),
+      );
+    }
+
+    if (lines.length === 0) {
       bannerEl.hidden = true;
       return;
     }
 
     bannerEl.hidden = false;
-    const activeRace = race;
-    bannerEl.textContent = formatRaceBanner(
-      configs.map((config, lane) => ({
-        label: config.label,
-        work: activeRace.laneState(lane).work,
-      })),
-    );
+    bannerEl.textContent = lines.join(" ");
   }
 
   /**
@@ -806,12 +845,94 @@ export function mountRace(): void {
    * @param counterRows - Per-lane counters already read in {@link drawFrame}.
    */
   function syncStanding(counterRows: readonly RaceLaneCounters[]): void {
-    if (race === null || finishVertex === null) {
+    if (race === null) {
       clearStanding();
       return;
     }
 
     const activeRace = race;
+
+    if (activeRace.allComplete) {
+      for (const ui of laneUis) {
+        if (ui.leadEl.hidden !== true) {
+          ui.leadEl.hidden = true;
+        }
+      }
+
+      const bannerLanes = configs.map((config, lane) => ({
+        label: config.label,
+        work: activeRace.laneTotalWork(lane),
+      }));
+      const ranked = rankLaneIndices(bannerLanes);
+      const winnerIndex = ranked[0];
+
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        if (ui === undefined) {
+          continue;
+        }
+
+        const isWinner = winnerIndex !== undefined && lane === winnerIndex;
+        if (ui.winnerEl.hidden === isWinner) {
+          ui.winnerEl.hidden = !isWinner;
+        }
+        if (isWinner && ui.winnerEl.textContent !== WINNER_CHIP_TEXT) {
+          ui.winnerEl.textContent = WINNER_CHIP_TEXT;
+        }
+      }
+
+      const flags = bestInClassSecondary(counterRows);
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        const laneFlags = flags[lane];
+        if (ui === undefined || laneFlags === undefined) {
+          continue;
+        }
+        applyBestMark(ui.heapBlock, laneFlags.heapOps);
+        applyBestMark(ui.dstructBlock, laneFlags.dstructOps);
+        applyBestMark(ui.relaxBlock, laneFlags.relaxations);
+        applyBestMark(ui.outOfOrderBlock, laneFlags.outOfOrderSettles);
+      }
+      return;
+    }
+
+    if (finishVertex === null) {
+      for (const ui of laneUis) {
+        if (ui.winnerEl.hidden !== true) {
+          ui.winnerEl.hidden = true;
+        }
+        applyBestMark(ui.heapBlock, false);
+        applyBestMark(ui.dstructBlock, false);
+        applyBestMark(ui.relaxBlock, false);
+        applyBestMark(ui.outOfOrderBlock, false);
+      }
+
+      const lead = settleLead(counterRows.map((c) => c.settledCount));
+      if (lead === null) {
+        for (const ui of laneUis) {
+          if (ui.leadEl.hidden !== true) {
+            ui.leadEl.hidden = true;
+          }
+        }
+        return;
+      }
+
+      const leadText = `Ahead by ${String(lead.margin)} settles`;
+      for (let lane = 0; lane < laneUis.length; lane += 1) {
+        const ui = laneUis[lane];
+        if (ui === undefined) {
+          continue;
+        }
+        const isLeader = lane === lead.leaderIndex;
+        if (ui.leadEl.hidden === isLeader) {
+          ui.leadEl.hidden = !isLeader;
+        }
+        if (isLeader && ui.leadEl.textContent !== leadText) {
+          ui.leadEl.textContent = leadText;
+        }
+      }
+      return;
+    }
 
     const allFrozen = activeRace.allPhotoFrozen();
     let anyFrozen = false;
@@ -927,7 +1048,14 @@ export function mountRace(): void {
    * @returns Whether PNG/WebM export buttons should be interactive.
    */
   function exportButtonsEnabled(): boolean {
-    return race !== null && canExportPhotoFinish(race.allPhotoFrozen()) && !recording;
+    return (
+      race !== null &&
+      canExportPhotoFinish(
+        race.allPhotoFrozen(),
+        raceState.target === "none" && race.allComplete,
+      ) &&
+      !recording
+    );
   }
 
   /**
@@ -959,6 +1087,7 @@ export function mountRace(): void {
     sizeSelect.disabled = disabled;
     seedInput.disabled = disabled;
     diceButton.disabled = disabled;
+    featuredButton.disabled = disabled;
     lanesSelect.disabled = disabled;
     bmsspSelect.disabled = disabled;
     dmsySelect.disabled = disabled;
@@ -1033,6 +1162,30 @@ export function mountRace(): void {
     const theme = THEMES[readStoredTheme()];
     const shareUrl = shareUrlForExport(raceState);
     const caption = exportCaption(raceState, shareUrl);
+    const allPhotoFrozen = activeRace.allPhotoFrozen();
+    const allComplete = activeRace.allComplete;
+
+    const bannerLines: string[] = [];
+    if (allPhotoFrozen) {
+      bannerLines.push(
+        formatRaceBanner(
+          configs.map((config, lane) => ({
+            label: config.label,
+            work: activeRace.laneState(lane).work,
+          })),
+        ),
+      );
+    }
+    if (allComplete) {
+      bannerLines.push(
+        formatSettleAllBanner(
+          configs.map((config, lane) => ({
+            label: config.label,
+            work: activeRace.laneTotalWork(lane),
+          })),
+        ),
+      );
+    }
 
     const lanes = configs.map((config, lane) => {
       const ui = laneUis[lane];
@@ -1042,21 +1195,17 @@ export function mountRace(): void {
       const state = activeRace.laneState(lane);
       return {
         label: config.label,
-        comparisons: raceCountersFromLane(state).comparisons,
+        comparisons:
+          allComplete && !allPhotoFrozen
+            ? Math.floor(activeRace.laneTotalWork(lane))
+            : raceCountersFromLane(state).comparisons,
         canvas: ui.canvas,
       };
     });
 
     return {
       lanes,
-      banner: activeRace.allPhotoFrozen()
-        ? formatRaceBanner(
-            configs.map((config, lane) => ({
-              label: config.label,
-              work: activeRace.laneState(lane).work,
-            })),
-          )
-        : "",
+      banner: bannerLines.join(" "),
       seedLine: caption.seedLine,
       urlLine: caption.urlLine,
       chrome: {
@@ -1191,9 +1340,17 @@ export function mountRace(): void {
       }
     }
 
+    /**
+     * WebM capture: after the export sheet paints, hold the banner on screen
+     * ({@link EXPORT_BANNER_HOLD_MS}) once the race is sheet-ready — photo-freeze
+     * or settle-all complete when `target=none` — then stop the recorder.
+     */
     if (recording) {
       if (paintExportSheet()) {
-        if (!recordingAwaitingReplay && !finishingVideo && race !== null && race.allPhotoFrozen()) {
+        const sheetReady =
+          race !== null &&
+          (race.allPhotoFrozen() || (raceState.target === "none" && race.allComplete));
+        if (!recordingAwaitingReplay && !finishingVideo && sheetReady) {
           if (recordingHoldUntilMs === null) {
             recordingHoldUntilMs = performance.now() + EXPORT_BANNER_HOLD_MS;
           }
@@ -1391,12 +1548,14 @@ export function mountRace(): void {
         } else {
           clearStatus();
         }
-        if (resolution.finish === null) {
+        if (resolution.finish !== null) {
+          finishVertex = resolution.finish;
+          race.setFinishVertex(resolution.finish);
+        } else if (resolution.status !== null) {
+          // auto-pick failed: keep existing abort (no renderers)
           return;
         }
-
-        finishVertex = resolution.finish;
-        race.setFinishVertex(resolution.finish);
+        // target=none: finish stays null, no cap, CONTINUE to renderers
 
         applyAllLaneBackingStores();
         for (let lane = 0; lane < configs.length; lane += 1) {
@@ -1634,6 +1793,10 @@ export function mountRace(): void {
 
   diceButton.addEventListener("click", () => {
     applyRaceState({ ...raceState, seed: rollSeed(), t: 0 });
+  });
+
+  featuredButton.addEventListener("click", () => {
+    applyRaceState({ ...FEATURED_RACE_URL });
   });
 
   kindSelect.addEventListener("change", () => {
@@ -2106,7 +2269,8 @@ function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
     prev.bt !== next.bt ||
     prev.dmsy !== next.dmsy ||
     prev.dk !== next.dk ||
-    prev.dt !== next.dt
+    prev.dt !== next.dt ||
+    prev.target !== next.target
   );
 }
 
