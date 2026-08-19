@@ -64,6 +64,9 @@ export const FOREST_GROW_WINDOW_OPS = GHOST_WINDOW_OPS;
 /** Pivot flare ring window in billed ops (scrub-safe; not wall-clock). */
 export const PIVOT_FLARE_WINDOW_OPS = 10_000;
 
+/** Pivot flare outer ring radius multiplier vs node radius. */
+export const PIVOT_FLARE_OUTER_SCALE = 2.2;
+
 /** Lane persona accent for settle-diff fills (issue #68). */
 export type DiffPersona = "marble" | "ember" | "moss" | "stub";
 
@@ -118,9 +121,6 @@ const RECURSION_TINT_ALPHA_SCALE = 0.08;
 
 /** Recursion depth contributing at most this value to tint alpha. */
 const RECURSION_DEPTH_CAP = 5;
-
-/** Pivot flare outer ring radius multiplier vs node radius. */
-const PIVOT_FLARE_OUTER_SCALE = 2.2;
 
 /** Pivot flare inner ring radius multiplier vs node radius. */
 const PIVOT_FLARE_INNER_SCALE = 1.35;
@@ -326,6 +326,7 @@ export class Renderer {
   private lastFrontier: Uint8Array;
   private srcOfEdge: Uint32Array;
   private lastGhost: Uint8Array;
+  private lastPivotFlare: Uint8Array;
   private lastForestGrow: Uint8Array;
   private lastForestCut: Uint8Array;
   private lastForestTree: Int32Array;
@@ -452,6 +453,7 @@ export class Renderer {
     this.lastFrontier = new Uint8Array(opts.graph.n);
     this.srcOfEdge = buildSrcOfEdge(opts.graph);
     this.lastGhost = new Uint8Array(opts.graph.m);
+    this.lastPivotFlare = new Uint8Array(opts.graph.n);
     this.lastForestGrow = new Uint8Array(opts.graph.m);
     this.lastForestCut = new Uint8Array(opts.graph.m);
     this.lastForestTree = new Int32Array(opts.graph.n);
@@ -547,6 +549,7 @@ export class Renderer {
     this.lastFrontier = new Uint8Array(graph.n);
     this.srcOfEdge = buildSrcOfEdge(graph);
     this.lastGhost = new Uint8Array(graph.m);
+    this.lastPivotFlare = new Uint8Array(graph.n);
     this.lastForestGrow = new Uint8Array(graph.m);
     this.lastForestCut = new Uint8Array(graph.m);
     this.lastForestTree = new Int32Array(graph.n);
@@ -780,6 +783,7 @@ export class Renderer {
         throw new Error(`forestTree[${String(v)}] is missing`);
       }
       this.lastForestTree[v] = curTree;
+      this.lastPivotFlare[v] = flags.pivotFlares && this.shouldDrawPivotFlare(v, state) ? 1 : 0;
     }
 
     for (let e = 0; e < m; e += 1) {
@@ -1045,6 +1049,17 @@ export class Renderer {
   private nodeDirtyRadius(): number {
     const base = this.usesAggregated() ? this.aggregatedNodePx : this.camera.radius;
     return base + this.strokeDirtyPad;
+  }
+
+  /**
+   * Dirty radius for a pivot-flare vertex so the 2.2× outer ring plus stroke overhang is
+   * covered (issue #101). Aggregated path keeps the node footprint.
+   */
+  private pivotFlareDirtyRadius(): number {
+    if (this.usesAggregated()) {
+      return this.nodeDirtyRadius();
+    }
+    return Math.ceil(this.camera.radius * PIVOT_FLARE_OUTER_SCALE) + this.strokeDirtyPad;
   }
 
   /**
@@ -1387,14 +1402,17 @@ export class Renderer {
   }
 
   /**
-   * Expand the dirty rect for every vertex showing an active pivot flare ring.
+   * Expand the dirty rect for active pivot flares and one final dirty mark on expiry
+   * (issue #101).
    */
   private includePivotFlareDirty(state: LaneState): void {
     const n = state.n;
-    const radius = this.nodeDirtyRadius();
+    const radius = this.pivotFlareDirtyRadius();
 
     for (let v = 0; v < n; v += 1) {
-      if (!this.shouldDrawPivotFlare(v, state)) {
+      const shouldDraw = this.shouldDrawPivotFlare(v, state);
+      const wasDrawn = this.lastPivotFlare[v] === 1;
+      if (!shouldDraw && !wasDrawn) {
         continue;
       }
       const cx = projectX(this.camera, vertexX(this.graph, v));

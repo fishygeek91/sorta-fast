@@ -26,6 +26,8 @@ import {
   MARK_LINE_WIDTH,
   PHOTO_FINISH_GOLD,
   PHOTO_FINISH_LINE_WIDTH,
+  PIVOT_FLARE_OUTER_SCALE,
+  PIVOT_FLARE_WINDOW_OPS,
   Renderer,
 } from "../src/render/renderer.ts";
 import { EMBER_RGB, THEMES } from "../src/render/theme.ts";
@@ -1262,6 +1264,89 @@ describe("Renderer", () => {
 
     assertFrontierDirtyBlit(1, 2);
     assertFrontierDirtyBlit(2, 3);
+  });
+
+  const flareOnlyOverlays = {
+    frontier: false,
+    relaxedEdges: false,
+    recursionTint: false,
+    pivotFlares: true,
+    batchBlooms: false,
+    dstructStrip: false,
+    forestGrow: false,
+    forestCut: false,
+    subtreePatchwork: false,
+  } as const;
+
+  const expectedPivotFlareDirtyBlit = (
+    graph: Graph,
+    pixelScale: number,
+  ): { sx: number; sy: number; sw: number; sh: number } => {
+    const camera = fitCamera(graph, CANVAS_SIZE, CANVAS_SIZE);
+    const vx = graph.x[1];
+    const vy = graph.y[1];
+    if (vx === undefined || vy === undefined) {
+      throw new Error("tinyGraph missing vertex 1 coordinates");
+    }
+    const cx = projectX(camera, vx);
+    const cy = projectY(camera, vy);
+    const flareRadius = Math.ceil(camera.radius * PIVOT_FLARE_OUTER_SCALE);
+    const pad = strokeDirtyPadForScale(pixelScale);
+    return expectedVertexDirtyBlit(cx, cy, flareRadius, pad, CANVAS_SIZE);
+  };
+
+  const assertPivotFlareDirtyBlitCalls = (
+    incremental: DrawCall[],
+    expected: { sx: number; sy: number; sw: number; sh: number },
+  ): void => {
+    expect(incremental).toHaveLength(4);
+    for (const call of incremental) {
+      expect(call.args[1]).toBe(expected.sx);
+      expect(call.args[2]).toBe(expected.sy);
+      expect(call.args[3]).toBe(expected.sw);
+      expect(call.args[4]).toBe(expected.sh);
+      expect(call.args[5]).toBe(expected.sx);
+      expect(call.args[6]).toBe(expected.sy);
+      expect(call.args[7]).toBe(expected.sw);
+      expect(call.args[8]).toBe(expected.sh);
+    }
+  };
+
+  it("dirty blit covers pivot flare outer ring at pixelScale 1", () => {
+    const graph = tinyGraph();
+    const { renderer, target } = createRendererWithLayers(graph, { pixelScale: 1 });
+
+    const state = new LaneState(2, graph.m);
+    renderer.draw(state, flareOnlyOverlays);
+
+    const ctx = getFakeContext(target);
+    const afterFirst = ctx.calls.length;
+
+    state.pivotFlareWork[1] = 0;
+    state.work = 0;
+    renderer.draw(state, flareOnlyOverlays);
+
+    const incremental = ctx.calls.slice(afterFirst).filter((call) => call.op === "drawImage");
+    assertPivotFlareDirtyBlitCalls(incremental, expectedPivotFlareDirtyBlit(graph, 1));
+  });
+
+  it("dirty blit covers pivot flare outer ring on expiry at pixelScale 1", () => {
+    const graph = tinyGraph();
+    const { renderer, target } = createRendererWithLayers(graph, { pixelScale: 1 });
+
+    const state = new LaneState(2, graph.m);
+    state.pivotFlareWork[1] = 0;
+    state.work = 0;
+    renderer.draw(state, flareOnlyOverlays);
+
+    const ctx = getFakeContext(target);
+    const afterFirst = ctx.calls.length;
+
+    state.work = PIVOT_FLARE_WINDOW_OPS;
+    renderer.draw(state, flareOnlyOverlays);
+
+    const incremental = ctx.calls.slice(afterFirst).filter((call) => call.op === "drawImage");
+    assertPivotFlareDirtyBlitCalls(incremental, expectedPivotFlareDirtyBlit(graph, 1));
   });
 
   it("aggregated node footprint is 2×2 at pixelScale 1 and 4×4 at pixelScale 2", () => {
