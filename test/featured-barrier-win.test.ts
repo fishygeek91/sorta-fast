@@ -15,19 +15,27 @@ const SOURCE_VERTEX = 0;
  * Drain a trace generator through TraceWriter and sum billed work via scanCosts.
  *
  * Avoids materializing a TraceEvent[] so the 100k-node featured race stays
- * inside the CI timeout.
+ * inside the CI timeout. Periodic `setImmediate` yields keep the vitest worker
+ * RPC heartbeat alive during the 100k DMSY drain (#103 review).
  *
  * @param gen - Algorithm trace generator (Dijkstra, BMSSP, or DMSY).
  * @returns Headline billed-op total.
  */
-function billedWork(gen: Generator<TraceEvent, unknown, undefined>): number {
+async function billedWork(gen: Generator<TraceEvent, unknown, undefined>): Promise<number> {
   const writer = new TraceWriter();
+  let i = 0;
   for (;;) {
     const step = gen.next();
     if (step.done) {
       break;
     }
     writer.append(step.value);
+    i += 1;
+    if (i % 500_000 === 0) {
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+    }
   }
 
   let work = 0;
@@ -51,7 +59,7 @@ describe("featured barrier race (#103)", () => {
     expect(FEATURED_RACE_URL.dt).toBeNull();
   });
 
-  it("BMSSP and DMSY billed work ≤ 0.95 × Dijkstra on FEATURED_RACE_URL", () => {
+  it("BMSSP and DMSY billed work ≤ 0.95 × Dijkstra on FEATURED_RACE_URL", async () => {
     const graph = generateGraph(FEATURED_RACE_URL.g, FEATURED_RACE_URL.n, FEATURED_RACE_URL.seed);
     const bmsspParams = resolveBmsspRunParams(
       FEATURED_RACE_URL.n,
@@ -66,9 +74,9 @@ describe("featured barrier race (#103)", () => {
       FEATURED_RACE_URL.dt,
     );
 
-    const dijkstraWork = billedWork(runDijkstra(graph, SOURCE_VERTEX));
-    const bmsspWork = billedWork(runBmssp(graph, SOURCE_VERTEX, bmsspParams));
-    const dmsyWork = billedWork(runDmsy(graph, SOURCE_VERTEX, dmsyParams));
+    const dijkstraWork = await billedWork(runDijkstra(graph, SOURCE_VERTEX));
+    const bmsspWork = await billedWork(runBmssp(graph, SOURCE_VERTEX, bmsspParams));
+    const dmsyWork = await billedWork(runDmsy(graph, SOURCE_VERTEX, dmsyParams));
 
     expect(bmsspWork / dijkstraWork).toBeLessThanOrEqual(0.95);
     expect(dmsyWork / dijkstraWork).toBeLessThanOrEqual(0.95);
