@@ -120,6 +120,42 @@ describe("RaceScheduler stream-while-generating", () => {
   });
 });
 
+describe("RaceScheduler settleAllFinished", () => {
+  it("is false at cursor 0 when lanes are complete with non-zero totalWork", () => {
+    const graph = packCsr(2, [], [0, 1], [0, 0]);
+
+    const lane0Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+    const lane1Events: TraceEvent[] = [
+      { k: "settle", v: 0, order: 0, cost: 1 },
+      { k: "heap", op: "push", cmps: 2 },
+      { k: "settle", v: 1, order: 1, cost: 1 },
+    ];
+
+    const race = new RaceScheduler(graph, 2);
+    for (const chunk of chunksFromEvents(lane0Events)) {
+      race.appendChunk(0, chunk);
+    }
+    for (const chunk of chunksFromEvents(lane1Events)) {
+      race.appendChunk(1, chunk);
+    }
+
+    race.markLaneComplete(0);
+    race.markLaneComplete(1);
+
+    expect(race.allComplete).toBe(true);
+    expect(race.maxTotalWork).toBeGreaterThan(0);
+    expect(race.appliedCursor).toBe(0);
+    expect(race.settleAllFinished).toBe(false);
+
+    race.seek(race.maxTotalWork);
+    expect(race.appliedCursor).toBe(race.maxTotalWork);
+    expect(race.settleAllFinished).toBe(true);
+  });
+});
+
 describe("RaceScheduler unequal finish", () => {
   it("clamps seek to maxTotalWork and marks shorter lane finished first", () => {
     const graph = packCsr(2, [], [0, 1], [0, 0]);

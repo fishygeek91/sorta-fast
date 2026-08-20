@@ -112,6 +112,15 @@ describe("issue #21 / #28 README launch copy", () => {
     expect(readme).toContain("settle-all work clock");
   });
 
+  it("lists the featured XL sparse seed-4 settle-all preset", () => {
+    expect(readme).toContain("n=100000");
+    expect(readme).toContain("target=none");
+    expect(readme).toContain("2,044,058");
+    expect(readme).toContain("2,208,892");
+    expect(readme).toContain("2,413,981");
+    expect(readme).toContain("The barrier falls");
+  });
+
   it("pins hero caption photo-finish and settle-all totals to drained traces", () => {
     const graph = generateGraph(HERO_KIND, HERO_N, HERO_SEED);
     const target = pickFinishVertex(graph, HERO_SOURCE);

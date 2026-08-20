@@ -13,6 +13,15 @@ function lineGraph3(): ReturnType<typeof packCsr> {
 }
 
 describe("resolveRaceFinishVertex", () => {
+  it('target "none" disables photo-finish with no status', () => {
+    const graph = lineGraph3();
+
+    expect(resolveRaceFinishVertex(graph, 0, "none")).toEqual({
+      finish: null,
+      status: null,
+    });
+  });
+
   it("null target picks farthest reachable vertex with no status", () => {
     const graph = lineGraph3();
 

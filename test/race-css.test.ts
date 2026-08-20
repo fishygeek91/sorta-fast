@@ -54,6 +54,7 @@ describe("race mode CSS", () => {
 
   it("defines dice roll buttons for race and lens modes", () => {
     expect(css).toContain("#race-dice-button");
+    expect(css).toContain("#race-featured-button");
     expect(css).toContain("#lens-dice-button");
   });
 
@@ -67,7 +68,9 @@ describe("race mode CSS", () => {
   });
 
   it("uses pointer cursor on dice roll buttons", () => {
-    expect(css).toMatch(/#race-dice-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/);
+    expect(css).toMatch(
+      /#race-dice-button,\s*\n#race-featured-button,\s*\n#lens-dice-button\s*\{[\s\S]*?cursor:\s*pointer/,
+    );
   });
 });
 

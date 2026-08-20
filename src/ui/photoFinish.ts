@@ -145,6 +145,41 @@ export function formatRaceBanner(lanes: readonly RaceBannerLane[]): string {
 }
 
 /**
+ * Format the settle-all work-clock banner (issue #103).
+ *
+ * Same ranking as {@link formatRaceBanner} (lowest floored work wins; ties keep
+ * original index). Wording must say "settle-all work clock" so path-to-target
+ * totals are never called the work clock.
+ *
+ * Example:
+ * `"BMSSP beat Dijkstra by 17,133 comparisons on the settle-all work clock. (Dijkstra: 48,210; BMSSP: 31,077)"`
+ *
+ * @param lanes - Two or three lane labels and work totals.
+ * @returns Banner text for the settle-all work-clock overlay.
+ * @throws If fewer than two lanes are provided.
+ */
+export function formatSettleAllBanner(lanes: readonly RaceBannerLane[]): string {
+  if (lanes.length < 2) {
+    throw new Error("formatSettleAllBanner requires at least two lanes");
+  }
+
+  const ranked = rankLaneIndices(lanes);
+  const winnerIndex = ranked[0];
+  const secondIndex = ranked[1];
+  const winner = lanes[winnerIndex];
+  const second = lanes[secondIndex];
+
+  const winnerWork = Math.floor(winner.work);
+  const secondWork = Math.floor(second.work);
+  const delta = secondWork - winnerWork;
+
+  const headline = `${winner.label} beat ${second.label} by ${formatWork(delta)} comparisons on the settle-all work clock.`;
+  const totals = lanes.map((lane) => `${lane.label}: ${formatWork(lane.work)}`).join("; ");
+
+  return `${headline} (${totals})`;
+}
+
+/**
  * Counter bundle for a single race lane panel.
  */
 export type RaceLaneCounters = {

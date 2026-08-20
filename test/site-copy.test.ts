@@ -96,6 +96,15 @@ describe("siteCopy", () => {
       ).toBe(true);
     });
 
+    it("params and dmsyParams disclose XL sparse seed-4 confirm ratios", () => {
+      const prose = joinFairnessCopy();
+
+      expect(prose.includes("100,000") || prose.includes("100000")).toBe(true);
+      expect(prose).toContain("0.8468");
+      expect(prose).toContain("0.9150");
+      expect(includesIgnoreCase(prose, "sparse-xl-confirm")).toBe(true);
+    });
+
     it("fairness prose discloses DMSY params and dstruct.merge billing", () => {
       const prose = joinFairnessCopy();
       const dmsy = FAIRNESS_COPY.dmsyParams;
@@ -255,8 +264,17 @@ describe("siteCopy", () => {
       expect(RACE_CHROME_COPY.stepOpTitle).toBe("advance one billed op");
     });
 
-    it('exportDisabledTitle is "Available after photo-finish."', () => {
-      expect(RACE_CHROME_COPY.exportDisabledTitle).toBe("Available after photo-finish.");
+    it('exportDisabledTitle is "Available after photo-finish or settle-all."', () => {
+      expect(RACE_CHROME_COPY.exportDisabledTitle).toBe(
+        "Available after photo-finish or settle-all.",
+      );
+    });
+
+    it("featured gallery button copy describes the barrier-breaker race", () => {
+      expect(RACE_CHROME_COPY.featuredButton).toBe("The barrier falls");
+      expect(RACE_CHROME_COPY.featuredButtonTitle).toBe(
+        "Sparse XL seed 4 — barrier-breakers win the settle-all work clock",
+      );
     });
 
     it("diff toggle label and title describe Diff view", () => {

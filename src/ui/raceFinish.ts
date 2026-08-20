@@ -32,13 +32,17 @@ function autoPick(graph: Graph, source: number, status: string): RaceFinishResol
  *
  * @param graph - Streamed CSR graph for the race.
  * @param source - SSSP source vertex.
- * @param target - URL finish target; `null` defers to {@link pickFinishVertex}.
+ * @param target - URL finish target; `null` defers to {@link pickFinishVertex}; `"none"` disables photo-finish.
  */
 export function resolveRaceFinishVertex(
   graph: Graph,
   source: number,
-  target: number | null,
+  target: number | "none" | null,
 ): RaceFinishResolution {
+  if (target === "none") {
+    return { finish: null, status: null };
+  }
+
   if (target === null) {
     try {
       return { finish: pickFinishVertex(graph, source), status: null };

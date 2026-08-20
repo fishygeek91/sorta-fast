@@ -6,6 +6,7 @@
  *
  * Run: npm run bench:bmssp-kt
  * Smoke: npm run bench:bmssp-kt -- --quick
+ * XL confirm: npm run bench:bmssp-kt -- --xl
  */
 
 import { run as runBmssp } from "../src/core/bmssp/bmssp.ts";
@@ -55,10 +56,10 @@ export type KtSweepConfig = {
 /**
  * True when a (kind, n) pair is excluded from the sweep (issue #52 / #32).
  *
- * Skips XL entirely and city at L (Bowyer–Watson Delaunay is O(n²)).
+ * Skips XL entirely (unless `allowXl`) and city at L (Bowyer–Watson Delaunay is O(n²)).
  */
-export function shouldSkipKtSweepCell(kind: GraphKind, n: number): boolean {
-  if (n === SIZE_PRESETS.XL) {
+export function shouldSkipKtSweepCell(kind: GraphKind, n: number, allowXl = false): boolean {
+  if (n === SIZE_PRESETS.XL && !allowXl) {
     return true;
   }
   if (kind === "city" && n === SIZE_PRESETS.L) {
@@ -102,6 +103,21 @@ export function defaultKtSweepConfig(): KtSweepConfig {
     seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     kValues: [...DEFAULT_K_VALUES],
     tVariants: [...DEFAULT_T_VARIANTS],
+  };
+}
+
+/**
+ * XL confirm grid for `--xl` (issue #103): sparse 100k, seeds 0–4, demo k/t only.
+ *
+ * Demo k = max(4, paper k) → 4; demo t = paper t (6 at n=100k).
+ */
+export function xlKtSweepConfig(): KtSweepConfig {
+  return {
+    kinds: ["sparse"],
+    sizes: [SIZE_PRESETS.XL],
+    seeds: [0, 1, 2, 3, 4],
+    kValues: [4],
+    tVariants: ["paper"],
   };
 }
 
@@ -169,12 +185,13 @@ export function sweepCell(
 export function runKtSweep(
   config: KtSweepConfig,
   onCell?: (cell: KtSweepCell) => void,
+  allowXl = false,
 ): KtSweepCell[] {
   const cells: KtSweepCell[] = [];
 
   for (const kind of config.kinds) {
     for (const n of config.sizes) {
-      if (shouldSkipKtSweepCell(kind, n)) {
+      if (shouldSkipKtSweepCell(kind, n, allowXl)) {
         continue;
       }
       for (const seed of config.seeds) {
@@ -221,6 +238,23 @@ function formatRatio(ratio: number): string {
 }
 
 /**
+ * Markdown blurb for sweep grid size skips: XL omitted by default, included when `--xl` cells are present.
+ */
+function formatKtSweepGridHeader(cells: readonly { n: number }[]): string[] {
+  const includesXl = cells.some((cell) => cell.n === SIZE_PRESETS.XL);
+  if (includesXl) {
+    return [
+      "**Grid:** XL (100k) included via `--xl`; **city at L (25k)** is still skipped because",
+      "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+    ];
+  }
+  return [
+    "**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because",
+    "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+  ];
+}
+
+/**
  * Markdown table of sweep results plus header noting grid skips (issue #52).
  */
 export function formatKtSweepMarkdown(cells: readonly KtSweepCell[]): string {
@@ -230,8 +264,7 @@ export function formatKtSweepMarkdown(cells: readonly KtSweepCell[]): string {
     "Work = comparison-addition billed work from `scanCosts` on drained traces.",
     "Ratio = BMSSP work / Dijkstra work on the same seeded graph (source vertex 0).",
     "",
-    "**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because",
-    "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+    ...formatKtSweepGridHeader(cells),
     "",
     "| kind | n | seed | k | t | tVariant | L | dijkstraWork | bmsspWork | ratio |",
     "| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
@@ -286,6 +319,7 @@ function quickKtSweepConfig(): KtSweepConfig {
 
 type CliOptions = {
   quick: boolean;
+  xl: boolean;
   outPath: string | undefined;
   kinds: readonly GraphKind[] | undefined;
   sizes: readonly number[] | undefined;
@@ -355,6 +389,7 @@ function parseTVariantList(raw: string): KtTVariant[] {
 
 function parseCli(argv: readonly string[]): CliOptions {
   let quick = false;
+  let xl = false;
   let outPath: string | undefined;
   let kinds: readonly GraphKind[] | undefined;
   let sizes: readonly number[] | undefined;
@@ -365,6 +400,8 @@ function parseCli(argv: readonly string[]): CliOptions {
   for (const arg of argv) {
     if (arg === "--quick") {
       quick = true;
+    } else if (arg === "--xl") {
+      xl = true;
     } else if (arg.startsWith("--out=")) {
       outPath = arg.slice("--out=".length);
     } else if (arg.startsWith("--kinds=")) {
@@ -385,7 +422,7 @@ function parseCli(argv: readonly string[]): CliOptions {
     }
   }
 
-  return { quick, outPath, kinds, sizes, seeds, kValues, tVariants };
+  return { quick, xl, outPath, kinds, sizes, seeds, kValues, tVariants };
 }
 
 /**
@@ -412,13 +449,21 @@ function formatCellSummary(cell: KtSweepCell): string {
 
 if (process.argv[1]?.includes("bmssp-kt-sweep")) {
   const options = parseCli(process.argv.slice(2));
-  const base = options.quick ? quickKtSweepConfig() : defaultKtSweepConfig();
+  const base = options.xl
+    ? xlKtSweepConfig()
+    : options.quick
+      ? quickKtSweepConfig()
+      : defaultKtSweepConfig();
   const config = applyCliOverlays(base, options);
 
   const wallT0 = performance.now();
-  const cells = runKtSweep(config, (cell) => {
-    console.log(formatCellSummary(cell));
-  });
+  const cells = runKtSweep(
+    config,
+    (cell) => {
+      console.log(formatCellSummary(cell));
+    },
+    options.xl,
+  );
   const wallMs = performance.now() - wallT0;
 
   if (options.outPath !== undefined) {
@@ -431,8 +476,8 @@ if (process.argv[1]?.includes("bmssp-kt-sweep")) {
     console.log(`wrote ${String(cells.length)} rows to ${options.outPath} and ${tsvPath}`);
   }
 
+  const modeSuffix = options.xl ? " (xl)" : options.quick ? " (quick)" : "";
   console.log(
-    `kt-sweep done: cells=${String(cells.length)} wallMs=${wallMs.toFixed(2)}` +
-      (options.quick ? " (quick)" : ""),
+    `kt-sweep done: cells=${String(cells.length)} wallMs=${wallMs.toFixed(2)}${modeSuffix}`,
   );
 }

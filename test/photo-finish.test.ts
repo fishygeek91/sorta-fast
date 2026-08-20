@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LaneState, UNSETTLED } from "../src/harness/laneState.ts";
 import {
   formatRaceBanner,
+  formatSettleAllBanner,
   isLaneFrozen,
   raceCountersFromLane,
   walkGoldPath,
@@ -105,6 +106,51 @@ describe("formatRaceBanner", () => {
 
   it("throws when fewer than two lanes are provided", () => {
     expect(() => formatRaceBanner([{ label: "Only", work: 1 }])).toThrow(/at least two lanes/i);
+  });
+});
+
+describe("formatSettleAllBanner", () => {
+  /**
+   * Exact 2-lane banner (input order: Dijkstra then BMSSP):
+   * settle-all wording; suffix lists totals in lane input order.
+   */
+  const twoLaneBanner =
+    "BMSSP beat Dijkstra by 17,133 comparisons on the settle-all work clock. (Dijkstra: 48,210; BMSSP: 31,077)";
+
+  it("formats the 2-lane design headline plus per-lane totals suffix", () => {
+    expect(
+      formatSettleAllBanner([
+        { label: "Dijkstra", work: 48210 },
+        { label: "BMSSP", work: 31077 },
+      ]),
+    ).toBe(twoLaneBanner);
+  });
+
+  it("compares winner vs second-lowest work with three totals in input order", () => {
+    expect(
+      formatSettleAllBanner([
+        { label: "Dijkstra", work: 50000 },
+        { label: "BMSSP '25", work: 31077 },
+        { label: "DMSY", work: 42000 },
+      ]),
+    ).toBe(
+      "BMSSP '25 beat DMSY by 10,923 comparisons on the settle-all work clock. (Dijkstra: 50,000; BMSSP '25: 31,077; DMSY: 42,000)",
+    );
+  });
+
+  it("reports zero margin when top two lanes tie on floored work", () => {
+    expect(
+      formatSettleAllBanner([
+        { label: "A", work: 100 },
+        { label: "B", work: 100.9 },
+      ]),
+    ).toBe("A beat B by 0 comparisons on the settle-all work clock. (A: 100; B: 100)");
+  });
+
+  it("throws when fewer than two lanes are provided", () => {
+    expect(() => formatSettleAllBanner([{ label: "Only", work: 1 }])).toThrow(
+      /at least two lanes/i,
+    );
   });
 });
 

@@ -82,9 +82,9 @@ export const FAIRNESS_COPY: FairnessCopy = {
   honesty:
     "At browser scale (thousands to tens of thousands of nodes), Dijkstra with a binary heap often wins wall-clock time — asymptotics need enormous n and constants are real. We show you where Dijkstra still wins; the work clock is what makes the race fair and legible.",
   params:
-    "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). Select bmssp=paper in the URL to race with the paper formula.",
+    "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). On sparse n = 100,000 seed = 4 (featured, `--xl` confirm) demo k/t beats Dijkstra by ~15% (ratio 0.8468; see bench/sparse-xl-confirm.md). Select bmssp=paper in the URL to race with the paper formula.",
   dmsyParams:
-    "DMSY's paper parameters (arXiv 2602.07868, Lemma 3.9) set t = ⌈√(log₂ n · log₂ log₂ n / δ)⌉ and k = ⌈t / log₂ t⌉; at every gallery size, degree reduction uses implementation δ = 3, so paper k is 2–3 across S–XL. With k = 2–3, FindPivots local searches rarely reach Θ(k)-size subtrees at browser n, so DMSY pays structure overhead without the asymptotic win — and at S and M it still loses the work-clock race even at swept k (see bench/dmsy-kt-sweep.md). This demo defaults to swept parameters — k = max(6, paper k) with paper t — because paper k is degenerate at browser scale; on sparse n = 25,000, seed = 4, that choice beats Dijkstra on total comparisons (ratio 0.9865 in the sweep), while paper k alone barely breaks even. Select dmsy=paper in the URL to race with the paper formula. FindPivots local searches use a binary heap rather than the paper's Fibonacci heap (DMSY-P07) — same O(log k) class at |K| ≤ k.",
+    "DMSY's paper parameters (arXiv 2602.07868, Lemma 3.9) set t = ⌈√(log₂ n · log₂ log₂ n / δ)⌉ and k = ⌈t / log₂ t⌉; at every gallery size, degree reduction uses implementation δ = 3, so paper k is 2–3 across S–XL. With k = 2–3, FindPivots local searches rarely reach Θ(k)-size subtrees at browser n, so DMSY pays structure overhead without the asymptotic win — and at S and M it still loses the work-clock race even at swept k (see bench/dmsy-kt-sweep.md). This demo defaults to swept parameters — k = max(6, paper k) with paper t — because paper k is degenerate at browser scale; on sparse n = 25,000, seed = 4, that choice beats Dijkstra on total comparisons (ratio 0.9865 in the sweep), while paper k alone barely breaks even. On sparse n = 100,000 seed = 4 ratio 0.9150 (~8.5%). Select dmsy=paper in the URL to race with the paper formula. FindPivots local searches use a binary heap rather than the paper's Fibonacci heap (DMSY-P07) — same O(log k) class at |K| ≤ k.",
   sourceLead: "The authoritative cost table lives in the core trace module:",
 };
 
@@ -225,6 +225,8 @@ export type RaceChromeCopy = {
   stubPersonaTitle: string;
   stepEventTitle: string;
   stepOpTitle: string;
+  featuredButton: string;
+  featuredButtonTitle: string;
   exportDisabledTitle: string;
   diffToggleLabel: string;
   diffToggleTitle: string;
@@ -257,13 +259,29 @@ export const RACE_CHROME_COPY: RaceChromeCopy = {
   stubPersonaTitle: "Duplicate Dijkstra lane",
   stepEventTitle: "advance one trace event",
   stepOpTitle: "advance one billed op",
-  exportDisabledTitle: "Available after photo-finish.",
+  featuredButton: "The barrier falls",
+  featuredButtonTitle: "Sparse XL seed 4 — barrier-breakers win the settle-all work clock",
+  exportDisabledTitle: "Available after photo-finish or settle-all.",
   diffToggleLabel: "Diff",
   diffToggleTitle: "Show where the lanes differ at equal billed work",
   legendDiffLeft: "Left only",
   legendDiffRight: "Right only",
   legendDiffBoth: "Both settled",
   legendDiffOutOfOrder: "Out of order",
+};
+
+/**
+ * Graph-kind picker labels for the race gallery (issue #103).
+ */
+export const GRAPH_KIND_PICKER_LABELS: Record<
+  "city" | "maze" | "clusters" | "adversarial" | "sparse",
+  string
+> = {
+  city: "city — Dijkstra territory",
+  maze: "maze — Dijkstra territory",
+  clusters: "clusters — Dijkstra territory",
+  adversarial: "adversarial — Dijkstra territory",
+  sparse: "sparse — barrier-breaker at L/XL",
 };
 
 /**

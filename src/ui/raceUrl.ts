@@ -8,7 +8,7 @@
  * Canonical race lane list: design.md §3.5. Default and DMSY triple serialize as `race=dijkstra,bmssp,dmsy`.
  */
 
-import { GRAPH_KINDS, type GraphKind } from "../core/graph.ts";
+import { GRAPH_KINDS, SIZE_PRESETS, type GraphKind } from "../core/graph.ts";
 import {
   isBmsspUrlMode,
   parseBmsspMode,
@@ -34,8 +34,13 @@ export type RaceUrlState = {
   n: number;
   seed: number;
   mode: RaceMode;
-  /** Finish vertex; `null` means defer to `pickFinishVertex` later. */
-  target: number | null;
+  /**
+   * Finish vertex.
+   * - `null` — auto-pick finish later via {@link pickFinishVertex}.
+   * - `"none"` — no photo-finish cap; race runs settle-all.
+   * - `number` — explicit finish vertex index.
+   */
+  target: number | "none" | null;
   /** Canonical lane algo slugs in URL order (length 2 or 3). */
   race: readonly RaceAlgoSlug[];
   /** Work-clock scrub position; `0` when omitted from the URL. */
@@ -63,6 +68,24 @@ export const DEFAULT_RACE_URL: RaceUrlState = {
   seed: 4,
   mode: "race",
   target: null,
+  race: ["dijkstra", "bmssp", "dmsy"],
+  t: 0,
+  bmssp: "demo",
+  bk: null,
+  bt: null,
+  dmsy: "demo",
+  dk: null,
+  dt: null,
+  view: "lanes",
+};
+
+/** One-click sparse XL seed-4 preset: settle-all race with no photo-finish cap (issue #103). */
+export const FEATURED_RACE_URL: RaceUrlState = {
+  g: "sparse",
+  n: SIZE_PRESETS.XL,
+  seed: 4,
+  mode: "race",
+  target: "none",
   race: ["dijkstra", "bmssp", "dmsy"],
   t: 0,
   bmssp: "demo",
@@ -190,11 +213,14 @@ function parseRaceView(raw: string | null): RaceView {
 
 /**
  * @param raw - `target` query value, or null when absent.
- * @returns A non-negative integer finish vertex, or `null` when unset/invalid.
+ * @returns `"none"` for settle-all, a non-negative integer finish vertex, or `null` when unset/invalid.
  */
-function parseTarget(raw: string | null): number | null {
+function parseTarget(raw: string | null): number | "none" | null {
   if (raw === null || raw === "") {
     return null;
+  }
+  if (raw === "none") {
+    return "none";
   }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
@@ -303,9 +329,11 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
   if (state.mode !== "race" && state.mode !== "lens") {
     throw new Error(`Invalid race mode: ${state.mode}`);
   }
-  if (state.target !== null) {
+  if (state.target !== null && state.target !== "none") {
     if (!Number.isFinite(state.target) || !Number.isInteger(state.target) || state.target < 0) {
-      throw new Error(`target must be a non-negative integer or null, got ${String(state.target)}`);
+      throw new Error(
+        `target must be a non-negative integer, "none", or null, got ${String(state.target)}`,
+      );
     }
   }
   if (state.race.length < 2 || state.race.length > 3) {
@@ -355,7 +383,7 @@ function assertValidRaceUrlState(state: RaceUrlState): void {
  *
  * The result always starts with `?` and contains `g`, `n`, `seed`, and `mode`.
  * `race=` is written for all lane presets (including the default DMSY triple).
- * `target` is included only when non-null; `t` only when greater than zero.
+ * `target` is included when a number or `"none"`; omitted when `null`. `t` only when greater than zero.
  * `bmssp` is included only when `paper`; `bk` and `bt` only when non-null.
  * `dmsy` is included only when `paper`; `dk` and `dt` only when non-null.
  * `view` is included only when `diff`; omitted when `lanes`.
@@ -371,7 +399,9 @@ export function serializeRaceUrl(state: RaceUrlState): string {
   params.set("seed", String(state.seed));
   params.set("mode", state.mode);
   params.set("race", state.race.join(","));
-  if (state.target !== null) {
+  if (state.target === "none") {
+    params.set("target", "none");
+  } else if (state.target !== null) {
     params.set("target", String(state.target));
   }
   if (state.t > 0) {

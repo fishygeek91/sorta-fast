@@ -109,10 +109,11 @@ export function exportCaption(
 }
 
 /**
- * Whether photo-finish export is allowed (all lanes frozen at finish).
+ * Whether PNG/WebM export is allowed.
  *
- * @param allPhotoFrozen - True when every lane has completed photo-finish freeze.
+ * @param allPhotoFrozen - Every lane has photo-frozen at the finish vertex.
+ * @param settleAllComplete - Featured/target=none race has finished every lane.
  */
-export function canExportPhotoFinish(allPhotoFrozen: boolean): boolean {
-  return allPhotoFrozen;
+export function canExportPhotoFinish(allPhotoFrozen: boolean, settleAllComplete = false): boolean {
+  return allPhotoFrozen || settleAllComplete;
 }

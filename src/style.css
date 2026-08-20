@@ -266,6 +266,7 @@ body {
 #race-bmssp-select,
 #lens-bmssp-select,
 #race-dice-button,
+#race-featured-button,
 #lens-dice-button {
   font: inherit;
 }
@@ -281,6 +282,7 @@ body {
 #race-bmssp-select,
 #lens-bmssp-select,
 #race-dice-button,
+#race-featured-button,
 #lens-dice-button {
   font-size: var(--text-ui);
   padding: 0.35rem var(--space-3);
@@ -292,6 +294,7 @@ body {
 
 .lens-transport button,
 #race-dice-button,
+#race-featured-button,
 #lens-dice-button {
   cursor: pointer;
 }
@@ -305,6 +308,7 @@ body {
 #race-bmssp-select:hover,
 #lens-bmssp-select:hover,
 #race-dice-button:hover,
+#race-featured-button:hover,
 #lens-dice-button:hover {
   background: var(--hover);
 }
