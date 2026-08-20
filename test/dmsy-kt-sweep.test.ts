@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   defaultKtSweepConfig,
+  formatKtSweepMarkdown,
   resolveT,
   runKtSweep,
   shouldSkipInfiniteBlock,
@@ -70,6 +71,27 @@ describe("dmsy k/t sweep bench", () => {
     expect(config.seeds).toEqual([0, 1, 2, 3, 4]);
     expect(config.kValues).toEqual([6]);
     expect(config.tVariants).toEqual(["paper"]);
+  });
+
+  it("formatKtSweepMarkdown notes XL included when --xl cells are present", () => {
+    const md = formatKtSweepMarkdown([
+      {
+        kind: "sparse",
+        n: SIZE_PRESETS.XL,
+        seed: 0,
+        k: 6,
+        t: 5,
+        tVariant: "paper",
+        L: 4,
+        dijkstraWork: 1,
+        dmsyWork: 1,
+        ratio: 1,
+      },
+    ]);
+
+    expect(md).toContain("included");
+    expect(md).toContain("--xl");
+    expect(md).not.toContain("XL (100k) is omitted");
   });
 
   it("shouldSkipKtSweepCell skip matrix respects allowXl", () => {

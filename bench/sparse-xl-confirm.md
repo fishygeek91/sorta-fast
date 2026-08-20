@@ -11,7 +11,7 @@ npm run bench:dmsy-kt -- --xl --out=bench/sparse-xl-confirm-dmsy.md
 
 Grid: sparse n = 100,000; seeds 0–4; **demo k/t only** (BMSSP k = max(4, paper k) with paper t → k = 4, t = 6; DMSY k = max(6, paper k) with paper t → k = 6, t = 5). Source vertex 0.
 
-Raw machine output (headers still say XL is omitted — ignore that):
+Raw machine output:
 
 - [`sparse-xl-confirm-bmssp.tsv`](sparse-xl-confirm-bmssp.tsv)
 - [`sparse-xl-confirm-dmsy.tsv`](sparse-xl-confirm-dmsy.tsv)

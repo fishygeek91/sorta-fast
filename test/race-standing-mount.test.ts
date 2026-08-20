@@ -97,7 +97,7 @@ describe("issue #63 race standing mount wiring", () => {
     expect(syncBannerBody).toContain("allPhotoFrozen()");
     expect(syncBannerBody).toContain("formatRaceBanner");
     expect(syncBannerBody).toContain("formatSettleAllBanner");
-    expect(syncBannerBody).toContain("allComplete");
+    expect(syncBannerBody).toContain("settleAllFinished");
 
     const buildExportIdx = raceSource.indexOf("function buildExportSheetSpec");
     expect(buildExportIdx).toBeGreaterThanOrEqual(0);
@@ -107,7 +107,7 @@ describe("issue #63 race standing mount wiring", () => {
     expect(buildExportSource).toContain("allPhotoFrozen()");
     expect(buildExportSource).toContain("formatRaceBanner");
     expect(buildExportSource).toContain("formatSettleAllBanner");
-    expect(buildExportSource).toContain("allComplete");
+    expect(buildExportSource).toContain("settleAllFinished");
   });
 
   it("race.ts documents partial-freeze / invert settle leadership", () => {

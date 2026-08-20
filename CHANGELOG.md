@@ -35,6 +35,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
+- Settle-all banner, winner chip, export, and WebM hold wait for playback to reach maxTotalWork (`settleAllFinished`), not merely worker generation-complete (#103).
+- Featured-win CI timeout raised to 600s so the 100k DMSY drain has headroom on GHA (#103).
 - WebM export hold also fires when a `target=none` featured race reaches settle-all, not only photo-freeze (#103).
 - Pivot-flare incremental composites now dirty `ceil(camera.radius × 2.2) + stroke pad` and mark one last frame on expiry so the outer ring leaves no residue (#101).
 - README hero caption names photo-finish work vs the settle-all work clock; the bench page discloses unmatched BMSSP demo k vs DMSY paper params; the Round-2 checklist no longer claims paper params as BMSSP's default (#28).
@@ -49,7 +51,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
-- Race photo-finish banner stays path-to-target; a settle-all work-clock line is added when traces complete, and the featured XL preset races without a finish cap (#103).
+- k/t sweep markdown headers say XL is included when `--xl` cells are present (#103).
+- Race photo-finish banner stays path-to-target; a settle-all work-clock line is added when playback reaches maxTotalWork, and the featured XL preset races without a finish cap (#103).
 - Forest grow/cut overlay strokes now scale with the Race backing-store DPR (`pixelScale`), and those widths are included in the vertex dirty-radius pad so HiDPI forest strokes keep CSS-px weight (#98).
 - Edge, frontier, and ghost strokes now scale with the Race backing-store DPR (`pixelScale`), and the vertex dirty radius pads for scaled stroke overhang so HiDPI partial composites leave no residue rings (#80).
 - README hero caption DMSY photo-finish / settle-all totals updated for demo-default k (city n=500 seed 1729) (#54).

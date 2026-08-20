@@ -3,7 +3,7 @@
 Work = comparison-addition billed work from `scanCosts` on drained traces.
 Ratio = BMSSP work / Dijkstra work on the same seeded graph (source vertex 0).
 
-**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because
+**Grid:** XL (100k) included via `--xl`; **city at L (25k)** is still skipped because
 Bowyer–Watson Delaunay generation is O(n²) (issue #32).
 
 | kind   |      n | seed |   k |   t | tVariant |   L | dijkstraWork | bmsspWork |  ratio |

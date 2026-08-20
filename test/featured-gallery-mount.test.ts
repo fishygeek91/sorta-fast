@@ -45,6 +45,25 @@ describe("issue #103 featured gallery wiring", () => {
     ).toBe(true);
   });
 
+  it("race.ts gates settle-all banner, winner, and export on settleAllFinished", () => {
+    const syncBannerIdx = raceSource.indexOf("function syncBanner");
+    expect(syncBannerIdx).toBeGreaterThanOrEqual(0);
+    const syncBannerBody = raceSource.slice(syncBannerIdx, syncBannerIdx + 800);
+    expect(syncBannerBody).toContain("settleAllFinished");
+    expect(syncBannerBody).not.toMatch(/if\s*\(\s*activeRace\.allComplete\s*\)/);
+
+    const syncStandingIdx = raceSource.indexOf("function syncStanding");
+    expect(syncStandingIdx).toBeGreaterThanOrEqual(0);
+    const syncStandingBody = raceSource.slice(syncStandingIdx, syncStandingIdx + 600);
+    expect(syncStandingBody).toContain("settleAllFinished");
+    expect(syncStandingBody).not.toMatch(
+      /if\s*\(\s*activeRace\.allComplete\s*\)\s*\{\s*for\s*\(\s*const\s+ui\s+of\s+laneUis/,
+    );
+
+    expect(raceSource).toContain("race.settleAllFinished");
+    expect(raceSource).not.toContain('raceState.target === "none" && race.allComplete');
+  });
+
   it("race.ts does not abort onGraph solely when finish is null", () => {
     const onGraphIdx = raceSource.indexOf("onGraph:");
     expect(onGraphIdx).toBeGreaterThanOrEqual(0);

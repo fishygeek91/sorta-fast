@@ -290,6 +290,23 @@ function formatRatio(ratio: number): string {
 }
 
 /**
+ * Markdown blurb for sweep grid size skips: XL omitted by default, included when `--xl` cells are present.
+ */
+function formatKtSweepGridHeader(cells: readonly { n: number }[]): string[] {
+  const includesXl = cells.some((cell) => cell.n === SIZE_PRESETS.XL);
+  if (includesXl) {
+    return [
+      "**Grid:** XL (100k) included via `--xl`; **city at L (25k)** is still skipped because",
+      "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+    ];
+  }
+  return [
+    "**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because",
+    "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+  ];
+}
+
+/**
  * Markdown table of sweep results plus header noting grid skips (issue #54).
  */
 export function formatKtSweepMarkdown(cells: readonly DmsyKtSweepCell[]): string {
@@ -299,8 +316,7 @@ export function formatKtSweepMarkdown(cells: readonly DmsyKtSweepCell[]): string
     "Work = comparison-addition billed work from `scanCosts` on drained traces.",
     "Ratio = DMSY work / Dijkstra work on the same seeded graph (source vertex 0).",
     "",
-    "**Grid skips:** XL (100k) is omitted; **city at L (25k)** is skipped because",
-    "Bowyer–Watson Delaunay generation is O(n²) (issue #32).",
+    ...formatKtSweepGridHeader(cells),
     "Cells with non-finite block size M (Lemma 3.1) or workload cap (Lemma 3.8)",
     "at top recursion depth are omitted from the sweep.",
     "",

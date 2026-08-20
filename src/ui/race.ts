@@ -774,7 +774,7 @@ export function mountRace(): void {
       );
     }
 
-    if (activeRace.allComplete) {
+    if (activeRace.settleAllFinished) {
       lines.push(
         formatSettleAllBanner(
           configs.map((config, lane) => ({
@@ -852,7 +852,7 @@ export function mountRace(): void {
 
     const activeRace = race;
 
-    if (activeRace.allComplete) {
+    if (finishVertex === null && activeRace.settleAllFinished) {
       for (const ui of laneUis) {
         if (ui.leadEl.hidden !== true) {
           ui.leadEl.hidden = true;
@@ -1052,7 +1052,7 @@ export function mountRace(): void {
       race !== null &&
       canExportPhotoFinish(
         race.allPhotoFrozen(),
-        raceState.target === "none" && race.allComplete,
+        raceState.target === "none" && race.settleAllFinished,
       ) &&
       !recording
     );
@@ -1163,7 +1163,7 @@ export function mountRace(): void {
     const shareUrl = shareUrlForExport(raceState);
     const caption = exportCaption(raceState, shareUrl);
     const allPhotoFrozen = activeRace.allPhotoFrozen();
-    const allComplete = activeRace.allComplete;
+    const settleAllFinished = activeRace.settleAllFinished;
 
     const bannerLines: string[] = [];
     if (allPhotoFrozen) {
@@ -1176,7 +1176,7 @@ export function mountRace(): void {
         ),
       );
     }
-    if (allComplete) {
+    if (settleAllFinished) {
       bannerLines.push(
         formatSettleAllBanner(
           configs.map((config, lane) => ({
@@ -1196,7 +1196,7 @@ export function mountRace(): void {
       return {
         label: config.label,
         comparisons:
-          allComplete && !allPhotoFrozen
+          settleAllFinished && !allPhotoFrozen
             ? Math.floor(activeRace.laneTotalWork(lane))
             : raceCountersFromLane(state).comparisons,
         canvas: ui.canvas,
@@ -1342,14 +1342,14 @@ export function mountRace(): void {
 
     /**
      * WebM capture: after the export sheet paints, hold the banner on screen
-     * ({@link EXPORT_BANNER_HOLD_MS}) once the race is sheet-ready — photo-freeze
-     * or settle-all complete when `target=none` — then stop the recorder.
+     * ({@link EXPORT_BANNER_HOLD_MS}) once playback is sheet-ready — photo-freeze
+     * or settle-all playback end when `target=none` — then stop the recorder.
      */
     if (recording) {
       if (paintExportSheet()) {
         const sheetReady =
           race !== null &&
-          (race.allPhotoFrozen() || (raceState.target === "none" && race.allComplete));
+          (race.allPhotoFrozen() || (raceState.target === "none" && race.settleAllFinished));
         if (!recordingAwaitingReplay && !finishingVideo && sheetReady) {
           if (recordingHoldUntilMs === null) {
             recordingHoldUntilMs = performance.now() + EXPORT_BANNER_HOLD_MS;
@@ -2256,7 +2256,7 @@ function raceCompositionEqual(a: readonly RaceAlgoSlug[], b: readonly RaceAlgoSl
 /**
  * @param prev - Previous race URL state.
  * @param next - Candidate next state.
- * @returns Whether graph kind, size, seed, lanes, or BMSSP params changed.
+ * @returns Whether graph kind, size, seed, lanes, BMSSP params, or target changed.
  */
 function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
   return (
@@ -2270,6 +2270,7 @@ function graphGalleryChanged(prev: RaceUrlState, next: RaceUrlState): boolean {
     prev.dmsy !== next.dmsy ||
     prev.dk !== next.dk ||
     prev.dt !== next.dt ||
+    // target changes the photo-finish cap even when graph bytes are identical.
     prev.target !== next.target
   );
 }

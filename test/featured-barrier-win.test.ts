@@ -72,5 +72,6 @@ describe("featured barrier race (#103)", () => {
 
     expect(bmsspWork / dijkstraWork).toBeLessThanOrEqual(0.95);
     expect(dmsyWork / dijkstraWork).toBeLessThanOrEqual(0.95);
-  }, 180_000);
+    // GHA/sandbox DMSY 100k drain can exceed 3 minutes.
+  }, 600_000);
 });

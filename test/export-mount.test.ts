@@ -58,7 +58,7 @@ describe("issue #18 export mount wiring", () => {
     const buildExportSource = nextFn >= 0 ? buildExportBody.slice(0, nextFn) : buildExportBody;
     expect(buildExportSource).toContain("allPhotoFrozen()");
     expect(buildExportSource).toContain("formatRaceBanner");
-    expect(buildExportSource).toContain("allComplete");
+    expect(buildExportSource).toContain("settleAllFinished");
     expect(buildExportSource).toContain("formatSettleAllBanner");
   });
 
@@ -85,7 +85,8 @@ describe("issue #18 export mount wiring", () => {
     expect(raceSource).toContain("EXPORT_BANNER_HOLD_MS");
     expect(raceSource).toContain("recordingHoldUntilMs");
     expect(raceSource).toContain("allPhotoFrozen()");
-    expect(raceSource).toContain('raceState.target === "none" && race.allComplete');
+    expect(raceSource).toContain("settleAllFinished");
+    expect(raceSource).not.toContain('raceState.target === "none" && race.allComplete');
   });
 
   it("race.ts keeps drawing while recording after the photo-finish pause", () => {

@@ -103,6 +103,17 @@ export class RaceScheduler {
   }
 
   /**
+   * Whether every lane has finished generating and playback has reached the
+   * settle-all work-clock end (issue #103).
+   *
+   * Distinct from {@link allComplete}, which is true as soon as workers finish
+   * streaming (often while the cursor is still at t≈0).
+   */
+  get settleAllFinished(): boolean {
+    return this.allComplete && this.appliedCursor >= this.maxTotalWork;
+  }
+
+  /**
    * Upper bound on applied playback while racing.
    *
    * When any lane is incomplete: minimum `totalWork` among incomplete lanes.

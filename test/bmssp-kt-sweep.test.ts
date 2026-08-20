@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   defaultKtSweepConfig,
+  formatKtSweepMarkdown,
   resolveT,
   runKtSweep,
   shouldSkipKtSweepCell,
@@ -57,6 +58,27 @@ describe("bmssp k/t sweep bench", () => {
     expect(config.seeds).toEqual([0, 1, 2, 3, 4]);
     expect(config.kValues).toEqual([4]);
     expect(config.tVariants).toEqual(["paper"]);
+  });
+
+  it("formatKtSweepMarkdown notes XL included when --xl cells are present", () => {
+    const md = formatKtSweepMarkdown([
+      {
+        kind: "sparse",
+        n: SIZE_PRESETS.XL,
+        seed: 0,
+        k: 4,
+        t: 6,
+        tVariant: "paper",
+        L: 3,
+        dijkstraWork: 1,
+        bmsspWork: 1,
+        ratio: 1,
+      },
+    ]);
+
+    expect(md).toContain("included");
+    expect(md).toContain("--xl");
+    expect(md).not.toContain("XL (100k) is omitted");
   });
 
   it("sweepCell drains both lanes with finite positive work", () => {
