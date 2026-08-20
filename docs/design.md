@@ -104,7 +104,7 @@ At browser scale (10³–10⁵ nodes), Dijkstra + binary heap will often win **w
 - **Delaunay/geometric city** — the flagship; looks like a road map, layouts are pretty. No XL size (capped at L / 25k nodes; issue #32).
 - **Grid maze** — recursion structure reads clearly.
 - **Ring of clusters** — makes batch-blooms dramatic (frontiers jump between clusters).
-- **Adversarial for Dijkstra** — long chains + wide fans; the heap thrashes.
+- **Adversarial (heap stress)** — long chains + wide fans. Built to grow Dijkstra's binary heap; under the billed-work clock it is barrier-breaker-hostile (Dijkstra wins at browser-scale S/M; analysis in docs/paper-notes.md §1.4).
 - **Sparse random (m ≈ 2n)** — the regime where the 2026 bound shines.
 - Sizes S/M/L/XL (500 / 5k / 25k / 100k nodes). XL uses aggregated rendering (§4.4). City has no XL (Delaunay is O(n²); capped at L; issue #32).
 

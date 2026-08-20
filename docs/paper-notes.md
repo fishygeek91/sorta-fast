@@ -112,6 +112,33 @@ Values use log₂. “Paper δ” = `(1/4) · min{m/n, log₂ log₂ n}`. Sparse
 
 At all four `n`, **paper δ < 3**, so the implementation never uses the paper’s fractional δ. **t ≈ 4–5**, **k ≈ 2–3**, **l_top ≈ 3–4**.
 
+### 1.4 Gallery billed-work analysis: the adversarial preset
+
+Issue #104 asked whether the gallery **adversarial** preset (chains + wide fans, `generateAdversarial` in `src/core/graph.ts`) could show BMSSP **demo** params beating Dijkstra at browser-scale M/L on seeds 0–4. Headless measurement used `scanCosts` on drained traces with the locked `OP_COST` table in [`src/core/trace.ts`](../src/core/trace.ts) (paper §2.2 comparison-addition; design.md §2.4): `relax` = 1, `settle` = 1, `heap` / `dstruct` = comparison count only; `pivot`, `batch`, `recurse`, and `forest` = 0. Source vertex 0; BMSSP demo `k = max(4, paper k)` with paper `t`; DMSY demo per §1.2 / #54.
+
+**Why chains + fans favors Dijkstra under this clock.** The generator yields a tree-like bidirectional graph with `m = 2(n − 1)`: a unit-weight chain plus heavy fan leaves. Dijkstra pays roughly `n` settles, `m` relaxes, and heap comparisons that stay comparatively cheap — fans arrive near-sorted and trigger few decrease-keys on a sparse tree. BMSSP and DMSY pay the same relax/settle baseline plus billed `dstruct` comparisons and FindPivots relaxes on wide fans that do not batch well. The construction was meant to maximize heap thrashing; under comparison-addition billing it instead **minimizes** the cost it was designed to maximize.
+
+**Control (current adversarial), demo params, source = 0** — matches issue #104 / [`bench/adversarial-candidates.ts`](../bench/adversarial-candidates.ts):
+
+| n | seed sample | dij | bmssp (ratio) | dmsy (ratio) |
+|---|---:|---:|---|---|
+| 500 | 0–2 | ~8562–8568 | ~3.09–3.15 | ~2.01–2.02 |
+| 5000 | 0–4 | ~118461–118526 | ~2.89–2.92 | ~1.75–1.76 |
+
+Exact M seed 4 (issue table): dij 118465, bmssp 345986 (2.9206), dmsy 207662 (1.7529).
+
+**Candidate families** ([`bench/adversarial-candidates.ts`](../bench/adversarial-candidates.ts), same demo params, source = 0; raw TSVs in [`bench/adversarial-candidates.md`](../bench/adversarial-candidates.md)):
+
+- **cascade3** (S seed 0): dij 13993, bmssp 39050 (2.7907), dmsy 23232 (1.6603) — raises Dijkstra work but BMSSP more.
+- **cascadeAll** (denser, all-wave decrease-keys) M seeds 0–4: dij ~803k–805k, bmssp ~882k–886k, **ratio 1.096–1.104** — closest to a BMSSP win, still **FAIL**. DMSY ~3.3×.
+- **cascadeHub** (low source degree) M seeds 0–4: **ratio 1.38–1.43** — worse than cascadeAll.
+- **wideFrontier** S seeds 0–2: **ratio ~2.04–2.11**.
+- Known gallery **sparse** at M is also a Dijkstra win: BMSSP/dij ~1.28–1.35 on demo k/t ([`bench/bmssp-kt-sweep-sparse-seeds.md`](../bench/bmssp-kt-sweep-sparse-seeds.md), seeds 0–4).
+
+**k/t on cascadeAll M seed 0:** only **k = 4, t = 8** (`twoK` variant) beats Dijkstra (ratio 0.9760). Demo is k = 4, paper t = 5 (ratio 1.0983). The #104 gate requires demo params, not swept k/t.
+
+**Decision (#104).** No browser-scale family was found that is (a) distinct from sparse and (b) a BMSSP-demo win at M and L on seeds 0–4. Keep chains + fans; relabel honestly as heap stress / Dijkstra territory; pin the Dijkstra win in CI. Full tables: [`bench/adversarial-candidates.md`](../bench/adversarial-candidates.md).
+
 ## 2. Tie-breaking specification
 
 DMSY correctness (§2.3–§2.4, Lemma 3.7) requires **exact** lexicographic comparison of distance labels. Dijkstra and BMSSP lanes stay **scalar distance-only**. Only the DMSY lane uses the tuples below.
