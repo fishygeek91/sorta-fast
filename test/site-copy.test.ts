@@ -8,6 +8,7 @@ import {
   explainerMeaning,
   FAIRNESS_COPY,
   FAIRNESS_COSTS,
+  GRAPH_KIND_PICKER_LABELS,
   PAPER_LINKS,
   personaTitle,
   RACE_CHROME_COPY,
@@ -103,6 +104,17 @@ describe("siteCopy", () => {
       expect(prose).toContain("0.8468");
       expect(prose).toContain("0.9150");
       expect(includesIgnoreCase(prose, "sparse-xl-confirm")).toBe(true);
+    });
+
+    it("honesty paragraph discloses adversarial heap-stress topology and bench evidence", () => {
+      const { honesty } = FAIRNESS_COPY;
+
+      expect(includesIgnoreCase(honesty, "adversarial")).toBe(true);
+      expect(
+        includesIgnoreCase(honesty, "barrier-breaker-hostile") ||
+          includesIgnoreCase(honesty, "hostile"),
+      ).toBe(true);
+      expect(includesIgnoreCase(honesty, "bench/adversarial-candidates.md")).toBe(true);
     });
 
     it("fairness prose discloses DMSY params and dstruct.merge billing", () => {
@@ -220,6 +232,16 @@ describe("siteCopy", () => {
         fairness: "Fairness rules",
         papers: "The papers",
       });
+    });
+  });
+
+  describe("GRAPH_KIND_PICKER_LABELS", () => {
+    it("adversarial label is heap-stress copy without thrash or struggle", () => {
+      const label = GRAPH_KIND_PICKER_LABELS.adversarial;
+
+      expect(label).toBe("adversarial — heap stress, Dijkstra territory");
+      expect(includesIgnoreCase(label, "thrash")).toBe(false);
+      expect(includesIgnoreCase(label, "struggle")).toBe(false);
     });
   });
 

@@ -80,7 +80,7 @@ export const FAIRNESS_COPY: FairnessCopy = {
   secondary:
     "Secondary counters are kind counts, not extra fees: heap ops, D-structure ops, relaxations, and vertices settled out of order (always 0 for Dijkstra — that invariant is the whole point of the classic rule).",
   honesty:
-    "At browser scale (thousands to tens of thousands of nodes), Dijkstra with a binary heap often wins wall-clock time — asymptotics need enormous n and constants are real. We show you where Dijkstra still wins; the work clock is what makes the race fair and legible.",
+    "At browser scale (thousands to tens of thousands of nodes), Dijkstra with a binary heap often wins wall-clock time — asymptotics need enormous n and constants are real. We show you where Dijkstra still wins; the work clock is what makes the race fair and legible. The adversarial gallery kind (√n chain + wide fans) is heap-stress topology that is barrier-breaker-hostile on the work clock — Dijkstra wins it by about 2–3× at S and M (see bench/adversarial-candidates.md).",
   params:
     "BMSSP's paper parameters (arXiv 2504.17033 §3.1) are k = ⌊(log₂ n)^{1/3}⌋ and t = ⌊(log₂ n)^{2/3}⌋. At browser scale (S=500 through XL=100k), that formula always yields k = 2; k = 3 does not appear until n ≈ 2²⁷. With k = 2, FindPivots (Lemma 3.2) often aborts when |W| > k|S| on typical gallery degrees, so BMSSP pays Dijkstra-like relaxations plus D-structure overhead and loses the work-clock race. This demo defaults to swept parameters — k = max(4, paper k) with paper t — because asymptotic k is degenerate below n ≈ 10⁸; on sparse n = 25,000 seed = 4, that choice beats Dijkstra on total comparisons while paper k = 2 does not (see bench/bmssp-kt-sweep.md). On sparse n = 100,000 seed = 4 (featured, `--xl` confirm) demo k/t beats Dijkstra by ~15% (ratio 0.8468; see bench/sparse-xl-confirm.md). Select bmssp=paper in the URL to race with the paper formula.",
   dmsyParams:
@@ -271,7 +271,8 @@ export const RACE_CHROME_COPY: RaceChromeCopy = {
 };
 
 /**
- * Graph-kind picker labels for the race gallery (issue #103).
+ * Graph-kind picker labels for the race gallery (issues #103, #104).
+ * Adversarial is heap-stress topology — not a Dijkstra-loss claim.
  */
 export const GRAPH_KIND_PICKER_LABELS: Record<
   "city" | "maze" | "clusters" | "adversarial" | "sparse",
@@ -280,7 +281,7 @@ export const GRAPH_KIND_PICKER_LABELS: Record<
   city: "city — Dijkstra territory",
   maze: "maze — Dijkstra territory",
   clusters: "clusters — Dijkstra territory",
-  adversarial: "adversarial — Dijkstra territory",
+  adversarial: "adversarial — heap stress, Dijkstra territory",
   sparse: "sparse — barrier-breaker at L/XL",
 };
 

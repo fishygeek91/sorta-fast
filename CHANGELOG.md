@@ -9,6 +9,8 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Added
 
+- CI pins Dijkstra billed-work win vs BMSSP-demo and DMSY-demo on adversarial at S and M, seeds 0–4 (#104).
+- Headless adversarial-candidate bench (`bench/adversarial-candidates.ts`) and analysis (`bench/adversarial-candidates.md`, paper-notes §1.4): chains+fans plus cascade/wide-frontier families fail the BMSSP-demo M/L gate (#104).
 - Fairness panel, README featured seed, and bench/sparse-xl-confirm.md publish XL sparse seed-4 settle-all ratios (BMSSP 0.8468, DMSY 0.9150) (#103).
 - CI pins FEATURED_RACE_URL (sparse XL seed 4, target=none): BMSSP and DMSY settle-all work / Dijkstra ≤ 0.95 (#103).
 - Race gallery "The barrier falls" featured XL preset, territory picker labels, and dual photo-finish / settle-all banner (#103).
@@ -52,6 +54,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Changed
 
+- Adversarial gallery copy no longer promises a Dijkstra weakness the work clock does not show: picker is "heap stress, Dijkstra territory", design.md §3.4 and the generator JSDoc match, Fairness panel notes the kind is barrier-breaker-hostile (#104).
 - k/t sweep markdown headers say XL is included when `--xl` cells are present (#103).
 - Race photo-finish banner stays path-to-target; a settle-all work-clock line is added when playback reaches maxTotalWork, and the featured XL preset races without a finish cap (#103).
 - Forest grow/cut overlay strokes now scale with the Race backing-store DPR (`pixelScale`), and those widths are included in the vertex dirty-radius pad so HiDPI forest strokes keep CSS-px weight (#98).

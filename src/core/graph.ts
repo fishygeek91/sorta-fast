@@ -415,11 +415,14 @@ function generateClusters(n: number, seed: number, onProgress?: GraphProgress): 
 }
 
 /**
- * Adversarial SSSP stress graph: Θ(√n) chain plus wide fan leaves (issue #20).
+ * Heap-stress gallery graph: Θ(√n) chain plus wide fan leaves (issues #20, #104).
  *
  * A bidirectional unit-weight path `0 .. chainLen-1` is the long chain; remaining
  * vertices attach as bidirectional fans onto chain vertices except the sink.
- * Fan weights are `chainLen + U(0,1)` so Dijkstra walks the chain with a growing heap.
+ * Fan weights are `chainLen + U(0,1)` so the binary heap grows while Dijkstra
+ * walks the chain. Under the work-clock cost model this topology is
+ * barrier-breaker-hostile: heap comparisons stay cheap on a tree, while BMSSP
+ * and DMSY still pay D-structure / FindPivots overhead (issue #104).
  */
 function generateAdversarial(n: number, seed: number, onProgress?: GraphProgress): Graph {
   onProgress?.(0);
