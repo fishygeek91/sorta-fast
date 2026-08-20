@@ -15,8 +15,9 @@ const SOURCE_VERTEX = 0;
  * Drain a trace generator through TraceWriter and sum billed work via scanCosts.
  *
  * Avoids materializing a TraceEvent[] so the 100k-node featured race stays
- * inside the CI timeout. Periodic `setImmediate` yields keep the vitest worker
- * RPC heartbeat alive during the 100k DMSY drain (#103 review).
+ * inside the CI timeout. Yields at least once per second (checked every 10k
+ * events) so the vitest worker RPC heartbeat survives slow 100k DMSY drains
+ * (#103).
  *
  * @param gen - Algorithm trace generator (Dijkstra, BMSSP, or DMSY).
  * @returns Headline billed-op total.
@@ -24,6 +25,7 @@ const SOURCE_VERTEX = 0;
 async function billedWork(gen: Generator<TraceEvent, unknown, undefined>): Promise<number> {
   const writer = new TraceWriter();
   let i = 0;
+  let lastYield = performance.now();
   for (;;) {
     const step = gen.next();
     if (step.done) {
@@ -31,10 +33,11 @@ async function billedWork(gen: Generator<TraceEvent, unknown, undefined>): Promi
     }
     writer.append(step.value);
     i += 1;
-    if (i % 500_000 === 0) {
+    if (i % 10_000 === 0 && performance.now() - lastYield > 1000) {
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
+      lastYield = performance.now();
     }
   }
 

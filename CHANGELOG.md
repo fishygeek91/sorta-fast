@@ -35,7 +35,7 @@ Released versions are tagged (`vMAJOR.MINOR.PATCH`). New work lands under **Unre
 
 ### Fixed
 
-- Featured-win 100k drain yields every 500k events so the vitest worker heartbeat survives the DMSY loop (#103).
+- Featured-win 100k drain yields at least once per second so the vitest worker heartbeat survives slow CI runners (#103).
 - Settle-all banner, winner chip, export, and WebM hold wait for playback to reach maxTotalWork (`settleAllFinished`), not merely worker generation-complete (#103).
 - Featured-win CI timeout raised to 600s so the 100k DMSY drain has headroom on GHA (#103).
 - WebM export hold also fires when a `target=none` featured race reaches settle-all, not only photo-freeze (#103).
